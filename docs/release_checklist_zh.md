@@ -41,12 +41,17 @@
 - [ ] 對應 PR / push 的 GitHub Actions 已通過
 - [ ] CI 只負責 `verify:local` 與 `verify:build`
 - [ ] 如需人工 release gate，已手動觸發 `Manual Release Gate` workflow
+- [ ] 如需 GitHub Actions 直接部署 staging，已確認 `Deploy Staging` workflow 的 `base_url` / `tenant_id` 正確
+- [ ] 如需 GitHub Actions 跑 production 唯讀驗收，已確認 `Production Readonly Verify` workflow 的 `base_url` / `tenant_id` / `run_id` 正確
 - [ ] 若要對 staging / verify tenant 做遠端寫入式驗收，已選對 `verification_mode=write`
 - [ ] 如有遠端驗收，已下載或記錄 workflow artifact 中的 logs / summary
 - [ ] 如需交接，已保留遠端驗收輸出的 JSON summary，或明確記錄 `VERIFY_OUTPUT_PATH`
 - [ ] 已確認 summary 內含 `started_at`、`completed_at`、`duration_ms`、`check_count` 與 `checks`
 - [ ] 已確認 workflow artifact 內有 `release-gate-manifest.json`，可直接讀取 inputs / outcomes / artifact 路徑
-- [ ] 這次發版仍需人工執行部署與 post-deploy 驗證
+- [ ] 若走 `Deploy Staging`，已確認 repository secrets 中存在 `CLOUDFLARE_API_TOKEN` 與 `CLOUDFLARE_ACCOUNT_ID`
+- [ ] 如有使用 `Deploy Staging`，已確認 artifact 內有 `staging-deploy-manifest.json`
+- [ ] 如有使用 `Production Readonly Verify`，已確認 artifact 內有 `production-readonly-manifest.json`
+- [ ] 已確認 production deploy 本身仍是受控手動流程，不會被 GitHub Actions 自動推進
 
 ### 2.4 資源與資料
 
@@ -75,11 +80,16 @@
 wrangler deploy --env staging
 ```
 
+或手動觸發：
+
+- `Deploy Staging` workflow
+
 完成後確認：
 
 - [ ] deploy 成功
 - [ ] 綁定資源與 staging 預期一致
 - [ ] 無明顯 Wrangler 配置錯誤
+- [ ] 若使用 `Deploy Staging`，已確認 `staging-deploy-summary.md` 與 `staging-deploy-manifest.json`
 
 ### 3.2 production
 
@@ -94,6 +104,7 @@ wrangler deploy
 - [ ] deploy 成功
 - [ ] 綁定資源與 production 預期一致
 - [ ] 沒有把 staging resource 名稱帶進 production
+- [ ] 如需 deploy 後再做安全回歸，已準備 `Production Readonly Verify` workflow 或等價唯讀命令
 
 ## 4. 發版後驗收
 
@@ -124,6 +135,10 @@ RUN_ID="<existing_run_id>" \
 npm run post-deploy:verify:readonly
 ```
 
+或手動觸發：
+
+- `Production Readonly Verify` workflow
+
 驗收完成前至少確認：
 
 - [ ] `GET /api/v1/health` 回 `200`
@@ -133,6 +148,7 @@ npm run post-deploy:verify:readonly
 - [ ] 既有 run 可查
 - [ ] graph / events / artifacts 可查
 - [ ] 若存在 artifact，正文可讀
+- [ ] 若走 workflow，已保存 `production-readonly-summary.md` / `production-readonly-manifest.json`
 
 ## 5. 若驗收失敗先看哪裡
 

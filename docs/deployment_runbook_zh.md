@@ -20,7 +20,7 @@
 
 ## 2. 當前代碼狀態
 
-截至 2026-03-31，倉庫內 MVP 已通過以下本地驗證：
+截至 2026-04-01，倉庫內 MVP 已通過以下本地驗證：
 
 - `npm run verify:local`
 - `npm run verify:build`
@@ -28,7 +28,13 @@
 這代表 TypeScript、mock smoke flow 與 Worker 打包配置目前是自洽的。  
 但這不等於可直接部署到真實 Cloudflare 環境，因為正式環境仍需先準備對應資源並補齊配置。
 
-倉庫另外提供一個 GitHub Actions 的手動 release gate workflow，會在不部署的前提下包裝本地驗證、可選的 write-mode 遠端驗收，以及 readonly 遠端驗證，並把 logs / summary 上傳成 artifact。驗證腳本現在也會輸出結構化步驟事件，讓後續排障時能直接看到每一步的開始時間、耗時與是否成功寫出 evidence。
+倉庫另外提供三條 GitHub Actions 輔助流程：
+
+- `CI`：對 `push` / `pull_request` 跑 `verify:local` 與 `verify:build`
+- `Manual Release Gate`：不部署，只做人工 gate 與遠端驗收 artifact 收集
+- `Deploy Staging` / `Production Readonly Verify`：把 staging deploy 與 production readonly 驗收包裝成可重跑 workflow
+
+驗證腳本現在也會輸出結構化步驟事件，讓後續排障時能直接看到每一步的開始時間、耗時與是否成功寫出 evidence。
 
 ## 3. 部署前提
 
@@ -203,7 +209,30 @@ npm run post-deploy:verify
 - 仍會檢查 A2A `message:stream` 與可用的 MCP SSE ready stream
 - 若該 run 目前尚未產出 artifact，腳本會保留成功並在輸出中標示略過正文檢查
 
-### 4.6 GitHub Actions 手動 release gate
+### 4.6 GitHub Actions workflow 總覽
+
+目前可用的 workflow：
+
+- `CI`
+  - 檔案: [.github/workflows/ci.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/ci.yml)
+  - 用途: 對 `push` / `pull_request` 自動跑 `verify:local` 與 `verify:build`
+- `Manual Release Gate`
+  - 檔案: [.github/workflows/manual-release-gate.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/manual-release-gate.yml)
+  - 用途: 不部署，只做人工 gate、write/readonly 遠端驗收與 artifact 收集
+- `Deploy Staging`
+  - 檔案: [.github/workflows/deploy-staging.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/deploy-staging.yml)
+  - 用途: 手動部署 `staging`，並在 deploy 後直接跑 write-mode 驗收
+- `Production Readonly Verify`
+  - 檔案: [.github/workflows/production-readonly-verify.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/production-readonly-verify.yml)
+  - 用途: 對既有 production 部署跑 readonly 驗收，不做 deploy
+
+其中：
+
+- `CI` 只做 baseline 驗證
+- `Deploy Staging` 會真的呼叫 `wrangler deploy --env staging`
+- `Manual Release Gate` 和 `Production Readonly Verify` 都不會做 deploy
+
+### 4.7 GitHub Actions 手動 release gate
 
 如果你想在正式部署前先做一個人工 gate，可以直接手動觸發：
 
@@ -240,6 +269,80 @@ npm run post-deploy:verify
 - `release-gate-summary.md`
 
 這個 workflow 不會做 `wrangler deploy`，也不會替你建立或修改真實環境。
+
+### 4.8 GitHub Actions staging deploy
+
+如果你要把 staging deploy 也包進 GitHub Actions，可以手動觸發：
+
+- Workflow: `Deploy Staging`
+- 檔案: [.github/workflows/deploy-staging.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/deploy-staging.yml)
+
+需要先在 GitHub repository secrets 補齊：
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+workflow 輸入：
+
+- `base_url`
+- `tenant_id`
+- `expected_run_rate_limit`（選填）
+- `expected_replay_rate_limit`（選填）
+
+這個 workflow 會依序做：
+
+- `npm ci`
+- `npm run verify:local`
+- `npx wrangler deploy --dry-run --env staging`
+- `npx wrangler deploy --env staging`
+- `npm run post-deploy:verify`
+
+artifact 內會包含：
+
+- `verify-local.log`
+- `verify-build-staging.log`
+- `deploy-staging.log`
+- `verify-write.log`
+- `verify-write-summary.json`
+- `staging-deploy-manifest.json`
+- `staging-deploy-summary.md`
+
+要注意：
+
+- 這個 workflow 只負責 deploy 與 verify，不會替你建立 D1 / R2 / Queue
+- 也不會自動套 migration；若 staging schema 有變更，仍要先完成 migration
+- 建議只對 verify tenant 或 staging 專用 tenant 跑 write-mode 驗收
+
+### 4.9 GitHub Actions production readonly verify
+
+如果 production 已部署完成，只想再跑一次安全的唯讀驗收，可以手動觸發：
+
+- Workflow: `Production Readonly Verify`
+- 檔案: [.github/workflows/production-readonly-verify.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/production-readonly-verify.yml)
+
+workflow 輸入：
+
+- `base_url`
+- `tenant_id`
+- `run_id`
+
+這個 workflow 會做：
+
+- `npm ci`
+- `npm run post-deploy:verify:readonly`
+
+artifact 內會包含：
+
+- `verify-readonly.log`
+- `verify-readonly-summary.json`
+- `production-readonly-manifest.json`
+- `production-readonly-summary.md`
+
+這個 workflow 不會 deploy，也不會建立新 run，適合作為：
+
+- production 變更窗口後的 readonly 驗收
+- 交接時的二次確認
+- Access / secret / provider 變更後的安全回歸檢查
 
 ## 5. Migration 與資料初始化
 

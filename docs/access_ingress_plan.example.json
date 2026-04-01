@@ -1,0 +1,17 @@
+{
+  "tenant_id": "tenant_verify_20260401",
+  "deploy_env": "staging",
+  "worker_url": "https://agent-control-plane-staging.izhenghaocn.workers.dev",
+  "northbound_auth_mode": "trusted_edge",
+  "access_application_name": "agent-control-plane-staging-access",
+  "service_token_name": "agent-control-plane-staging-service-token",
+  "trusted_subject_header": "X-Authenticated-Subject",
+  "trusted_roles_header": "X-Authenticated-Roles",
+  "access_group_names": [
+    "platform_admin",
+    "legal_approver"
+  ],
+  "service_token_audience": "release-gate",
+  "verify_output_path": "/tmp/access-ingress-verify.json",
+  "notes": "Use a dedicated staging Access application and verify in trusted_edge mode before production rollout."
+}

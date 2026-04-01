@@ -40,6 +40,18 @@
 
 - [secret_rotation_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_plan.example.json)
 
+如果你想直接生成一份可交接的 rotation bundle，可以使用：
+
+```bash
+npm run secret:rotation:bundle -- --plan docs/secret_rotation_plan.example.json --output-dir .secret-rotation
+```
+
+這個 bundle 會輸出：
+
+- `rotation-plan.json`
+- `rotation-checklist.md`
+- `rotate.sh`
+
 至少要確認：
 
 - tenant

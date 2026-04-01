@@ -36,6 +36,8 @@
 - `post-deploy:verify` 與 `post-deploy:verify:readonly` 已對齊 trusted headers
 - Access / service token 的部署方式請先看：
   - [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
+- 若要先生成一份可交接的入口治理計劃，可直接使用：
+  - `npm run access:ingress:plan -- --plan-file docs/access_ingress_plan.example.json --output-dir /tmp/access-ingress-plan`
 
 ## 4. 接手優先閱讀順序
 
@@ -44,6 +46,8 @@
 3. [docs/environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md)
 4. [docs/access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
 5. [docs/release_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/release_checklist_zh.md)
+6. [docs/observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md)
+7. [docs/secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md)
 
 ## 5. 常用命令
 
@@ -66,10 +70,23 @@ VERIFY_OUTPUT_PATH="/tmp/agent-control-plane-production-verify-readonly.json" \
 npm run post-deploy:verify:readonly
 ```
 
+### 5.3 GitHub Actions 輔助入口
+
+- staging deploy:
+  - `Deploy Staging`
+  - [.github/workflows/deploy-staging.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/deploy-staging.yml)
+- production readonly verify:
+  - `Production Readonly Verify`
+  - [.github/workflows/production-readonly-verify.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/production-readonly-verify.yml)
+- secret rotation bundle:
+  - `npm run secret:rotation:bundle -- --plan docs/secret_rotation_plan.example.json --output-dir .secret-rotation`
+- tenant onboarding bundle:
+  - `npm run tenant:onboarding:bundle -- --tenant-id tenant_acme --deploy-env staging`
+
 ## 6. 目前仍需補強的運維項
 
 - 正式 Access application / service token 治理自動化
 - 監控 / 告警基線已成文，但尚未接入真實監控系統與 oncall 值班流程
-- secret rotation 已有 runbook 與 plan template，但尚未自動化
-- deploy / release automation 的更完整流水線
-- tenant provisioning 的半自動或自動化
+- secret rotation 已有 runbook 與 bundle template，但尚未接入真正的 secret-store 自動化
+- staging deploy 與 production readonly verify workflow 已落地，但 production deploy / migration / approval gate 仍未完全自動化
+- tenant provisioning 已有 `status.sh` / `provision.sh` / `verify.sh`，但仍未接入外部 provisioning 系統

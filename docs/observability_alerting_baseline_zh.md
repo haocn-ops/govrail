@@ -18,6 +18,11 @@
 
 這份基線就是把這些證據轉成可操作的 SLI 和告警模板。
 
+若要直接往監控系統落地，請再搭配：
+
+- [monitoring_dashboard_template.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/monitoring_dashboard_template.example.json)
+- [incident_response_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/incident_response_checklist_zh.md)
+
 ## 2. 值班原則
 
 ### 2.1 先頁面，後工單
@@ -165,3 +170,10 @@
 - `verify_output_path`
 - `deploy version id`
 
+## 9. 最小落地組合
+
+如果要在一個工作週內把監控接起來，建議直接用這個組合：
+
+1. 先把 [monitoring_dashboard_template.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/monitoring_dashboard_template.example.json) 對接到你的 dashboard 平台
+2. 再把 [incident_response_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/incident_response_checklist_zh.md) 接到 oncall wiki 或 incident template
+3. 最後把 synthetic check 的結果接到 `health` / `production readonly verify`

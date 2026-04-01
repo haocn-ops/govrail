@@ -106,6 +106,11 @@
 | staging Wrangler env 與資源綁定 | 已實作 | [wrangler.jsonc](/Users/zh/Documents/codeX/agent_control_plane/wrangler.jsonc), [docs/wrangler.multi-env.example.jsonc](/Users/zh/Documents/codeX/agent_control_plane/docs/wrangler.multi-env.example.jsonc) | 實際 deploy + `post-deploy:verify` | 已建立 staging D1 / R2 / Queue 並完成遠端驗收 |
 | production Wrangler env 與資源綁定 | 已實作 | [wrangler.jsonc](/Users/zh/Documents/codeX/agent_control_plane/wrangler.jsonc) | 實際 deploy + `post-deploy:verify`, `post-deploy:verify:readonly` | 已建立 production D1 / R2 / Queue 並完成 write / readonly 驗收 |
 | Access / service-token ingress runbook | 已實作 | [docs/access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md) | 文檔交接 | 已收斂 trusted headers、role 映射、verify 檢查點 |
+| Access ingress plan renderer | 已實作 | [scripts/render_access_ingress_plan.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_access_ingress_plan.mjs), [docs/access_ingress_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_plan.example.json) | `npm run access:ingress:plan` | 可產出 `access-ingress-plan.json` 與 `access-ingress-checklist.md` |
+| staging deploy workflow | 已實作 | [.github/workflows/deploy-staging.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/deploy-staging.yml) | YAML parse、runbook/checklist 對齊 | workflow 已落地；仍需 GitHub secrets 與實際 dispatch |
+| production readonly verify workflow | 已實作 | [.github/workflows/production-readonly-verify.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/production-readonly-verify.yml) | YAML parse、runbook/checklist 對齊 | 不 deploy，只包裝 readonly 驗收與 artifact manifest |
+| secret rotation bundle renderer | 已實作 | [scripts/render_secret_rotation_bundle.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_secret_rotation_bundle.mjs), [docs/secret_rotation_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_plan.example.json) | `npm run secret:rotation:bundle` | 可產出 `rotation-plan.json`、`rotation-checklist.md`、`rotate.sh` |
+| onboarding bundle `status.sh` helper | 已實作 | [scripts/render_tenant_onboarding_bundle.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_tenant_onboarding_bundle.mjs), [docs/tenant_onboarding_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/tenant_onboarding_runbook_zh.md) | bundle 生成、shell syntax check | 先看摘要再進 `provision.sh` / `verify.sh` |
 
 ## 10. 最重要的當前限制
 
@@ -113,4 +118,4 @@
 
 - replay 的 `from_step` 會對 `mcp_call` / `a2a_message` 等非 workflow-native step 做最小 rewind 回退；若同 run 內找不到最近的 workflow-native anchor，才會失敗
 - Worker 內不直接驗證 `Authorization` 內容，production 需依賴外層 Access / gateway
-- 目前已有 baseline onboarding bundle，但仍缺少完整 production provisioning、告警、secret 輪替與更完整的 deploy / post-deploy 自動化流水線
+- 目前已有 baseline onboarding bundle、staging deploy workflow 與 production readonly verify workflow，但仍缺少完整 production provisioning、告警、secret 輪替，以及 production deploy / migration 的全自動流水線

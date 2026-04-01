@@ -22,13 +22,17 @@
 - [deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md)
 - [environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md)
 - [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
+- [access_ingress_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_plan.example.json)
 - [observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md)
+- [monitoring_dashboard_template.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/monitoring_dashboard_template.example.json)
+- [incident_response_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/incident_response_checklist_zh.md)
 - [secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md)
 - [ops_handoff_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/ops_handoff_summary_zh.md)
 - [final_delivery_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/final_delivery_summary_zh.md)
 - [flow_failure_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/flow_failure_runbook_zh.md)
 - 如果是要交接給下一位工程師，優先把 `post-deploy:verify` 當成驗收出口來看
 - 如果是新 tenant 接入，優先把 onboarding bundle 內的 `provision.sh` 和 `verify.sh` 當成最小接入與驗收出口來看
+- 如果是新 tenant 接入，先用 onboarding bundle 內的 `status.sh` 快速看摘要，再用 `provision.sh` 和 `verify.sh` 完成接入與驗收
 
 ## 2. 各文件用途
 
@@ -42,8 +46,13 @@
 | [release_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/release_checklist_zh.md) | staging / production 發版前後的可勾選清單 |
 | [environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md) | staging / production 配置、secrets、graph / replay / SSE 驗證節奏 |
 | [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md) | Access / service token / trusted-edge 部署方式與入口治理檢查點 |
+| [access_ingress_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_plan.example.json) | Access / service token 部署計劃模板，供生成 checklist 與驗證命令 |
+| [access:ingress:plan](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_access_ingress_plan.mjs) | 根據 ingress plan 模板生成 access-ingress-plan 與 checklist |
 | [observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md) | 可觀測性、SLI、告警門檻與 oncall 排障順序 |
+| [monitoring_dashboard_template.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/monitoring_dashboard_template.example.json) | 可直接對接監控系統的 dashboard 模板 |
+| [incident_response_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/incident_response_checklist_zh.md) | oncall 事故處置與升級清單 |
 | [secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md) | `auth_ref` 對應 Worker secret 的輪替、回滾與交接流程 |
+| [secret:rotation:bundle](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_secret_rotation_bundle.mjs) | 根據 rotation plan 生成 rotation-plan、checklist 與 rotate.sh |
 | [ops_handoff_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/ops_handoff_summary_zh.md) | 目前已落地環境、verify 證據與接手入口摘要 |
 | [final_delivery_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/final_delivery_summary_zh.md) | 本輪交付的完成項、部署結果、驗收證據與下一步建議 |
 | [tenant_onboarding_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/tenant_onboarding_runbook_zh.md) | 新 tenant 接入步驟、tenant onboarding bundle 生成、驗收出口、回滾與交接資訊 |

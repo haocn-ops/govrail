@@ -1,0 +1,175 @@
+name: Deploy Staging
+
+run-name: deploy-staging:${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Staging worker base URL, for example https://agent-control-plane-staging.<subdomain>.workers.dev"
+        required: true
+        default: ""
+        type: string
+      tenant_id:
+        description: "Verify tenant ID used after deploy"
+        required: true
+        default: tenant_verify_staging
+        type: string
+      expected_run_rate_limit:
+        description: "Optional expected RATE_LIMIT_RUNS_PER_MINUTE for staging verification"
+        required: false
+        default: ""
+        type: string
+      expected_replay_rate_limit:
+        description: "Optional expected RATE_LIMIT_REPLAYS_PER_MINUTE for staging verification"
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-staging:
+    name: deploy-staging
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run local verification
+        id: verify_local
+        run: |
+          mkdir -p staging-deploy
+          set -euo pipefail
+          npm run verify:local 2>&1 | tee staging-deploy/verify-local.log
+
+      - name: Run staging build verification
+        id: verify_staging_build
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --dry-run --env staging 2>&1 | tee staging-deploy/verify-build-staging.log
+
+      - name: Deploy staging Worker
+        id: deploy_staging
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --env staging 2>&1 | tee staging-deploy/deploy-staging.log
+
+      - name: Run staging post-deploy verification
+        id: verify_remote
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url }}
+          TENANT_ID: ${{ github.event.inputs.tenant_id }}
+          EXPECT_RATE_LIMIT_RUNS_PER_MINUTE: ${{ github.event.inputs.expected_run_rate_limit }}
+          EXPECT_RATE_LIMIT_REPLAYS_PER_MINUTE: ${{ github.event.inputs.expected_replay_rate_limit }}
+          VERIFY_OUTPUT_PATH: staging-deploy/verify-write-summary.json
+        run: |
+          set -euo pipefail
+          npm run post-deploy:verify 2>&1 | tee staging-deploy/verify-write.log
+
+      - name: Build staging deploy summary
+        if: always()
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url }}
+          TENANT_ID: ${{ github.event.inputs.tenant_id }}
+          EXPECTED_RUN_RATE_LIMIT: ${{ github.event.inputs.expected_run_rate_limit }}
+          EXPECTED_REPLAY_RATE_LIMIT: ${{ github.event.inputs.expected_replay_rate_limit }}
+          VERIFY_LOCAL_OUTCOME: ${{ steps.verify_local.outcome }}
+          VERIFY_STAGING_BUILD_OUTCOME: ${{ steps.verify_staging_build.outcome }}
+          DEPLOY_STAGING_OUTCOME: ${{ steps.deploy_staging.outcome }}
+          VERIFY_REMOTE_OUTCOME: ${{ steps.verify_remote.outcome }}
+        run: |
+          mkdir -p staging-deploy
+          cat > staging-deploy/staging-deploy-summary.md <<EOF
+          # Staging deploy
+
+          - Base URL: ${BASE_URL}
+          - Tenant ID: ${TENANT_ID}
+          - Local verification: ${VERIFY_LOCAL_OUTCOME}
+          - Staging build verification: ${VERIFY_STAGING_BUILD_OUTCOME}
+          - Deploy staging: ${DEPLOY_STAGING_OUTCOME}
+          - Remote verification: ${VERIFY_REMOTE_OUTCOME}
+          - Expected run rate limit: ${EXPECTED_RUN_RATE_LIMIT:-<none>}
+          - Expected replay rate limit: ${EXPECTED_REPLAY_RATE_LIMIT:-<none>}
+          EOF
+
+          if [ -f staging-deploy/verify-write-summary.json ]; then
+            node -e '
+              const fs = require("node:fs");
+              const summary = JSON.parse(fs.readFileSync("staging-deploy/verify-write-summary.json", "utf8"));
+              const lines = [
+                `- Verify summary path: ${summary.verification_output_path ?? "staging-deploy/verify-write-summary.json"}`,
+                `- Verify started at: ${summary.started_at ?? "<none>"}`,
+                `- Verify completed at: ${summary.completed_at ?? "<none>"}`,
+                `- Verify duration ms: ${summary.duration_ms ?? "<none>"}`,
+                `- Verify check count: ${summary.check_count ?? "<none>"}`,
+                `- Verify trace ID: ${summary.trace_id ?? "<none>"}`,
+                `- Verify run ID: ${summary.run_id ?? "<none>"}`,
+                `- Verify policy ID: ${summary.policy_id ?? "<none>"}`,
+                `- Verify tool provider ID: ${summary.tool_provider_id ?? "<none>"}`
+              ];
+              fs.appendFileSync("staging-deploy/staging-deploy-summary.md", `${lines.join("\n")}\n`);
+            '
+          fi
+
+          node -e '
+            const fs = require("node:fs");
+            const manifest = {
+              type: "staging_deploy",
+              inputs: {
+                base_url: process.env.BASE_URL || "",
+                tenant_id: process.env.TENANT_ID || "",
+                expected_run_rate_limit: process.env.EXPECTED_RUN_RATE_LIMIT || "",
+                expected_replay_rate_limit: process.env.EXPECTED_REPLAY_RATE_LIMIT || ""
+              },
+              outcomes: {
+                verify_local: process.env.VERIFY_LOCAL_OUTCOME || "skipped",
+                verify_staging_build: process.env.VERIFY_STAGING_BUILD_OUTCOME || "skipped",
+                deploy_staging: process.env.DEPLOY_STAGING_OUTCOME || "skipped",
+                verify_remote: process.env.VERIFY_REMOTE_OUTCOME || "skipped"
+              },
+              artifacts: {
+                verify_local_log: "staging-deploy/verify-local.log",
+                verify_staging_build_log: "staging-deploy/verify-build-staging.log",
+                deploy_staging_log: "staging-deploy/deploy-staging.log",
+                verify_remote_log: "staging-deploy/verify-write.log",
+                verify_remote_summary: "staging-deploy/verify-write-summary.json",
+                summary_md: "staging-deploy/staging-deploy-summary.md"
+              },
+              generated_at: new Date().toISOString()
+            };
+            fs.writeFileSync("staging-deploy/staging-deploy-manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
+          '
+
+          cat >> staging-deploy/staging-deploy-summary.md <<'EOF'
+
+          Manifest:
+          - staging-deploy/staging-deploy-manifest.json
+          EOF
+
+          cat staging-deploy/staging-deploy-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload staging deploy artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-deploy-${{ github.run_id }}
+          path: staging-deploy/
+          if-no-files-found: error

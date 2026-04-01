@@ -40,6 +40,7 @@ function buildBundleSummary({
   metadataPath,
   handoffPath,
   provisionScriptPath,
+  statusScriptPath,
   verifyScriptPath,
   verifyWriteSummaryPath,
   verifyReadonlySummaryPath,
@@ -65,6 +66,7 @@ function buildBundleSummary({
       metadata_json: metadataPath,
       handoff_markdown: handoffPath,
       provision_script: provisionScriptPath,
+      status_script: statusScriptPath,
       verify_script: verifyScriptPath,
     },
     verification_artifacts: {
@@ -92,6 +94,7 @@ function buildBundleSummary({
       provider_list: `curl "${baseUrl}/api/v1/tool-providers" -H "X-Tenant-Id: ${tenantId}"`,
       policy_list: `curl "${baseUrl}/api/v1/policies" -H "X-Tenant-Id: ${tenantId}"`,
       provision_helper: `./provision.sh apply`,
+      status_helper: `./status.sh`,
       post_deploy_verify: recommendedVerifyCommand,
       post_deploy_verify_write: writeVerifyCommand,
       post_deploy_verify_readonly: readonlyVerifyCommand,
@@ -215,6 +218,40 @@ function renderProvisionScript(summary) {
   ].join("\n");
 }
 
+function renderStatusScript(summary) {
+  const nextStep =
+    summary.deploy_env === "production"
+      ? "./verify.sh readonly <existing_run_id>"
+      : "./verify.sh write";
+  return [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    "",
+    'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
+    `DEFAULT_TENANT_ID="${summary.tenant_id}"`,
+    `DEFAULT_DEPLOY_ENV="${summary.deploy_env}"`,
+    `DEFAULT_BASE_URL="${summary.base_url}"`,
+    `NEXT_STEP="${nextStep}"`,
+    'TENANT_ID="${TENANT_ID:-${DEFAULT_TENANT_ID}}"',
+    'DEPLOY_ENV="${DEPLOY_ENV:-${DEFAULT_DEPLOY_ENV}}"',
+    'BASE_URL="${BASE_URL:-${DEFAULT_BASE_URL}}"',
+    "",
+    'if [ -f "${SCRIPT_DIR}/bundle.json" ]; then',
+    '  node -e \'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(JSON.stringify({ tenant_id: data.tenant_id, deploy_env: data.deploy_env, created_at: data.created_at, base_url: data.base_url, files: data.files, verification_artifacts: data.verification_artifacts, suggested_commands: data.suggested_commands }, null, 2));\' "${SCRIPT_DIR}/bundle.json"',
+    "else",
+    '  cat <<EOF',
+    `Tenant: ${summary.tenant_id}`,
+    `Deploy env: ${summary.deploy_env}`,
+    `Base URL: ${summary.base_url}`,
+    `Next verify: ${nextStep}`,
+    "EOF",
+    "fi",
+    "",
+    'echo "Next step: ${NEXT_STEP}"',
+    "",
+  ].join("\n");
+}
+
 function renderHandoffMarkdown(summary) {
   return `# Tenant Onboarding Bundle
 
@@ -292,6 +329,7 @@ async function main() {
   const metadataPath = join(outputDir, "bundle.json");
   const handoffPath = join(outputDir, "handoff.md");
   const provisionScriptPath = join(outputDir, "provision.sh");
+  const statusScriptPath = join(outputDir, "status.sh");
   const verifyScriptPath = join(outputDir, "verify.sh");
   const verifyWriteSummaryPath = join(outputDir, "verify-write-summary.json");
   const verifyReadonlySummaryPath = join(outputDir, "verify-readonly-summary.json");
@@ -307,12 +345,14 @@ async function main() {
     metadataPath,
     handoffPath,
     provisionScriptPath,
+    statusScriptPath,
     verifyScriptPath,
     verifyWriteSummaryPath,
     verifyReadonlySummaryPath,
   });
   const handoffMarkdown = renderHandoffMarkdown(summary);
   const provisionScript = renderProvisionScript(summary);
+  const statusScript = renderStatusScript(summary);
   const verifyScript = renderVerifyScript(summary);
 
   await Promise.all([
@@ -320,10 +360,12 @@ async function main() {
     writeFile(metadataPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8"),
     writeFile(handoffPath, handoffMarkdown, "utf8"),
     writeFile(provisionScriptPath, provisionScript, "utf8"),
+    writeFile(statusScriptPath, statusScript, "utf8"),
     writeFile(verifyScriptPath, verifyScript, "utf8"),
   ]);
 
   await chmod(provisionScriptPath, 0o755);
+  await chmod(statusScriptPath, 0o755);
   await chmod(verifyScriptPath, 0o755);
 
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

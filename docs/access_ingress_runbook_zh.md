@@ -17,6 +17,7 @@
 - [environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md)
 - [deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md)
 - [release_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/release_checklist_zh.md)
+- [access_ingress_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_plan.example.json)
 
 ## 2. 目標安全模型
 
@@ -150,6 +151,33 @@ npm run post-deploy:verify:readonly
 
 - verify 腳本必須能在 `trusted_edge` 下跑通
 - summary 要保留 `trace_id`、`run_id`、`duration_ms`、`checks`
+
+### 8.3 生成可交接的 ingress plan
+
+如果你要把這份治理資訊交給下一位操作者，建議先用模板產出一份機器可讀計劃：
+
+```bash
+npm run access:ingress:plan -- \
+  --plan-file docs/access_ingress_plan.example.json \
+  --output-dir /tmp/access-ingress-plan
+```
+
+如果不想先準備模板，也可以直接用命令列參數：
+
+```bash
+npm run access:ingress:plan -- \
+  --tenant-id tenant_verify_20260401 \
+  --deploy-env staging \
+  --worker-url https://agent-control-plane-staging.izhenghaocn.workers.dev \
+  --access-application-name agent-control-plane-staging-access \
+  --service-token-name agent-control-plane-staging-service-token \
+  --output-dir /tmp/access-ingress-plan
+```
+
+產物會包含：
+
+- `access-ingress-plan.json`
+- `access-ingress-checklist.md`
 
 ## 9. 常見故障
 

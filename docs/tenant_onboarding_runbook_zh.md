@@ -100,6 +100,7 @@ npm run tenant:onboarding:bundle -- --tenant-id tenant_acme --deploy-env staging
 - `seed.sql`
 - `bundle.json`
 - `handoff.md`
+- `status.sh`
 - `provision.sh`
 - `verify.sh`
 
@@ -297,6 +298,8 @@ readonly 模式更適合正式交付，因為它不會建立新的 run 或修改
 若使用 tenant onboarding bundle 腳本，建議把生成的 `bundle.json` 與 `handoff.md` 一起存檔，作為最小交接包。
 
 若要降低人工出錯，優先直接執行 bundle 內的 `verify.sh`，它會自動把驗收輸出寫到同一個 bundle 目錄。
+
+若要先快速確認 bundle 內有哪些檔案、下一步要做什麼，先執行 `status.sh`。它會讀取 `bundle.json` 並列出本次 bundle 的摘要與建議下一步。
 
 若這次驗收本身就是交接證據，建議再把 `VERIFY_OUTPUT_PATH` 輸出的 `verify-write-summary.json` 或 `verify-readonly-summary.json` 一起保存在同一個 bundle 目錄。
 

@@ -1,0 +1,141 @@
+{
+  "title": "Agent Control Plane - Operations Dashboard",
+  "description": "Monitoring-system-agnostic dashboard template for staging or production. Wire these panels to logs, synthetic checks, or metrics in your platform of choice.",
+  "recommended_refresh_interval_seconds": 60,
+  "sections": [
+    {
+      "name": "Golden Signals",
+      "panels": [
+        {
+          "name": "Health success rate",
+          "type": "timeseries",
+          "source": "synthetic_check",
+          "query": "GET /api/v1/health success rate",
+          "goal": "99.9% over 1h",
+          "alert_threshold": "below 99.5% over 5m"
+        },
+        {
+          "name": "Run create success rate",
+          "type": "timeseries",
+          "source": "api_logs",
+          "query": "POST /api/v1/runs 2xx rate",
+          "goal": "99% over 1h",
+          "alert_threshold": "5xx above 1% over 10m"
+        },
+        {
+          "name": "Run completion rate",
+          "type": "timeseries",
+          "source": "d1",
+          "query": "completed runs / all terminal runs",
+          "goal": "stable upward trend",
+          "alert_threshold": "failed ratio above 10% over 30m"
+        },
+        {
+          "name": "Request latency p95",
+          "type": "timeseries",
+          "source": "api_logs",
+          "query": "p95 latency for northbound requests",
+          "goal": "baseline under SLO",
+          "alert_threshold": "sustained regression above baseline"
+        }
+      ]
+    },
+    {
+      "name": "Workflow Health",
+      "panels": [
+        {
+          "name": "Pending approvals",
+          "type": "single_value",
+          "source": "d1",
+          "query": "count of approvals where status = pending",
+          "alert_threshold": "oldest pending approval over 30m"
+        },
+        {
+          "name": "Approval timeout ratio",
+          "type": "timeseries",
+          "source": "audit_events",
+          "query": "approval_expired / approval_created",
+          "alert_threshold": "above 10% over 1h"
+        },
+        {
+          "name": "Workflow failures",
+          "type": "timeseries",
+          "source": "d1",
+          "query": "failed runs / terminal runs",
+          "alert_threshold": "above 10% over 30m"
+        }
+      ]
+    },
+    {
+      "name": "Gateway Health",
+      "panels": [
+        {
+          "name": "A2A inbound errors",
+          "type": "timeseries",
+          "source": "api_logs",
+          "query": "POST /api/v1/a2a/message:send 5xx rate",
+          "alert_threshold": "above 1% over 10m"
+        },
+        {
+          "name": "MCP call errors",
+          "type": "timeseries",
+          "source": "api_logs",
+          "query": "POST /api/v1/mcp/* 5xx rate",
+          "alert_threshold": "above 1% over 10m"
+        },
+        {
+          "name": "Upstream auth errors",
+          "type": "timeseries",
+          "source": "api_logs",
+          "query": "upstream_auth_invalid + upstream_auth_not_configured",
+          "alert_threshold": "any unexpected non-zero occurrence"
+        }
+      ]
+    },
+    {
+      "name": "Storage And Queue",
+      "panels": [
+        {
+          "name": "Artifact write failures",
+          "type": "timeseries",
+          "source": "workflow_logs",
+          "query": "artifact write failures",
+          "alert_threshold": "any sustained failure"
+        },
+        {
+          "name": "Queue invalid messages",
+          "type": "timeseries",
+          "source": "queue_consumer_logs",
+          "query": "invalid queue message count",
+          "alert_threshold": "greater than 0 in a batch"
+        },
+        {
+          "name": "Queue duplicate rate",
+          "type": "timeseries",
+          "source": "queue_consumer_logs",
+          "query": "duplicate processed / total processed",
+          "alert_threshold": "sharp unexplained increase"
+        }
+      ]
+    }
+  ],
+  "annotations": [
+    "mark deploy timestamps",
+    "mark verify timestamps",
+    "mark major tenant onboarding events"
+  ],
+  "links": [
+    {
+      "label": "Observability baseline",
+      "path": "docs/observability_alerting_baseline_zh.md"
+    },
+    {
+      "label": "Ops handoff summary",
+      "path": "docs/ops_handoff_summary_zh.md"
+    },
+    {
+      "label": "Final delivery summary",
+      "path": "docs/final_delivery_summary_zh.md"
+    }
+  ]
+}

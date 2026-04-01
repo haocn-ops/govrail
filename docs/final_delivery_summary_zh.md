@@ -37,7 +37,9 @@
 - staging / production Wrangler 配置與實際資源落地
 - post-deploy verify 結構化 evidence
 - manual release gate manifest
-- onboarding bundle 內 `verify.sh` / `provision.sh`
+- `Deploy Staging` / `Production Readonly Verify` workflow artifact 與 manifest
+- access ingress plan / secret rotation bundle 可執行模板
+- onboarding bundle 內 `status.sh` / `verify.sh` / `provision.sh`
 - ops handoff summary
 - observability / alerting baseline 文檔
 
@@ -73,11 +75,11 @@
 
 目前仍屬下一階段工作的部分：
 
-- Access application / service token 的自動化治理
+- Access application / service token 的真正自動化建立與輪換
 - 監控系統、dashboard、告警通道與 oncall 流程的真實接入
 - secret rotation 的自動化執行與 secret-store 治理
-- deploy / release 的更完整流水線
-- tenant provisioning 的更高程度自動化
+- production deploy / migration / approval gate 的更完整流水線
+- tenant provisioning 的更高程度自動化與外部系統串接
 
 ## 6. 推薦下一步
 
@@ -85,6 +87,6 @@
 
 1. 把 release/deploy 流水線正式化
 2. 把 observability baseline 接入真實監控系統
-3. 把 secret rotation 從 runbook 提升到自動化
-4. 把 Access / service token 治理自動化
-5. 再推 tenant provisioning 自動化
+3. 把 Access / service token 治理從模板提升到自動化
+4. 把 secret rotation 從 runbook/bundle 提升到自動化
+5. 再推 tenant provisioning 自動化與外部 provisioning 串接

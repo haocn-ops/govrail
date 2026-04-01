@@ -90,7 +90,9 @@ npm run post-deploy:verify:readonly
 | `npm run smoke` | Mocked end-to-end smoke flow |
 | `npm run verify:local` | `check` + `smoke` |
 | `npm run verify:build` | Wrangler dry-run package validation |
+| `npm run access:ingress:plan -- --plan-file <plan.json>` | Render an access ingress plan and checklist for a tenant/environment |
 | `npm run seed:sql -- --tenant-id <id>` | Render seed SQL for a tenant |
+| `npm run secret:rotation:bundle -- --plan <plan.json>` | Render a secret rotation bundle with checklist and helper script |
 | `npm run tenant:onboarding:bundle -- --tenant-id <id>` | Render tenant onboarding bundle files for a tenant |
 | `npm run post-deploy:verify` | Write-mode remote verification for staging or dedicated verify tenants |
 | `npm run post-deploy:verify:readonly` | Readonly remote verification for production or shared tenants |
@@ -113,7 +115,9 @@ npm run post-deploy:verify:readonly
 | [migrations](/Users/zh/Documents/codeX/agent_control_plane/migrations) | D1 schema migrations |
 | [scripts/smoke.ts](/Users/zh/Documents/codeX/agent_control_plane/scripts/smoke.ts) | Local smoke test harness |
 | [scripts/post_deploy_verify.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/post_deploy_verify.mjs) | Remote verification script |
+| [scripts/render_access_ingress_plan.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_access_ingress_plan.mjs) | Access ingress plan and checklist renderer |
 | [scripts/render_seed_sql.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_seed_sql.mjs) | Seed SQL generator |
+| [scripts/render_secret_rotation_bundle.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_secret_rotation_bundle.mjs) | Secret rotation bundle renderer |
 | [scripts/render_tenant_onboarding_bundle.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_tenant_onboarding_bundle.mjs) | Tenant onboarding bundle renderer |
 
 ## Document Map
@@ -136,6 +140,10 @@ Start here based on what you need:
   - [docs/access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
 - Observability and alerting baseline:
   - [docs/observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md)
+- Monitoring dashboard template:
+  - [docs/monitoring_dashboard_template.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/monitoring_dashboard_template.example.json)
+- Incident response checklist:
+  - [docs/incident_response_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/incident_response_checklist_zh.md)
 - Release checklist:
   - [docs/release_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/release_checklist_zh.md)
 - Environment, secrets, and multi-env guidance:
@@ -186,15 +194,29 @@ For human release gating, use [.github/workflows/manual-release-gate.yml](/Users
 - it uploads logs, JSON summaries, and a short markdown summary as an artifact
 - it does not deploy
 
+For controlled staging rollout, use [.github/workflows/deploy-staging.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/deploy-staging.yml):
+
+- it runs `verify:local`
+- it runs `wrangler deploy --dry-run --env staging`
+- it deploys the `staging` environment
+- it runs write-mode `post-deploy:verify`
+- it uploads `staging-deploy-manifest.json`, logs, and JSON summary as an artifact
+
+For production-safe remote checks without deploy, use [.github/workflows/production-readonly-verify.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/production-readonly-verify.yml):
+
+- it runs readonly `post-deploy:verify:readonly` against an existing `RUN_ID`
+- it uploads `production-readonly-manifest.json`, logs, and JSON summary as an artifact
+- it does not deploy or mutate production data
+
 ## Known Gaps
 
 The most important remaining work before serious production rollout is:
 
 - real Access / service-token deployment automation and governance rollout
 - fully automated production tenant onboarding and external provisioning workflow
-- observability now has a concrete SLI/alerting baseline doc, but the repo still needs real monitoring-system integration and a staffed oncall process
+- observability now has a concrete SLI/alerting baseline plus dashboard and incident templates, but the repo still needs real monitoring-system integration and a staffed oncall process
 - secret rotation now has a concrete runbook/template, but the repo still needs real rotation automation and secret-store governance
-- CI baseline now covers `verify:local` and `verify:build`; deploy is still manual and post-deploy verification is only wrapped by a manual gate
+- staging deploy and production readonly verification now have manual workflows, but production deploy promotion, migration orchestration, and release approval policy are still not fully automated
 
 ## Notes
 
