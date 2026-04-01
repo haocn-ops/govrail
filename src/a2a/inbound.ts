@@ -347,7 +347,7 @@ export async function handleA2ATaskCancel(
   }
 
   const meta = buildMeta(request);
-  const subjectId = getSubjectId(request);
+  const subjectId = getSubjectId(request, env);
   const { cancelledAt } = await cancelRun({
     env,
     tenantId,

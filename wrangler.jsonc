@@ -21,6 +21,7 @@
     {
       "binding": "DB",
       "database_name": "agent-control-plane",
+      "database_id": "fb4d2c8e-9701-4d32-8ffa-e42251587026",
       "migrations_dir": "./migrations"
     }
   ],
@@ -63,6 +64,11 @@
       "class_name": "RunWorkflow"
     }
   ],
+  "vars": {
+    "NORTHBOUND_AUTH_MODE": "trusted_edge",
+    "RATE_LIMIT_RUNS_PER_MINUTE": "0",
+    "RATE_LIMIT_REPLAYS_PER_MINUTE": "0"
+  },
   "queues": {
     "producers": [
       {
@@ -77,5 +83,67 @@
         "max_retries": 3
       }
     ]
+  },
+  "env": {
+    "staging": {
+      "name": "agent-control-plane-staging",
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "RUN_COORDINATOR",
+            "class_name": "RunCoordinator"
+          },
+          {
+            "name": "APPROVAL_SESSION",
+            "class_name": "ApprovalSession"
+          },
+          {
+            "name": "RATE_LIMITER",
+            "class_name": "RateLimiter"
+          }
+        ]
+      },
+      "vars": {
+        "NORTHBOUND_AUTH_MODE": "trusted_edge",
+        "RATE_LIMIT_RUNS_PER_MINUTE": "0",
+        "RATE_LIMIT_REPLAYS_PER_MINUTE": "0"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "agent-control-plane-staging",
+          "database_id": "8a9f2791-c691-4296-8d0f-1095c4d825e8",
+          "migrations_dir": "./migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ARTIFACTS_BUCKET",
+          "bucket_name": "agent-control-plane-staging-artifacts"
+        }
+      ],
+      "workflows": [
+        {
+          "binding": "RUN_WORKFLOW",
+          "name": "agent-control-plane-staging-run-workflow",
+          "class_name": "RunWorkflow"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "EVENT_QUEUE",
+            "queue": "agent-control-plane-staging-events"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "agent-control-plane-staging-events",
+            "max_batch_size": 10,
+            "max_retries": 3
+          }
+        ]
+      }
+    }
   }
 }

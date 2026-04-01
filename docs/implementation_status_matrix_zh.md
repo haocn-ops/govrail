@@ -98,7 +98,16 @@
 | `npm run post-deploy:verify` | staging / 寫入式遠端驗收 | staging 或 verify tenant |
 | `npm run post-deploy:verify:readonly` | production / 唯讀驗收 | production 或共享 tenant |
 
-## 9. 最重要的當前限制
+## 9. 入口治理與環境落地狀態
+
+| 能力 | 目前狀態 | 主要檔案 | 驗證方式 | 備註 |
+|---|---|---|---|---|
+| `trusted_edge` northbound auth mode | 已實作 | [src/lib/http.ts](/Users/zh/Documents/codeX/agent_control_plane/src/lib/http.ts), [src/app.ts](/Users/zh/Documents/codeX/agent_control_plane/src/app.ts) | `smoke`, `post-deploy:verify` | `NORTHBOUND_AUTH_MODE=trusted_edge` 時僅接受 `CF-Access-*` / `X-Authenticated-*` 身份 |
+| staging Wrangler env 與資源綁定 | 已實作 | [wrangler.jsonc](/Users/zh/Documents/codeX/agent_control_plane/wrangler.jsonc), [docs/wrangler.multi-env.example.jsonc](/Users/zh/Documents/codeX/agent_control_plane/docs/wrangler.multi-env.example.jsonc) | 實際 deploy + `post-deploy:verify` | 已建立 staging D1 / R2 / Queue 並完成遠端驗收 |
+| production Wrangler env 與資源綁定 | 已實作 | [wrangler.jsonc](/Users/zh/Documents/codeX/agent_control_plane/wrangler.jsonc) | 實際 deploy + `post-deploy:verify`, `post-deploy:verify:readonly` | 已建立 production D1 / R2 / Queue 並完成 write / readonly 驗收 |
+| Access / service-token ingress runbook | 已實作 | [docs/access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md) | 文檔交接 | 已收斂 trusted headers、role 映射、verify 檢查點 |
+
+## 10. 最重要的當前限制
 
 目前最需要提醒接手方的限制如下：
 

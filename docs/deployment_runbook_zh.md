@@ -16,6 +16,7 @@
 - `docs/policy_approval_spec_zh.md`
 - `docs/flow_failure_runbook_zh.md`
 - `docs/environment_config_runbook_zh.md`
+- `docs/observability_alerting_baseline_zh.md`
 
 ## 2. 當前代碼狀態
 
@@ -27,7 +28,7 @@
 這代表 TypeScript、mock smoke flow 與 Worker 打包配置目前是自洽的。  
 但這不等於可直接部署到真實 Cloudflare 環境，因為正式環境仍需先準備對應資源並補齊配置。
 
-倉庫另外提供一個 GitHub Actions 的手動 release gate workflow，會在不部署的前提下包裝本地驗證、可選的 write-mode 遠端驗收，以及 readonly 遠端驗證，並把 logs / summary 上傳成 artifact。
+倉庫另外提供一個 GitHub Actions 的手動 release gate workflow，會在不部署的前提下包裝本地驗證、可選的 write-mode 遠端驗收，以及 readonly 遠端驗證，並把 logs / summary 上傳成 artifact。驗證腳本現在也會輸出結構化步驟事件，讓後續排障時能直接看到每一步的開始時間、耗時與是否成功寫出 evidence。
 
 ## 3. 部署前提
 
@@ -161,6 +162,16 @@ npm run post-deploy:verify:readonly
 - `SUBJECT_ROLES=platform_admin,legal_approver`
 - `VERIFY_MODE=write`
 
+這兩個 subject 相關環境變數目前會由驗證腳本映射成受信任入口風格的身份標頭：
+
+- `X-Authenticated-Subject`
+- `X-Authenticated-Roles`
+
+因此同一支驗證腳本可同時適用於：
+
+- 還在 `permissive` 模式的環境
+- 已切到 `NORTHBOUND_AUTH_MODE=trusted_edge` 的 staging / production 環境
+
 若要在 staging / verify tenant 額外驗證限流，可用：
 
 ```bash
@@ -182,7 +193,7 @@ VERIFY_OUTPUT_PATH="/tmp/post-deploy-verify-summary.json" \
 npm run post-deploy:verify
 ```
 
-腳本會保留原本 stdout JSON，同時把同一份 summary 寫到指定路徑，方便交接、artifact 收集或後續 workflow 包裝。
+腳本會保留原本 stdout JSON，同時把同一份 summary 寫到指定路徑，並附上 `started_at`、`completed_at`、`duration_ms`、`check_count` 與 `checks`，方便交接、artifact 收集或後續 workflow 包裝。若中途失敗，仍會盡量留下 partial summary。
 
 唯讀模式行為：
 
@@ -225,6 +236,7 @@ npm run post-deploy:verify
 - `verify-write-summary.json`（只有 write 模式才有）
 - `verify-readonly.log`（只有 readonly 模式才有）
 - `verify-readonly-summary.json`（只有 readonly 模式才有）
+- `release-gate-manifest.json`，用來機器化讀取 mode、inputs、outcomes 與 artifact 路徑
 - `release-gate-summary.md`
 
 這個 workflow 不會做 `wrangler deploy`，也不會替你建立或修改真實環境。
@@ -334,6 +346,7 @@ wrangler secret put A2A_SHARED_KEY
 若要一次匯入多個 secret，可先準備 JSON 檔：
 
 - [secrets.bulk.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/secrets.bulk.example.json)
+- [secret_rotation_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_plan.example.json)
 
 然後執行：
 
@@ -354,11 +367,17 @@ wrangler secret bulk /Users/zh/Documents/codeX/agent_control_plane/docs/secrets.
 - `bearer:<SECRET_BINDING_NAME>`
 - `header:<Header-Name>:<SECRET_BINDING_NAME>`
 
+目前代碼會先在 `tool_providers` 寫入與 `context.a2a_dispatch.auth_ref` 解析階段做語法檢查，所以格式本身有問題時，現在會更早回 `400 invalid_request`；只有格式正確但 secret 尚未建立時，才會在執行上游請求時回 `500 upstream_auth_not_configured`。
+
+若要輪替某個已在 production 使用中的 secret，請先參考：
+
+- [secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md)
+
 若 secret 未配置，系統會回：
 
 - `500 upstream_auth_not_configured`
 
-若 `auth_ref` 格式錯誤，系統會回：
+若舊資料或執行期仍觸發 `auth_ref` 格式錯誤，系統才會回：
 
 - `500 upstream_auth_invalid`
 

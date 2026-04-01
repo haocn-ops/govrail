@@ -21,8 +21,14 @@
 
 - [deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md)
 - [environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md)
+- [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
+- [observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md)
+- [secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md)
+- [ops_handoff_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/ops_handoff_summary_zh.md)
+- [final_delivery_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/final_delivery_summary_zh.md)
 - [flow_failure_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/flow_failure_runbook_zh.md)
 - 如果是要交接給下一位工程師，優先把 `post-deploy:verify` 當成驗收出口來看
+- 如果是新 tenant 接入，優先把 onboarding bundle 內的 `provision.sh` 和 `verify.sh` 當成最小接入與驗收出口來看
 
 ## 2. 各文件用途
 
@@ -35,10 +41,16 @@
 | [deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md) | 部署步驟、驗收流程、D1 SQL 查詢、常見故障 |
 | [release_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/release_checklist_zh.md) | staging / production 發版前後的可勾選清單 |
 | [environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md) | staging / production 配置、secrets、graph / replay / SSE 驗證節奏 |
+| [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md) | Access / service token / trusted-edge 部署方式與入口治理檢查點 |
+| [observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md) | 可觀測性、SLI、告警門檻與 oncall 排障順序 |
+| [secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md) | `auth_ref` 對應 Worker secret 的輪替、回滾與交接流程 |
+| [ops_handoff_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/ops_handoff_summary_zh.md) | 目前已落地環境、verify 證據與接手入口摘要 |
+| [final_delivery_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/final_delivery_summary_zh.md) | 本輪交付的完成項、部署結果、驗收證據與下一步建議 |
 | [tenant_onboarding_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/tenant_onboarding_runbook_zh.md) | 新 tenant 接入步驟、tenant onboarding bundle 生成、驗收出口、回滾與交接資訊 |
 | [implementation_status_matrix_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/implementation_status_matrix_zh.md) | 一頁查看已實作 / 佔位 / 保留欄位 / 驗證方式 |
 | [wrangler.multi-env.example.jsonc](/Users/zh/Documents/codeX/agent_control_plane/docs/wrangler.multi-env.example.jsonc) | Wrangler 多環境配置範例 |
 | [secrets.bulk.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/secrets.bulk.example.json) | `wrangler secret bulk` 匯入範例 |
+| [secret_rotation_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_plan.example.json) | secret rotation 計劃模板，包含舊新 binding、驗證命令與 rollback 提示 |
 
 ## 3. 建議操作順序
 

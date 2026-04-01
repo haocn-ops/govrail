@@ -7,6 +7,7 @@ declare namespace Cloudflare {
 	}
 	interface Env {
 		ARTIFACTS_BUCKET: R2Bucket;
+		NORTHBOUND_AUTH_MODE?: string;
 		DB: D1Database;
 		EVENT_QUEUE: Queue;
 		RUN_COORDINATOR: DurableObjectNamespace<import("./src/index").RunCoordinator>;

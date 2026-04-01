@@ -10,6 +10,9 @@ const existingRunId = process.env.RUN_ID ?? process.env.EXISTING_RUN_ID ?? null;
 const expectedRunRateLimit = readOptionalPositiveInteger(process.env.EXPECT_RATE_LIMIT_RUNS_PER_MINUTE);
 const expectedReplayRateLimit = readOptionalPositiveInteger(process.env.EXPECT_RATE_LIMIT_REPLAYS_PER_MINUTE);
 const verifyOutputPath = normalizeOptionalString(process.env.VERIFY_OUTPUT_PATH);
+const verificationStartedAt = nowIso();
+const verificationStartedAtMs = Date.now();
+const verificationChecks = [];
 
 if (process.argv.includes("--help")) {
   printUsage();
@@ -27,6 +30,8 @@ const traceId = `trc_verify_${Date.now()}`;
 const suffix = `${Date.now()}`;
 
 async function main() {
+  logStep("Start verification");
+
   logStep("Check health");
   const health = await request("GET", "/api/v1/health", {
     expectedStatus: 200,
@@ -70,7 +75,6 @@ async function main() {
   logStep("Check SSE streams");
   const a2aStream = await request("GET", "/api/v1/a2a/message:stream", {
     expectedStatus: 200,
-    includeSubject: false,
     parseJson: false,
   });
   assert(
@@ -95,13 +99,10 @@ async function main() {
   assert(typeof a2aSnapshotData?.task_count === "number", "A2A snapshot missing task_count");
   assert(Array.isArray(a2aSnapshotData?.tasks), "A2A snapshot missing task list");
 
-  const activeProviderId =
-    verifyMode === "write"
-      ? toolProviderId
-      : Array.isArray(providers.json.data?.items)
-        ? providers.json.data.items.find((item) => item?.status === "active" && typeof item?.tool_provider_id === "string")
-            ?.tool_provider_id ?? null
-        : null;
+  const activeProviderId = Array.isArray(providers.json.data?.items)
+    ? providers.json.data.items.find((item) => item?.status === "active" && typeof item?.tool_provider_id === "string")
+        ?.tool_provider_id ?? null
+    : null;
   if (activeProviderId) {
     const mcpStream = await request("GET", `/api/v1/mcp/${activeProviderId}`, {
       expectedStatus: 200,
@@ -136,6 +137,11 @@ async function main() {
       base_url: normalizedBaseUrl,
       tenant_id: tenantId,
       trace_id: traceId,
+      started_at: verificationStartedAt,
+      completed_at: nowIso(),
+      duration_ms: Date.now() - verificationStartedAtMs,
+      check_count: verificationChecks.length,
+      checks: verificationChecks,
       tool_provider_count: countItems(providers.json.data?.items),
       policy_count: countItems(policies.json.data?.items),
       ...readonlySummary,
@@ -157,6 +163,15 @@ async function main() {
     },
   });
   assert(createdProvider.json.data.tool_provider_id === toolProviderId, "Tool provider create mismatch");
+  const createdProviderStream = await request("GET", `/api/v1/mcp/${toolProviderId}`, {
+    expectedStatus: 200,
+    parseJson: false,
+    readStreamPrefix: true,
+  });
+  assert(
+    (createdProviderStream.headers.get("content-type") ?? "").startsWith("text/event-stream"),
+    "Created MCP stream content-type mismatch",
+  );
 
   logStep("Get and update tool provider");
   await request("GET", `/api/v1/tool-providers/${toolProviderId}`, { expectedStatus: 200 });
@@ -368,6 +383,11 @@ async function main() {
     base_url: normalizedBaseUrl,
     tenant_id: tenantId,
     trace_id: traceId,
+    started_at: verificationStartedAt,
+    completed_at: nowIso(),
+    duration_ms: Date.now() - verificationStartedAtMs,
+    check_count: verificationChecks.length,
+    checks: verificationChecks,
     tool_provider_id: toolProviderId,
     policy_id: policyId,
     tool_provider_status: fetchedDisabledProvider.json.data.status,
@@ -557,8 +577,8 @@ async function request(method, path, options = {}) {
     headers.set("idempotency-key", options.idempotencyKey);
   }
   if (options.includeSubject !== false) {
-    headers.set("x-subject-id", subjectId);
-    headers.set("x-subject-roles", subjectRoles);
+    headers.set("x-authenticated-subject", subjectId);
+    headers.set("x-authenticated-roles", subjectRoles);
   }
 
   const response = await fetch(`${normalizedBaseUrl}${path}`, {
@@ -603,7 +623,22 @@ function assert(condition, message) {
 }
 
 function logStep(message) {
-  console.log(`verify: ${message}`);
+  const entry = {
+    at: nowIso(),
+    elapsed_ms: Date.now() - verificationStartedAtMs,
+    message,
+  };
+  verificationChecks.push(entry);
+  console.log(
+    JSON.stringify({
+      level: "info",
+      event: "verify_step",
+      trace_id: traceId,
+      tenant_id: tenantId,
+      mode: verifyMode,
+      ...entry,
+    }),
+  );
 }
 
 function normalizeVerifyMode(rawMode) {
@@ -633,8 +668,18 @@ function normalizeOptionalString(rawValue) {
   return trimmed === "" ? null : trimmed;
 }
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
 async function emitVerificationResult(result) {
-  const body = JSON.stringify(result, null, 2);
+  const payload = verifyOutputPath
+    ? {
+        ...result,
+        verification_output_path: verifyOutputPath,
+      }
+    : result;
+  const body = JSON.stringify(payload, null, 2);
   if (verifyOutputPath) {
     await mkdir(dirname(verifyOutputPath), { recursive: true });
     await writeFile(verifyOutputPath, `${body}\n`, "utf8");
@@ -710,6 +755,7 @@ function printUsage() {
       "Optional env vars:",
       "  SUBJECT_ID",
       "  SUBJECT_ROLES",
+      "    (used as trusted-edge identity and role headers by the verifier)",
       "  VERIFY_MODE=write|readonly",
       "  RUN_ID or EXISTING_RUN_ID",
       "  EXPECT_RATE_LIMIT_RUNS_PER_MINUTE",
@@ -720,6 +766,46 @@ function printUsage() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  const failure = {
+    ok: false,
+    mode: verifyMode,
+    base_url: normalizedBaseUrl,
+    tenant_id: tenantId,
+    trace_id: traceId,
+    started_at: verificationStartedAt,
+    completed_at: nowIso(),
+    duration_ms: Date.now() - verificationStartedAtMs,
+    check_count: verificationChecks.length,
+    checks: verificationChecks,
+    error: serializeError(error),
+  };
+
+  emitVerificationResult(failure).catch(() => {});
+  console.error(
+    JSON.stringify({
+      level: "error",
+      event: "verify_failed",
+      trace_id: traceId,
+      tenant_id: tenantId,
+      mode: verifyMode,
+      error: serializeError(error),
+    }),
+  );
   process.exit(1);
 });
+
+function serializeError(error) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    name: "Error",
+    message: String(error),
+    stack: null,
+  };
+}

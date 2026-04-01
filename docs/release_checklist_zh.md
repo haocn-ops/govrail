@@ -44,6 +44,8 @@
 - [ ] 若要對 staging / verify tenant 做遠端寫入式驗收，已選對 `verification_mode=write`
 - [ ] 如有遠端驗收，已下載或記錄 workflow artifact 中的 logs / summary
 - [ ] 如需交接，已保留遠端驗收輸出的 JSON summary，或明確記錄 `VERIFY_OUTPUT_PATH`
+- [ ] 已確認 summary 內含 `started_at`、`completed_at`、`duration_ms`、`check_count` 與 `checks`
+- [ ] 已確認 workflow artifact 內有 `release-gate-manifest.json`，可直接讀取 inputs / outcomes / artifact 路徑
 - [ ] 這次發版仍需人工執行部署與 post-deploy 驗證
 
 ### 2.4 資源與資料
@@ -53,11 +55,13 @@
 - [ ] 若是新 tenant，已完成 onboarding 準備
 - [ ] 若是新 tenant，已生成或保存 onboarding bundle（`seed.sql` / `bundle.json` / `handoff.md`）
 - [ ] 若是新 tenant 且有驗收交接需求，已規劃 verify summary 輸出位置（例如 bundle 目錄下的 `verify-write-summary.json` 或 `verify-readonly-summary.json`）
+- [ ] 若要快速比對驗收範圍，已確認 summary 會記錄 `check_count` 與 `duration_ms`
 - [ ] 若依賴 `auth_ref`，對應 Worker secret 已存在
 
 ### 2.5 安全與入口
 
 - [ ] 已確認 Access / service token / 上游入口保護狀態
+- [ ] 已確認 staging / production 的 `NORTHBOUND_AUTH_MODE=trusted_edge`
 - [ ] 已確認 production 不會只依賴 `X-Subject-Id` / `X-Subject-Roles`
 - [ ] 已確認 staging 與 production 的 Access 群組或 token 範圍隔離
 

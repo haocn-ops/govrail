@@ -100,6 +100,8 @@ npm run tenant:onboarding:bundle -- --tenant-id tenant_acme --deploy-env staging
 - `seed.sql`
 - `bundle.json`
 - `handoff.md`
+- `provision.sh`
+- `verify.sh`
 
 若只需要 SQL，仍可單獨使用：
 
@@ -130,6 +132,11 @@ wrangler d1 execute agent-control-plane --remote --file /tmp/tenant_acme_seed.sq
 ### 5.4 建立對應 secrets
 
 若 tenant 需要真實上游憑證，先建立 Worker secret。
+
+若這次不是全新建立，而是要把既有 tenant 的 secret 換成新版本，請先看：
+
+- [secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md)
+- [secret_rotation_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_plan.example.json)
 
 單筆建立：
 
@@ -243,11 +250,20 @@ VERIFY_OUTPUT_PATH=".onboarding-bundles/tenant_acme/verify-write-summary.json" \
 npm run post-deploy:verify
 ```
 
+若目標環境已把 `NORTHBOUND_AUTH_MODE` 切成 `trusted_edge`，不需要改腳本名稱；內建的驗證腳本與 bundle 內的 `verify.sh` 會自動把 `SUBJECT_ID` / `SUBJECT_ROLES` 映射成 `X-Authenticated-Subject` / `X-Authenticated-Roles`。
+
 這個模式適合用來快速做 handoff，因為腳本會：
 
 - 驗證 tenant 的 health、admin API、A2A SSE 與 MCP SSE
 - 建立臨時的 provider / policy / run
 - 在結束前把臨時 provider 與 policy 停用，減少殘留配置
+
+若要把最小接入流程收斂成兩個命令，建議直接在 bundle 目錄執行：
+
+```bash
+./provision.sh apply
+./verify.sh write
+```
 
 如果是 production 或共享 tenant，建議分兩段：
 
@@ -279,6 +295,8 @@ readonly 模式更適合正式交付，因為它不會建立新的 run 或修改
 - 驗收日期與操作者
 
 若使用 tenant onboarding bundle 腳本，建議把生成的 `bundle.json` 與 `handoff.md` 一起存檔，作為最小交接包。
+
+若要降低人工出錯，優先直接執行 bundle 內的 `verify.sh`，它會自動把驗收輸出寫到同一個 bundle 目錄。
 
 若這次驗收本身就是交接證據，建議再把 `VERIFY_OUTPUT_PATH` 輸出的 `verify-write-summary.json` 或 `verify-readonly-summary.json` 一起保存在同一個 bundle 目錄。
 

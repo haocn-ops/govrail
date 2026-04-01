@@ -32,7 +32,7 @@ The codebase is in "deployable MVP skeleton" shape:
 One important current boundary:
 
 - northbound auth is assumed to be enforced by Cloudflare Access or another trusted edge layer
-- the Worker code itself currently relies on trusted identity headers for local tests and controlled validation flows
+- the Worker defaults to a permissive local/test mode, but can now be switched to `NORTHBOUND_AUTH_MODE=trusted_edge` so only trusted edge identity headers are accepted and direct `X-Subject-*` overrides are rejected
 
 It is not yet a fully productionized service. Access rollout, production onboarding automation, external provisioning, secret rotation, monitoring, and environment hardening still need to be completed.
 
@@ -53,7 +53,7 @@ Generate tenant seed SQL:
 npm run seed:sql -- --tenant-id tenant_demo
 ```
 
-Render a tenant onboarding bundle with seed SQL, metadata JSON, and handoff markdown:
+Render a tenant onboarding bundle with seed SQL, metadata JSON, handoff markdown, and an executable verify helper:
 
 ```bash
 npm run tenant:onboarding:bundle -- --tenant-id tenant_acme --deploy-env staging
@@ -132,12 +132,20 @@ Start here based on what you need:
   - [docs/flow_failure_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/flow_failure_runbook_zh.md)
 - Deployment, validation, and SQL troubleshooting:
   - [docs/deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md)
+- Access / service-token ingress governance:
+  - [docs/access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
+- Observability and alerting baseline:
+  - [docs/observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md)
 - Release checklist:
   - [docs/release_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/release_checklist_zh.md)
 - Environment, secrets, and multi-env guidance:
   - [docs/environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md)
+- Secret rotation governance:
+  - [docs/secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md)
 - Tenant onboarding:
   - [docs/tenant_onboarding_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/tenant_onboarding_runbook_zh.md)
+- Ops handoff summary:
+  - [docs/ops_handoff_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/ops_handoff_summary_zh.md)
 - Multi-env Wrangler example:
   - [docs/wrangler.multi-env.example.jsonc](/Users/zh/Documents/codeX/agent_control_plane/docs/wrangler.multi-env.example.jsonc)
 - Bulk secrets example:
@@ -182,10 +190,10 @@ For human release gating, use [.github/workflows/manual-release-gate.yml](/Users
 
 The most important remaining work before serious production rollout is:
 
-- real Access / service-token deployment guidance
+- real Access / service-token deployment automation and governance rollout
 - fully automated production tenant onboarding and external provisioning workflow
-- metrics, alerting, and operational dashboards
-- secret rotation / credential governance
+- observability now has a concrete SLI/alerting baseline doc, but the repo still needs real monitoring-system integration and a staffed oncall process
+- secret rotation now has a concrete runbook/template, but the repo still needs real rotation automation and secret-store governance
 - CI baseline now covers `verify:local` and `verify:build`; deploy is still manual and post-deploy verification is only wrapped by a manual gate
 
 ## Notes

@@ -204,7 +204,7 @@ async function handleToolsCall(
   meta: { request_id: string; trace_id: string },
 ): Promise<Response> {
   const tenantId = getRequiredTenantId(request);
-  const subjectId = getSubjectId(request);
+  const subjectId = getSubjectId(request, env);
   const idempotencyKey = requireIdempotencyKey(request);
   const routeKey = `POST:/api/v1/mcp/${toolProviderId}`;
   const payloadHash = await hashPayload(rpc);

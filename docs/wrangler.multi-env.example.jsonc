@@ -58,6 +58,7 @@
     }
   ],
   "vars": {
+    "NORTHBOUND_AUTH_MODE": "trusted_edge",
     "RATE_LIMIT_RUNS_PER_MINUTE": "0",
     "RATE_LIMIT_REPLAYS_PER_MINUTE": "0"
   },
@@ -87,6 +88,7 @@
     "staging": {
       "name": "agent-control-plane-staging",
       "vars": {
+        "NORTHBOUND_AUTH_MODE": "trusted_edge",
         "RATE_LIMIT_RUNS_PER_MINUTE": "0",
         "RATE_LIMIT_REPLAYS_PER_MINUTE": "0"
       },

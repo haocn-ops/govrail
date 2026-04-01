@@ -9,6 +9,7 @@ import {
 import { cancelRun } from "./lib/cancellation.js";
 import { expireApproval } from "./lib/approvals.js";
 import { listRunAuditEvents, recordAuditEvent } from "./lib/audit.js";
+import { normalizeAuthRef } from "./lib/auth.js";
 import {
   getApproval,
   getArtifact,
@@ -23,7 +24,18 @@ import {
   listToolProviders,
   putIdempotencyRecord,
 } from "./lib/db.js";
-import { ApiError, buildMeta, errorResponse, getRequiredTenantId, getSubjectId, getSubjectRoles, json, readJson, requireIdempotencyKey } from "./lib/http.js";
+import {
+  ApiError,
+  buildMeta,
+  enforceNorthboundAccess,
+  errorResponse,
+  getRequiredTenantId,
+  getSubjectId,
+  getSubjectRoles,
+  json,
+  readJson,
+  requireIdempotencyKey,
+} from "./lib/http.js";
 import { createId, hashPayload, nowIso } from "./lib/ids.js";
 import { markQueueMessageProcessed } from "./lib/queue.js";
 import { enforceReplayRateLimit, enforceRunCreateRateLimit } from "./lib/rate-limit.js";
@@ -179,6 +191,10 @@ export async function routeRequest(request: Request, env: Env): Promise<Response
     return getHealth(request);
   }
 
+  if (url.pathname.startsWith(`${API_BASE}/`)) {
+    enforceNorthboundAccess(request, env);
+  }
+
   if (request.method === "POST" && url.pathname === `${API_BASE}/runs`) {
     return createRun(request, env);
   }
@@ -268,7 +284,7 @@ export async function routeRequest(request: Request, env: Env): Promise<Response
 
   if (request.method === "POST" && url.pathname === `${API_BASE}/a2a/message:send`) {
     const tenantId = getRequiredTenantId(request);
-    const subjectId = getSubjectId(request);
+    const subjectId = getSubjectId(request, env);
     return handleA2AMessageSend(request, env, tenantId, subjectId);
   }
 
@@ -319,7 +335,7 @@ function getHealth(request: Request): Response {
 
 async function createRun(request: Request, env: Env): Promise<Response> {
   const tenantId = getRequiredTenantId(request);
-  const subjectId = getSubjectId(request);
+  const subjectId = getSubjectId(request, env);
   const idempotencyKey = requireIdempotencyKey(request);
   const rawBody = await readJson<RunCreateRequest>(request);
   const body = await normalizeRunCreateRequest(env, tenantId, rawBody);
@@ -697,7 +713,7 @@ async function createToolProvider(request: Request, env: Env): Promise<Response>
       body.name,
       body.provider_type,
       body.endpoint_url,
-      body.auth_ref,
+      normalizeAuthRefInput(body.auth_ref, "tool_providers.auth_ref"),
       body.visibility_policy_ref,
       body.execution_policy_ref,
       body.status,
@@ -766,7 +782,10 @@ async function updateToolProvider(request: Request, env: Env, toolProviderId: st
       body.provider_type ?? provider.provider_type,
       body.endpoint_url ?? provider.endpoint_url,
     ),
-    auth_ref: body.auth_ref !== undefined ? body.auth_ref : provider.auth_ref,
+    auth_ref:
+      body.auth_ref !== undefined
+        ? normalizeAuthRefInput(body.auth_ref, "tool_providers.auth_ref")
+        : provider.auth_ref,
     visibility_policy_ref:
       body.visibility_policy_ref !== undefined ? body.visibility_policy_ref : provider.visibility_policy_ref,
     execution_policy_ref:
@@ -1015,7 +1034,7 @@ async function getRunArtifactById(
 
 async function cancelRunById(request: Request, env: Env, runId: string): Promise<Response> {
   const tenantId = getRequiredTenantId(request);
-  const subjectId = getSubjectId(request);
+  const subjectId = getSubjectId(request, env);
   const idempotencyKey = requireIdempotencyKey(request);
   const meta = buildMeta(request);
   const routeKey = `POST:/api/v1/runs/${runId}:cancel`;
@@ -1089,8 +1108,8 @@ async function cancelRunById(request: Request, env: Env, runId: string): Promise
 
 async function decideApproval(request: Request, env: Env, approvalId: string): Promise<Response> {
   const tenantId = getRequiredTenantId(request);
-  const subjectId = getSubjectId(request);
-  const subjectRoles = getSubjectRoles(request);
+  const subjectId = getSubjectId(request, env);
+  const subjectRoles = getSubjectRoles(request, env);
   const idempotencyKey = requireIdempotencyKey(request);
   const body = await readJson<ApprovalDecisionRequest>(request);
   const meta = buildMeta(request);
@@ -1237,7 +1256,7 @@ async function decideApproval(request: Request, env: Env, approvalId: string): P
 
 async function replayRun(request: Request, env: Env, sourceRunId: string): Promise<Response> {
   const tenantId = getRequiredTenantId(request);
-  const subjectId = getSubjectId(request);
+  const subjectId = getSubjectId(request, env);
   const idempotencyKey = requireIdempotencyKey(request);
   const replay = await readJson<ReplayRunRequest>(request);
   const replayMode = replay.mode ?? "from_input";
@@ -1505,8 +1524,9 @@ async function normalizeOutboundDispatchContext(
   const authRef =
     candidate.auth_ref === undefined
       ? undefined
-      : normalizeNullableReference(
+      : normalizeAuthRefInput(
           normalizeRequiredString(candidate.auth_ref, "context.a2a_dispatch.auth_ref"),
+          "context.a2a_dispatch.auth_ref",
         );
   const taskId =
     candidate.task_id === undefined
@@ -2050,6 +2070,17 @@ function normalizeNullableReference(value: string | null | undefined): string | 
   }
 
   return trimmed;
+}
+
+function normalizeAuthRefInput(value: string | null | undefined, fieldPath: string): string | null {
+  try {
+    return normalizeAuthRef(value);
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "upstream_auth_invalid") {
+      throw new ApiError(400, "invalid_request", `${fieldPath} is invalid: ${error.message}`, error.details);
+    }
+    throw error;
+  }
 }
 
 function serializePolicy(policy: PolicyRow): {

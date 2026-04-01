@@ -25,6 +25,7 @@ type MockEnv = Env & {
   __queue: MockQueue;
   MCP_API_TOKEN: string;
   A2A_SHARED_KEY: string;
+  NORTHBOUND_AUTH_MODE?: string;
   RATE_LIMIT_RUNS_PER_MINUTE?: string;
   RATE_LIMIT_REPLAYS_PER_MINUTE?: string;
 };
@@ -65,6 +66,29 @@ async function main(): Promise<void> {
     });
     assert.equal(healthHead.status, 200);
     assert.deepEqual(healthHead.json, {});
+
+    env.NORTHBOUND_AUTH_MODE = "trusted_edge";
+    const trustedEdgeMissingIdentity = await api("/api/v1/tool-providers");
+    assert.equal(trustedEdgeMissingIdentity.status, 401);
+    assert.equal(trustedEdgeMissingIdentity.json.error.code, "unauthorized");
+
+    const trustedEdgeRejectedOverride = await api("/api/v1/tool-providers", {
+      headers: {
+        "x-subject-id": "override_user",
+      },
+    });
+    assert.equal(trustedEdgeRejectedOverride.status, 401);
+    assert.equal(trustedEdgeRejectedOverride.json.error.code, "unauthorized");
+
+    const trustedEdgeAccepted = await api("/api/v1/tool-providers", {
+      headers: {
+        "x-authenticated-subject": "platform_admin@example.com",
+        "x-authenticated-roles": "platform_admin,legal_approver",
+      },
+    });
+    assert.equal(trustedEdgeAccepted.status, 200);
+
+    env.NORTHBOUND_AUTH_MODE = "permissive";
 
     const baseRunPayload = {
       input: {
@@ -176,6 +200,27 @@ async function main(): Promise<void> {
       ),
     );
 
+    const invalidToolProviderAuthRef = await api("/api/v1/tool-providers", {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-tool-provider-invalid-auth-ref-1",
+      },
+      body: JSON.stringify({
+        tool_provider_id: "tp_invalid_auth_ref",
+        name: "Invalid Auth Ref",
+        provider_type: "mcp_server",
+        endpoint_url: "https://invalid-auth-ref.example.test/mcp",
+        auth_ref: "header:X-Api-Key",
+        status: "active",
+      }),
+    });
+    assert.equal(invalidToolProviderAuthRef.status, 400);
+    assert.equal(invalidToolProviderAuthRef.json.error.code, "invalid_request");
+    assert.match(
+      invalidToolProviderAuthRef.json.error.message,
+      /tool_providers\.auth_ref is invalid/i,
+    );
+
     const createdToolProvider = await api("/api/v1/tool-providers", {
       method: "POST",
       headers: {
@@ -193,6 +238,32 @@ async function main(): Promise<void> {
     assert.equal(createdToolProvider.status, 201);
     assert.equal(createdToolProvider.json.data.tool_provider_id, "tp_secure_admin");
     assert.equal(createdToolProvider.json.data.auth_ref, "bearer:MCP_API_TOKEN");
+
+    const invalidRunAuthRef = await api("/api/v1/runs", {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-run-invalid-auth-ref-1",
+      },
+      body: JSON.stringify({
+        input: {
+          kind: "user_instruction",
+          text: "invalid auth ref should be rejected before dispatch",
+        },
+        context: {
+          a2a_dispatch: {
+            endpoint_url: "mock://remote-agent",
+            agent_id: "agent_remote_supplier_analysis",
+            auth_ref: "bearer:",
+          },
+        },
+      }),
+    });
+    assert.equal(invalidRunAuthRef.status, 400);
+    assert.equal(invalidRunAuthRef.json.error.code, "invalid_request");
+    assert.match(
+      invalidRunAuthRef.json.error.message,
+      /context\.a2a_dispatch\.auth_ref is invalid/i,
+    );
 
     const createdToolProviderAgain = await api("/api/v1/tool-providers", {
       method: "POST",

@@ -49,8 +49,19 @@
 目前 Worker 代碼本身：
 
 - 直接要求 `X-Tenant-Id`
-- 允許以 `X-Subject-Id` / `X-Subject-Roles` 覆寫本地測試身份
+- 預設仍允許以 `X-Subject-Id` / `X-Subject-Roles` 覆寫本地測試身份
 - 不直接在 Worker 內驗證 `Authorization` header 的內容
+
+但目前已新增一個收斂 production 邊界的 runtime 開關：
+
+- `NORTHBOUND_AUTH_MODE=permissive`（預設）
+  - 保持目前本地 smoke / 手動驗收行為
+  - 可接受 `X-Subject-Id` / `X-Subject-Roles`
+- `NORTHBOUND_AUTH_MODE=trusted_edge`
+  - 所有 `/api/v1/*` 請求都必須帶受信任入口注入的身份
+  - 目前接受 `CF-Access-Authenticated-User-Email` 或 `X-Authenticated-Subject`
+  - roles 目前接受 `CF-Access-Authenticated-User-Groups` 或 `X-Authenticated-Roles`
+  - 直接帶 `X-Subject-Id` / `X-Subject-Roles` / `X-Roles` 會回 `401 unauthorized`
 
 也就是說，當前 MVP 的真實假設是：
 
@@ -62,6 +73,7 @@
 
 - 文件中的 `Authorization` 要求代表目標部署形態，而不是本地 smoke 測試時 Worker 內部一定會拒絕無 token 請求
 - production 不應只依賴 `X-Subject-Id` / `X-Subject-Roles`
+- staging / production 建議把 `NORTHBOUND_AUTH_MODE` 設為 `trusted_edge`
 
 ### 2.4 標準成功回應包裝
 
@@ -119,6 +131,12 @@
 | 500 | upstream_auth_invalid | `auth_ref` 格式不合法 |
 | 500 | upstream_auth_not_configured | `auth_ref` 指向的 Worker secret 未配置 |
 | 503 | upstream_unavailable | 遠端 agent 或 MCP server 不可用 |
+
+補充說明：
+
+- `tool_providers` 建立/更新與 `context.a2a_dispatch.auth_ref` 解析階段，若 `auth_ref` 格式本身錯誤，現在會更早回 `400 invalid_request`
+- 只有格式正確但 secret binding 未配置時，才會在實際發起上游請求時回 `500 upstream_auth_not_configured`
+- `upstream_auth_invalid` 仍保留作為執行期防線，用來處理舊資料或非預期輸入
 
 ## 3. 冪等規則
 
