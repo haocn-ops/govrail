@@ -68,7 +68,7 @@ jobs:
               completed_at: new Date().toISOString(),
               duration_ms: Date.now() - start,
               status_code: response.status,
-              ok: response.ok && json?.ok === true,
+              ok: response.ok && json?.data?.ok === true,
               response_json: json,
             };
           }
@@ -130,6 +130,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prepare synthetic runtime output directory
+        run: mkdir -p synthetic-runtime-checks
 
       - name: Run production readonly verify
         env:
