@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy",
     "access:ingress:plan": "node scripts/render_access_ingress_plan.mjs",
     "github:actions:bootstrap": "node scripts/bootstrap_github_actions_runtime.mjs",
+    "github:actions:inventory": "node scripts/print_github_actions_runtime_inventory.mjs",
     "post-deploy:verify": "node scripts/post_deploy_verify.mjs",
     "post-deploy:verify:readonly": "VERIFY_MODE=readonly node scripts/post_deploy_verify.mjs",
     "provisioning:submit": "node scripts/submit_provisioning_request.mjs",

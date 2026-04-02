@@ -42,11 +42,16 @@
 npm run github:actions:bootstrap -- --dry-run
 ```
 
+若要先看完整接線矩陣，再決定哪些值要寫進 GitHub，可先跑：
+
+```bash
+npm run github:actions:inventory -- --format markdown
+```
+
 這個 bootstrap 會檢查並準備：
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `ACP_STAGING_BASE_URL`
-- `ACP_STAGING_TENANT_ID`
 - `ACP_PRODUCTION_BASE_URL`
 - `ACP_PRODUCTION_TENANT_ID`
 - `ACP_PRODUCTION_RUN_ID`
@@ -315,6 +320,10 @@ npm run post-deploy:verify
 npm run github:actions:bootstrap -- --repo haocn-ops/agent_control_plane
 ```
 
+若你想先確認 `Deploy Staging` 依賴哪些 repo-side 值與 workflow inputs，可先查看：
+
+- [github_actions_runtime_inventory_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/github_actions_runtime_inventory_zh.md)
+
 workflow 輸入：
 
 - `base_url`
@@ -471,6 +480,12 @@ artifact 內會包含：
 
 ```bash
 npm run github:actions:bootstrap -- --dry-run
+```
+
+若想先列出所有 synthetic/runtime 依賴，再決定是否補 `ACP_SYNTH_*`，可先跑：
+
+```bash
+npm run github:actions:inventory -- --format markdown --workflow synthetic-runtime-checks
 ```
 
 若你也要把 synthetic identity 變數一起 bootstrap（用於 Synthetic Runtime Checks SSE probes），可以用：

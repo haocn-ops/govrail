@@ -20,6 +20,7 @@
 ### 想部署、驗收或排障
 
 - [deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md)
+- [github_actions_runtime_inventory_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/github_actions_runtime_inventory_zh.md)
 - [environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md)
 - [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
 - [access_ingress_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_plan.example.json)
@@ -44,6 +45,7 @@
 | [policy_approval_spec_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/policy_approval_spec_zh.md) | policy 匹配、approval 規則與治理約束 |
 | [flow_failure_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/flow_failure_runbook_zh.md) | 執行路徑、失敗語義、證據來源與排障方向 |
 | [deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md) | 部署步驟、驗收流程、D1 SQL 查詢、常見故障 |
+| [github_actions_runtime_inventory_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/github_actions_runtime_inventory_zh.md) | GitHub Actions 所需 repo variables / secrets / inputs 對照清單 |
 | [release_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/release_checklist_zh.md) | staging / production 發版前後的可勾選清單 |
 | [environment_config_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/environment_config_runbook_zh.md) | staging / production 配置、secrets、graph / replay / SSE 驗證節奏 |
 | [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md) | Access / service token / trusted-edge 部署方式與入口治理檢查點 |

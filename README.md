@@ -95,6 +95,7 @@ npm run post-deploy:verify:readonly
 | `npm run validate:observability` | Validate observability example contracts and refs |
 | `npm run access:ingress:plan -- --plan-file <plan.json>` | Render an access ingress plan and checklist for a tenant/environment |
 | `npm run github:actions:bootstrap -- --dry-run` | Validate or push the GitHub Actions runtime variables / secret bootstrap |
+| `npm run github:actions:inventory -- --format markdown` | Print the GitHub Actions runtime variable / secret / workflow input inventory |
 | `npm run provisioning:submit -- --request <file> --endpoint <url>` | Submit a provisioning request artifact to an external workflow or ticket endpoint |
 | `npm run seed:sql -- --tenant-id <id>` | Render seed SQL for a tenant |
 | `npm run secret:rotation:bundle -- --plan <plan.json>` | Render a secret rotation bundle with checklist and helper script |
@@ -122,6 +123,7 @@ npm run post-deploy:verify:readonly
 | [migrations](/Users/zh/Documents/codeX/agent_control_plane/migrations) | D1 schema migrations |
 | [scripts/smoke.ts](/Users/zh/Documents/codeX/agent_control_plane/scripts/smoke.ts) | Local smoke test harness |
 | [scripts/bootstrap_github_actions_runtime.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/bootstrap_github_actions_runtime.mjs) | Bootstrap GitHub Actions runtime variables / secret |
+| [scripts/print_github_actions_runtime_inventory.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/print_github_actions_runtime_inventory.mjs) | Print GitHub Actions runtime variable / secret / input inventory |
 | [scripts/post_deploy_verify.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/post_deploy_verify.mjs) | Remote verification script |
 | [scripts/render_access_ingress_plan.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_access_ingress_plan.mjs) | Access ingress plan and checklist renderer |
 | [scripts/render_seed_sql.mjs](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_seed_sql.mjs) | Seed SQL generator |
@@ -146,6 +148,8 @@ Start here based on what you need:
   - [docs/flow_failure_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/flow_failure_runbook_zh.md)
 - Deployment, validation, and SQL troubleshooting:
   - [docs/deployment_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/deployment_runbook_zh.md)
+- GitHub Actions runtime wiring inventory:
+  - [docs/github_actions_runtime_inventory_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/github_actions_runtime_inventory_zh.md)
 - Access / service-token ingress governance:
   - [docs/access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md)
 - Observability and alerting baseline:
@@ -221,6 +225,7 @@ For controlled staging rollout, use [.github/workflows/deploy-staging.yml](/User
 - it runs write-mode `post-deploy:verify`
 - it uploads `staging-deploy-manifest.json`, logs, and JSON summary as an artifact
 - before first remote use, you can bootstrap the required repo-side values with `npm run github:actions:bootstrap -- --dry-run`
+- if you want the exact repo-side wiring matrix first, run `npm run github:actions:inventory -- --format markdown`
 
 For production-safe remote checks without deploy, use [.github/workflows/production-readonly-verify.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/production-readonly-verify.yml):
 
@@ -240,6 +245,7 @@ For controlled production rollout, use [.github/workflows/deploy-production.yml]
 - it uploads `production-deploy-manifest.json`, logs, and JSON summary as an artifact
 - it is designed to pair with a protected GitHub `production` environment for human approval
 - before first remote use, you can bootstrap the required repo-side values with `npm run github:actions:bootstrap -- --dry-run`
+- if you want the exact repo-side wiring matrix first, run `npm run github:actions:inventory -- --format markdown`
 
 For scheduled runtime checks, use [.github/workflows/synthetic-runtime-checks.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/synthetic-runtime-checks.yml):
 
@@ -247,6 +253,7 @@ For scheduled runtime checks, use [.github/workflows/synthetic-runtime-checks.ym
 - it can run production readonly verification on a schedule using repository variables
 - it uploads synthetic health and readonly verify artifacts for incident review
 - it currently uses repository variables for URLs / tenant / run ID, so it can start working before deploy credentials are wired
+- optional `ACP_SYNTH_*` repository variables unlock A2A and MCP SSE probes; `github:actions:inventory` shows the full matrix
 
 ## Known Gaps
 

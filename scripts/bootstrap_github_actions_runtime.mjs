@@ -1,16 +1,11 @@
 import { execFileSync } from "node:child_process";
+import {
+  RECOMMENDED_PROBE_VARIABLE_NAMES,
+  REQUIRED_SECRET_NAMES,
+  REQUIRED_VARIABLE_NAMES,
+} from "./lib/github_actions_runtime_inventory.mjs";
 
 const DEFAULT_REPO = process.env.GITHUB_REPOSITORY || "haocn-ops/agent_control_plane";
-const REQUIRED_VARIABLE_NAMES = [
-  "CLOUDFLARE_ACCOUNT_ID",
-  "ACP_STAGING_BASE_URL",
-  "ACP_STAGING_TENANT_ID",
-  "ACP_PRODUCTION_BASE_URL",
-  "ACP_PRODUCTION_TENANT_ID",
-  "ACP_PRODUCTION_RUN_ID",
-];
-const REQUIRED_SECRET_NAMES = ["CLOUDFLARE_API_TOKEN"];
-const RECOMMENDED_SYNTHETIC_VARIABLE_NAMES = ["ACP_SYNTH_SUBJECT_ID", "ACP_SYNTH_SUBJECT_ROLES"];
 
 function hasFlag(flag) {
   return process.argv.includes(flag);
@@ -80,18 +75,18 @@ function printUsage() {
   console.log(`Usage:
   npm run github:actions:bootstrap -- [--repo owner/name] [--dry-run] [--skip-variables] [--skip-secrets]
   Optional synthetic check support:
-    --include-synthetic   Also set optional ACP_SYNTH_* variables if present in your environment
-    --require-synthetic   Require ACP_SYNTH_* variables to be present (implies --include-synthetic)
+    --include-synthetic   Also set optional synthetic probe variables if present in your environment
+    --require-synthetic   Require optional synthetic probe variables to be present (implies --include-synthetic)
 
 Required environment variables:
   CLOUDFLARE_ACCOUNT_ID
   ACP_STAGING_BASE_URL
-  ACP_STAGING_TENANT_ID
   ACP_PRODUCTION_BASE_URL
   ACP_PRODUCTION_TENANT_ID
   ACP_PRODUCTION_RUN_ID
   CLOUDFLARE_API_TOKEN
 Optional (recommended for Synthetic Runtime Checks SSE probes):
+  ACP_STAGING_TENANT_ID
   ACP_SYNTH_SUBJECT_ID
   ACP_SYNTH_SUBJECT_ROLES
 
@@ -125,7 +120,7 @@ async function main() {
   const syntheticResult =
     skipVariables || !includeSynthetic
       ? { entries: [], missing: [] }
-      : collectOptionalEntries(RECOMMENDED_SYNTHETIC_VARIABLE_NAMES, "variable");
+      : collectOptionalEntries(RECOMMENDED_PROBE_VARIABLE_NAMES, "variable");
 
   const missing = [
     ...variableResult.missing,
@@ -181,6 +176,10 @@ async function main() {
     runGh(["variable", "set", entry.name, "--repo", repo, "--body", entry.value]);
   }
 
+  for (const entry of syntheticResult.entries) {
+    runGh(["variable", "set", entry.name, "--repo", repo, "--body", entry.value]);
+  }
+
   for (const entry of secretResult.entries) {
     runGh(["secret", "set", entry.name, "--repo", repo, "--body", entry.value]);
   }
@@ -191,6 +190,7 @@ async function main() {
         ok: true,
         repo,
         variables_updated: variableResult.entries.map((entry) => entry.name),
+        synthetic_variables_updated: syntheticResult.entries.map((entry) => entry.name),
         secrets_updated: secretResult.entries.map((entry) => entry.name),
       },
       null,
