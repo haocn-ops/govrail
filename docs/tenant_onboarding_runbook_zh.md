@@ -1,4 +1,4 @@
-# Agent Control Plane 租戶接入 Runbook（MVP）
+# Govrail 租戶接入 Runbook（MVP）
 
 交付對象：Platform / Solutions / SRE / 接手工程師  
 版本：v0.1  

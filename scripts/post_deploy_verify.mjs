@@ -41,14 +41,14 @@ async function main() {
     includeSubject: false,
   });
   assert(health.json.data?.ok === true, "Health endpoint did not return ok=true");
-  assert(health.json.data?.service === "agent-control-plane", "Health endpoint service mismatch");
+  assert(health.json.data?.service === "govrail-control-plane", "Health endpoint service mismatch");
 
   logStep("Check agent card");
   const agentCard = await request("GET", "/.well-known/agent-card.json", {
     expectedStatus: 200,
     includeTenant: false,
   });
-  assert(agentCard.json.name === "Agent Control Plane Gateway", "Unexpected agent card name");
+  assert(agentCard.json.name === "Govrail Gateway", "Unexpected agent card name");
   assert(agentCard.json.capabilities?.tasks === true, "Agent card tasks capability mismatch");
   assert(agentCard.json.capabilities?.streaming === true, "Agent card streaming capability mismatch");
   assert(

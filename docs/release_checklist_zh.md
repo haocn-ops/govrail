@@ -1,4 +1,4 @@
-# Agent Control Plane 發布檢查清單（MVP）
+# Govrail 發布檢查清單（MVP）
 
 交付對象：SRE / 值班工程師 / 發布負責人  
 版本：v0.1  

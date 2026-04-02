@@ -58,7 +58,7 @@ async function main(): Promise<void> {
     const health = await api("/api/v1/health");
     assert.equal(health.status, 200);
     assert.equal(health.json.data.ok, true);
-    assert.equal(health.json.data.service, "agent-control-plane");
+    assert.equal(health.json.data.service, "govrail-control-plane");
     assert.equal(health.json.data.version, "0.1.0");
 
     const healthHead = await api("/api/v1/health", {

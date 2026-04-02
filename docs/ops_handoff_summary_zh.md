@@ -1,4 +1,4 @@
-# Agent Control Plane Ops Handoff Summary
+# Govrail Ops Handoff Summary
 
 交付對象：SRE / 值班工程師 / 接手工程師  
 版本：v0.1  
@@ -24,7 +24,8 @@
 
 ### 2.2 production
 
-- Worker URL: `https://agent-control-plane.izhenghaocn.workers.dev`
+- Console URL: `https://govrail.net`
+- API URL: `https://api.govrail.net`
 - 驗收 tenant: `tenant_verify_prod_20260401`
 - write verify run_id: `run_mng2k03y958a39a20ce0489b`
 - write verify summary: `/tmp/agent-control-plane-production-verify-write.json`
@@ -83,7 +84,7 @@ npm run post-deploy:verify
 ### 5.2 production readonly verify
 
 ```bash
-BASE_URL="https://agent-control-plane.izhenghaocn.workers.dev" \
+BASE_URL="https://api.govrail.net" \
 TENANT_ID="tenant_verify_prod_20260401" \
 RUN_ID="run_mng2k03y958a39a20ce0489b" \
 VERIFY_OUTPUT_PATH="/tmp/agent-control-plane-production-verify-readonly.json" \

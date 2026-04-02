@@ -1,6 +1,6 @@
-# Agent Control Plane Docs Index
+# Govrail Docs Index
 
-這個目錄存放 Agent Control Plane MVP 的交付文檔、運維手冊與配置範例。
+這個目錄存放 Govrail MVP 的交付文檔、運維手冊與配置範例。
 
 如果你是第一次接手這個倉庫，建議閱讀順序如下。
 

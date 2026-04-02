@@ -1,4 +1,4 @@
-# Agent Control Plane 事故處置清單
+# Govrail 事故處置清單
 
 交付對象：SRE / oncall / Platform  
 版本：v0.1  
@@ -62,7 +62,7 @@
 
 ```json
 {
-  "service": "agent-control-plane",
+  "service": "govrail-control-plane",
   "environment": "production",
   "timestamp": "2026-04-02T00:00:00.000Z",
   "base_url": "https://<worker>",

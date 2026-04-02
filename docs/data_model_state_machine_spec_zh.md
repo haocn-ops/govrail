@@ -1,4 +1,4 @@
-# Agent Control Plane 資料模型與狀態機補充規格（MVP）
+# Govrail 資料模型與狀態機補充規格（MVP）
 
 交付對象：D1 / Durable Objects / Workflow 工程師  
 版本：v0.1  

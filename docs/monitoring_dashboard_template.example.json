@@ -1,8 +1,8 @@
 {
   "dashboard_id": "acp_ops_v1",
-  "title": "Agent Control Plane - Operations Dashboard",
+  "title": "Govrail - Operations Dashboard",
   "description": "Monitoring-system-agnostic dashboard template for staging or production. Wire these panels to logs, synthetic checks, or metrics in your platform of choice.",
-  "service": "agent-control-plane",
+  "service": "govrail-control-plane",
   "recommended_refresh_interval_seconds": 60,
   "integration_contract": {
     "manifest_path": "docs/observability_integration_manifest.example.json",

@@ -1,6 +1,6 @@
-# Agent Control Plane
+# Govrail
 
-Cloudflare Workers-based multi-tenant agent control plane MVP.
+Govrail is a Cloudflare Workers-based multi-tenant agent control plane MVP.
 
 This repository currently includes:
 
@@ -36,6 +36,11 @@ One important current boundary:
 - the Worker defaults to a permissive local/test mode, but can now be switched to `NORTHBOUND_AUTH_MODE=trusted_edge` so only trusted edge identity headers are accepted and direct `X-Subject-*` overrides are rejected
 
 It is not yet a fully productionized service. Access rollout, production onboarding automation, external provisioning, secret rotation, monitoring, and environment hardening still need to be completed.
+
+## Production Endpoints
+
+- Console: `https://govrail.net`
+- API: `https://api.govrail.net`
 
 ## Quick Start
 

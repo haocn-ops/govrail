@@ -1,4 +1,4 @@
-# Agent Control Plane API 契約補充規格（MVP）
+# Govrail API 契約補充規格（MVP）
 
 交付對象：API / Workflow / Gateway 工程師  
 版本：v0.1  
@@ -188,7 +188,7 @@
 {
   "data": {
     "ok": true,
-    "service": "agent-control-plane",
+    "service": "govrail-control-plane",
     "version": "0.1.0",
     "now": "2026-04-01T12:34:56.000Z"
   },
@@ -903,7 +903,7 @@ MVP 至少包含：
 
 ```json
 {
-  "name": "Agent Control Plane Gateway",
+  "name": "Govrail Gateway",
   "version": "0.1.0",
   "capabilities": {
     "tasks": true,

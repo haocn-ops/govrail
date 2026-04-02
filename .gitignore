@@ -4,6 +4,11 @@ node_modules/
 .DS_Store
 dist/
 coverage/
+.next/
+.open-next/
+.wrangler/
+.dev.vars
+*.tsbuildinfo
 *.log
 .access-ingress-plan*/
 .secret-rotation/

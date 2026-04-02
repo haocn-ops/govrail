@@ -64,6 +64,8 @@ import type {
 } from "./types.js";
 
 const API_BASE = "/api/v1";
+const SERVICE_NAME = "govrail-control-plane";
+const SERVICE_VERSION = "0.1.0";
 
 const app = {
   async fetch(request, env): Promise<Response> {
@@ -317,6 +319,7 @@ export async function routeRequest(request: Request, env: Env): Promise<Response
 
   throw new ApiError(404, "not_found", "Route does not exist");
 }
+
 function getHealth(request: Request): Response {
   if (request.method === "HEAD") {
     return new Response(null, { status: 200 });
@@ -325,8 +328,8 @@ function getHealth(request: Request): Response {
   return json(
     {
       ok: true,
-      service: "agent-control-plane",
-      version: "0.1.0",
+      service: SERVICE_NAME,
+      version: SERVICE_VERSION,
       now: nowIso(),
     },
     buildMeta(request),

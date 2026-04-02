@@ -21,6 +21,9 @@
     "smoke": "tsc -p tsconfig.smoke.json && node .smoke-dist/scripts/smoke.js",
     "verify:build": "wrangler deploy --dry-run --env=\"\"",
     "verify:local": "npm run check && npm run smoke",
+    "web:build": "npm --prefix web run build",
+    "web:check": "npm --prefix web run check",
+    "web:dev": "npm --prefix web run dev",
     "types": "wrangler types"
   },
   "devDependencies": {

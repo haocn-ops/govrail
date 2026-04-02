@@ -1,4 +1,4 @@
-# Agent Control Plane 可觀測性與告警基線（MVP）
+# Govrail 可觀測性與告警基線（MVP）
 
 交付對象：SRE / Platform / oncall 工程師  
 版本：v0.1  
@@ -6,7 +6,7 @@
 
 ## 1. 文檔目的
 
-這份文檔不是監控系統實作，也不是警報平台整合手冊。它的目標很單純：把 Agent Control Plane 的最小可行 SLI、告警門檻與排障順序定下來，讓後續不管接 Cloudflare Logs、Dashboard、Sentry 還是其他監控平台，都能用同一套語義。
+這份文檔不是監控系統實作，也不是警報平台整合手冊。它的目標很單純：把 Govrail 的最小可行 SLI、告警門檻與排障順序定下來，讓後續不管接 Cloudflare Logs、Dashboard、Sentry 還是其他監控平台，都能用同一套語義。
 
 目前倉庫已經具備：
 

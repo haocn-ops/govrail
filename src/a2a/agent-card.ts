@@ -1,6 +1,6 @@
 export function buildAgentCard(baseUrl: string): Record<string, unknown> {
   return {
-    name: "Agent Control Plane Gateway",
+    name: "Govrail Gateway",
     version: "0.1.0",
     capabilities: {
       tasks: true,

@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agent-control-plane-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-04-02",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "routes": [
+    {
+      "pattern": "govrail.net",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.govrail.net",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "agent-control-plane-web"
+    }
+  ],
+  "vars": {
+    "CONTROL_PLANE_BASE_URL": "https://api.govrail.net",
+    "CONTROL_PLANE_TENANT_ID": "tenant_demo",
+    "CONTROL_PLANE_SUBJECT_ID": "console@govrail.net",
+    "CONTROL_PLANE_SUBJECT_ROLES": "platform_admin"
+  }
+}

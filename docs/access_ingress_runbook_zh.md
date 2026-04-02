@@ -1,4 +1,4 @@
-# Agent Control Plane Access 與入口治理 Runbook（MVP+）
+# Govrail Access 與入口治理 Runbook（MVP+）
 
 交付對象：Platform / Security / SRE / 後端工程師  
 版本：v0.1  

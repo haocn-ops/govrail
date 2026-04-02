@@ -2,7 +2,7 @@
   "kind": "observability_integration_manifest",
   "schema_version": 1,
   "version": "2026-04-01",
-  "service": "agent-control-plane",
+  "service": "govrail-control-plane",
   "description": "Monitoring integration contract for synthetic checks, alert routing, and evidence summaries. Replace placeholders with your platform-specific IDs.",
   "environments": [
     "staging",

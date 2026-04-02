@@ -1,4 +1,4 @@
-# Agent Control Plane 最終交付摘要
+# Govrail 最終交付摘要
 
 交付對象：產品 / Tech Lead / Platform / SRE / 接手工程師  
 版本：v0.1  
@@ -58,7 +58,8 @@
 
 ### 3.2 production
 
-- URL: `https://agent-control-plane.izhenghaocn.workers.dev`
+- Console URL: `https://govrail.net`
+- API URL: `https://api.govrail.net`
 - verify tenant: `tenant_verify_prod_20260401`
 - 最近一次 write verify run_id: `run_mng2k03y958a39a20ce0489b`
 - write verify summary: `/tmp/agent-control-plane-production-verify-write.json`

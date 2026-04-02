@@ -1,4 +1,4 @@
-# Agent Control Plane 環境配置與 Secrets 手冊（MVP）
+# Govrail 環境配置與 Secrets 手冊（MVP）
 
 交付對象：Platform / SRE / Security / 後端工程師  
 版本：v0.1  

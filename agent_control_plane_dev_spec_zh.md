@@ -1,4 +1,4 @@
-# Agent Control Plane 開發規格書（Cloudflare 版 MVP）
+# Govrail 開發規格書（Cloudflare 版 MVP）
 
 交付對象：Codex / 工程團隊  
 版本：v0.1  
@@ -6,7 +6,7 @@
 
 ## 文檔用途
 
-本文件用於指導第一版 Agent Control Plane 的工程實作。重點不是自建新的 agent 協議，而是在現有 A2A、MCP 與 Cloudflare 基礎設施之上，構建一層可安全、可治理、可追蹤的控制平面。
+本文件用於指導第一版 Govrail 的工程實作。重點不是自建新的 agent 協議，而是在現有 A2A、MCP 與 Cloudflare 基礎設施之上，構建一層可安全、可治理、可追蹤的控制平面。
 
 ### 配套工程文檔
 
@@ -41,7 +41,7 @@
 
 ## 一頁結論
 
-- 產品定位：企業級 Agent Control Plane，而不是新的 agent framework 或新的通信協議。
+- 產品定位：企業級 agent control plane 產品 Govrail，而不是新的 agent framework 或新的通信協議。
 - 技術基座：Cloudflare Workers + Durable Objects + Workflows + Queues + D1 + R2。
 - 互通邊界：對 agent 使用 A2A，對 tools / resources 使用 MCP。
 - 治理原則：所有 side effects 經由 gateway；所有 execution 必須有 trace；所有高風險動作可 pause / approval / resume。
@@ -49,7 +49,7 @@
 
 ## 1. 產品定位與範圍
 
-Agent Control Plane 位於 OpenAI Agents、LangGraph、Microsoft Agent Framework 與自研 agents 之上，負責統一身份、路由、治理、審計與可觀測性。
+Govrail 位於 OpenAI Agents、LangGraph、Microsoft Agent Framework 與自研 agents 之上，負責統一身份、路由、治理、審計與可觀測性。
 
 本產品不負責自建模型託管，不負責重新發明 workflow engine，也不負責創造新的標準協議。它的任務是將現有 agent 生態接入一個統一、可控制的作業平面。
 

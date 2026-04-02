@@ -1,4 +1,4 @@
-# Agent Control Plane Policy 與 Approval 補充規格（MVP）
+# Govrail Policy 與 Approval 補充規格（MVP）
 
 交付對象：Security / Platform / Gateway / Admin UI 工程師  
 版本：v0.1  
