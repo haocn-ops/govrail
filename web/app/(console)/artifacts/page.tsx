@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { artifactRows } from "@/lib/mock-data";
+import { headers } from "next/headers";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,7 @@ type HandoffArgs = {
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  runId?: string | null;
 };
 
 function buildHandoffLink(args: HandoffArgs): string {
@@ -50,6 +51,9 @@ function buildHandoffLink(args: HandoffArgs): string {
   if (args.recentOwnerLabel) {
     searchParams.set("recent_owner_label", args.recentOwnerLabel);
   }
+  if (args.runId) {
+    searchParams.set("run_id", args.runId);
+  }
   const query = searchParams.toString();
   return query ? `${args.pathname}?${query}` : args.pathname;
 }
@@ -71,6 +75,58 @@ function getParam(value?: string | string[] | undefined): string | null {
   return Array.isArray(value) ? value[0] : value;
 }
 
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
+
+type RunArtifact = {
+  artifact_id: string;
+  run_id: string;
+  step_id: string | null;
+  artifact_type: string;
+  mime_type: string;
+  created_at: string;
+};
+
+type RunGraphResponse = {
+  artifacts: RunArtifact[];
+};
+
+function getBaseUrl(): string {
+  const requestHeaders = headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const proto = requestHeaders.get("x-forwarded-proto") ?? "http";
+  if (!host) {
+    return "";
+  }
+  return `${proto}://${host}`;
+}
+
+async function requestControlPlane<T>(path: string): Promise<T | null> {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl) {
+    return null;
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+      cookie: headers().get("cookie") ?? "",
+    },
+  });
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as { data?: T };
+  return payload.data ?? null;
+}
+
 export default async function ArtifactsPage({
   searchParams,
 }: {
@@ -89,6 +145,7 @@ export default async function ArtifactsPage({
     evidenceCountParam && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
   const ownerLabel =
     getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
+  const requestedRunId = getParam(searchParams?.run_id) ?? getParam(searchParams?.runId);
   const showAdminAttention = source === "admin-attention";
   const showAdminReadiness = source === "admin-readiness";
   const handoffArgs = {
@@ -101,7 +158,14 @@ export default async function ArtifactsPage({
     recentUpdateKind,
     evidenceCount,
     recentOwnerLabel: ownerLabel,
+    runId: requestedRunId,
   };
+  const workspace = await requestControlPlane<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const runId = requestedRunId ?? workspace?.onboarding?.latest_demo_run?.run_id ?? null;
+  const graph = runId ? await requestControlPlane<RunGraphResponse>(`/api/control-plane/runs/${runId}/graph`) : null;
+  const artifacts = (graph?.artifacts ?? [])
+    .slice()
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 
   return (
     <div className="space-y-8">
@@ -131,6 +195,10 @@ export default async function ArtifactsPage({
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted">
           <p>{evidenceGuidance.body}</p>
+          <p>
+            Showing artifacts for{" "}
+            <span className="font-medium text-foreground">{runId ?? "the latest onboarding demo run when available"}</span>.
+          </p>
           <div className="flex flex-wrap gap-2">
             {evidenceGuidance.links.map((link) => (
               <Link
@@ -144,23 +212,51 @@ export default async function ArtifactsPage({
           </div>
         </CardContent>
       </Card>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {artifactRows.map((artifact) => (
-          <Card key={artifact.name}>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base">{artifact.name}</CardTitle>
-                <Badge variant="subtle">{artifact.type}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted">
-              <p>Run: {artifact.runId}</p>
-              <p>Size: {artifact.size}</p>
-              <p>Updated: {artifact.updatedAt}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {!runId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No demo run yet</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted">
+            <p>This workspace does not have a recorded onboarding demo run, so there are no live artifacts to show.</p>
+            <Link
+              className="text-foreground underline underline-offset-4"
+              href={buildHandoffLink({ pathname: "/playground", ...handoffArgs })}
+            >
+              Start a run in Playground
+            </Link>
+          </CardContent>
+        </Card>
+      ) : artifacts.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No artifacts for run {runId}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted">
+            <p>The run exists, but no artifacts have been persisted yet.</p>
+            <p>Check Tasks and Logs for in-flight state, then refresh after the workflow finishes.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {artifacts.map((artifact) => (
+            <Card key={artifact.artifact_id}>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base">{artifact.artifact_id}</CardTitle>
+                  <Badge variant="subtle">{artifact.artifact_type}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted">
+                <p>Run: {artifact.run_id}</p>
+                <p>Step: {artifact.step_id ?? "-"}</p>
+                <p>MIME: {artifact.mime_type}</p>
+                <p>Created: {new Date(artifact.created_at).toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

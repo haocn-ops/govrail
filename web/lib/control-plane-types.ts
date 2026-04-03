@@ -678,3 +678,51 @@ export type ControlPlaneRunGraph = {
     next_cursor: string | null;
   };
 };
+
+export type ControlPlaneRunAuditEvent = {
+  event_id: string;
+  run_id: string;
+  step_id: string | null;
+  trace_id: string;
+  event_type: string;
+  actor: {
+    type: string;
+    ref: string | null;
+  };
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ControlPlaneRunArtifact = {
+  artifact_id: string;
+  run_id: string;
+  step_id: string | null;
+  artifact_type: string;
+  mime_type: string;
+  r2_key: string;
+  sha256: string | null;
+  size_bytes: number | null;
+  created_at: string;
+};
+
+export type ControlPlaneRunEvents = {
+  run: {
+    run_id: string;
+    status: string;
+  };
+  items: ControlPlaneRunAuditEvent[];
+  page_info: {
+    next_cursor: string | null;
+  };
+};
+
+export type ControlPlaneRunArtifacts = {
+  run: {
+    run_id: string;
+    status: string;
+  };
+  items: ControlPlaneRunArtifact[];
+  page_info: {
+    next_cursor: string | null;
+  };
+};

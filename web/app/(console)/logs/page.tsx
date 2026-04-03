@@ -20,6 +20,7 @@ type HandoffArgs = {
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  runId?: string | null;
 };
 
 function getParam(value?: string | string[] | undefined): string | null {
@@ -58,6 +59,9 @@ function buildHandoffLink(args: HandoffArgs): string {
   if (args.recentOwnerLabel) {
     searchParams.set("recent_owner_label", args.recentOwnerLabel);
   }
+  if (args.runId) {
+    searchParams.set("run_id", args.runId);
+  }
   const query = searchParams.toString();
   return query ? `${args.pathname}?${query}` : args.pathname;
 }
@@ -90,6 +94,7 @@ export default async function LogsPage({
     evidenceCountParam && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
   const ownerLabel =
     getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
+  const requestedRunId = getParam(searchParams?.run_id) ?? getParam(searchParams?.runId);
   const showAdminAttention = source === "admin-attention";
   const showAdminReadiness = source === "admin-readiness";
   const handoffArgs = {
@@ -102,6 +107,7 @@ export default async function LogsPage({
     recentUpdateKind,
     evidenceCount,
     recentOwnerLabel: ownerLabel,
+    runId: requestedRunId,
   };
 
   return (
@@ -174,7 +180,7 @@ export default async function LogsPage({
           <Badge variant="subtle">tailing</Badge>
         </CardHeader>
         <CardContent>
-          <LogStream />
+          <LogStream runId={requestedRunId} />
         </CardContent>
       </Card>
     </div>
