@@ -7,7 +7,9 @@ import type {
   ControlPlaneHealth,
   ControlPlanePolicy,
   ControlPlaneRunDetail,
+  ControlPlaneRunEvents,
   ControlPlaneRunGraph,
+  ControlPlaneRunArtifacts,
   ControlPlaneRunCreateRequest,
   ControlPlaneRunCreateResult,
   ControlPlaneServiceAccount,
@@ -571,6 +573,46 @@ export async function fetchRun(runId: string): Promise<ControlPlaneRunDetail> {
 
 export async function fetchRunGraph(runId: string): Promise<ControlPlaneRunGraph> {
   return request<ControlPlaneRunGraph>(`/api/control-plane/runs/${runId}/graph`);
+}
+
+export async function fetchRunEvents(
+  runId: string,
+  query?: {
+    page_size?: number;
+    cursor?: string;
+  },
+): Promise<ControlPlaneRunEvents> {
+  const searchParams = new URLSearchParams();
+  if (typeof query?.page_size === "number" && Number.isFinite(query.page_size) && query.page_size > 0) {
+    searchParams.set("page_size", String(Math.floor(query.page_size)));
+  }
+  if (query?.cursor) {
+    searchParams.set("cursor", query.cursor);
+  }
+  const suffix = searchParams.toString();
+  const path = suffix ? `/api/control-plane/runs/${runId}/events?${suffix}` : `/api/control-plane/runs/${runId}/events`;
+  return request<ControlPlaneRunEvents>(path);
+}
+
+export async function fetchRunArtifacts(
+  runId: string,
+  query?: {
+    page_size?: number;
+    cursor?: string;
+  },
+): Promise<ControlPlaneRunArtifacts> {
+  const searchParams = new URLSearchParams();
+  if (typeof query?.page_size === "number" && Number.isFinite(query.page_size) && query.page_size > 0) {
+    searchParams.set("page_size", String(Math.floor(query.page_size)));
+  }
+  if (query?.cursor) {
+    searchParams.set("cursor", query.cursor);
+  }
+  const suffix = searchParams.toString();
+  const path = suffix
+    ? `/api/control-plane/runs/${runId}/artifacts?${suffix}`
+    : `/api/control-plane/runs/${runId}/artifacts`;
+  return request<ControlPlaneRunArtifacts>(path);
 }
 
 export async function createWorkspace(input: {
