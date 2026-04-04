@@ -20,14 +20,18 @@ test("Topbar keeps fallback-aware context badge and warning semantics", async ()
   assert.match(source, /context: \{sourceDetail\.label\}/);
   assert.match(
     source,
-    /sourceDetail\.warning \? <Badge variant="default">context warning: non-production fallback<\/Badge> : null/,
+    /sourceDetail\.warning \?\s*\(\s*<Badge variant="default">review context details on \/session<\/Badge>\s*\)\s*:\s*null/s,
   );
+  assert.match(source, /sourceDetail\.local_only \? <Badge variant="default">local-only context<\/Badge> : null/);
+  assert.match(source, /const nextLane = nextLaneFromRole\(workspaceContext\.workspace\.subject_roles\);/);
 });
 
 test("workspace context route shares warning header when fallback warns", async () => {
   const source = await readSource(path.resolve(testDir, "../../app/api/workspace-context/route.ts"));
 
   assert.match(source, /response\.headers\.set\("x-govrail-workspace-context-warning",/);
+  assert.match(source, /request\.headers\.get\("x-authenticated-subject"\)\s*\?\?\s*request\.headers\.get\("cf-access-authenticated-user-email"\)/s);
+  assert.doesNotMatch(source, /x-subject-id/);
 });
 
 test("Members panel keeps metadata-guard fallback messaging and no-members live-only semantics", async () => {

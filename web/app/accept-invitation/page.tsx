@@ -7,7 +7,123 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { acceptWorkspaceInvitation } from "@/services/control-plane";
+import { acceptWorkspaceInvitation, ControlPlaneRequestError } from "@/services/control-plane";
+
+type AcceptedWorkspace = {
+  workspace_slug: string;
+  display_name: string;
+  organization_display_name: string;
+  role: string;
+};
+
+type WorkspaceLandingAction = {
+  label: string;
+  path: string;
+};
+
+function formatRoleLabel(role: string): string {
+  return role.replaceAll("_", " ");
+}
+
+function getRoleLaneSummary(role: string): string {
+  if (role === "viewer" || role === "auditor") {
+    return "This role is usually focused on reading verification evidence, artifacts, and billing posture without changing workspace configuration.";
+  }
+  if (role === "operator") {
+    return "This role is usually focused on running the first demo flow, checking usage pressure, and keeping verification evidence current.";
+  }
+  if (role === "approver") {
+    return "This role is usually focused on reviewing the Week 8 checklist and the mock go-live drill before sign-off.";
+  }
+  if (role === "workspace_admin" || role === "workspace_owner") {
+    return "This role is usually focused on access, settings, credential readiness, and the overall first-run lane for the workspace.";
+  }
+  return "Use the recommended surfaces below to complete the first follow-up for this workspace.";
+}
+
+function getRoleLandingActions(role: string): WorkspaceLandingAction[] {
+  if (role === "viewer" || role === "auditor") {
+    return [
+      { label: "Open verification", path: "/verification?surface=verification" },
+      { label: "Review usage", path: "/usage" },
+      { label: "Inspect artifacts", path: "/artifacts" },
+    ];
+  }
+  if (role === "operator") {
+    return [
+      { label: "Run a demo", path: "/playground" },
+      { label: "Check usage", path: "/usage" },
+      { label: "Capture verification", path: "/verification?surface=verification" },
+    ];
+  }
+  if (role === "approver") {
+    return [
+      { label: "Open Week 8 checklist", path: "/verification?surface=verification" },
+      { label: "Review go-live drill", path: "/go-live?surface=go_live" },
+      { label: "Review usage", path: "/usage" },
+    ];
+  }
+  if (role === "workspace_admin" || role === "workspace_owner") {
+    return [
+      { label: "Confirm members", path: "/members" },
+      { label: "Review settings", path: "/settings" },
+      { label: "Check service accounts", path: "/service-accounts" },
+    ];
+  }
+  return [
+    { label: "Open members", path: "/members" },
+    { label: "Run a demo", path: "/playground" },
+    { label: "Open verification", path: "/verification?surface=verification" },
+  ];
+}
+
+function formatInvitationAcceptError(error: unknown): string {
+  if (error instanceof ControlPlaneRequestError) {
+    const invitationEmail =
+      typeof error.details.invitation_email === "string" ? error.details.invitation_email : null;
+    const upgradeHref =
+      typeof error.details.upgrade_href === "string" ? error.details.upgrade_href : "/settings?intent=upgrade";
+    if (error.code === "unauthorized") {
+      return "Invitation acceptance requires an authenticated SaaS session. Re-open /session, confirm the current signed-in user, then retry.";
+    }
+    if (error.code === "invitation_not_found") {
+      return "This invitation token is no longer valid. Ask a workspace admin to issue a fresh invitation.";
+    }
+    if (error.code === "tenant_access_denied") {
+      return invitationEmail
+        ? `The signed-in SaaS user does not match the invited member (${invitationEmail}). Confirm the current session before redeeming the token.`
+        : "The signed-in SaaS user does not match the invited member. Confirm the current session before redeeming the token.";
+    }
+    if (error.code === "plan_limit_exceeded" && error.details.scope === "member_seats") {
+      return `This workspace has reached the member seat limit. Free a seat or upgrade the plan via ${upgradeHref} before accepting the invitation.`;
+    }
+    if (error.code === "invalid_state_transition") {
+      const invitationStatus =
+        typeof error.details.invitation_status === "string" ? error.details.invitation_status : null;
+      const workspaceStatus =
+        typeof error.details.workspace_status === "string" ? error.details.workspace_status : null;
+      const organizationStatus =
+        typeof error.details.organization_status === "string" ? error.details.organization_status : null;
+      if (invitationStatus === "revoked" || invitationStatus === "expired") {
+        return "This invitation is no longer redeemable because the token is no longer active. Ask a workspace admin to issue a fresh invitation.";
+      }
+      if (workspaceStatus && workspaceStatus !== "active") {
+        return "This invitation can no longer be redeemed because the workspace is not active. Ask for a fresh invitation from an active workspace.";
+      }
+      if (organizationStatus && organizationStatus !== "active") {
+        return "This invitation can no longer be redeemed because the organization is not active. Ask for a fresh invitation from an active organization.";
+      }
+      return "This invitation is no longer redeemable in its current state. Ask a workspace admin to review the invitation and issue a new token if needed.";
+    }
+    return error.message?.trim() || "Invitation accept failed";
+  }
+
+  if (error instanceof Error && error.message.trim() !== "") {
+    return error.message;
+  }
+
+  return "Invitation accept failed";
+}
 
 function AcceptInvitationPageContent() {
   const router = useRouter();
@@ -16,12 +132,7 @@ function AcceptInvitationPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [acceptedWorkspace, setAcceptedWorkspace] = useState<{
-    workspace_slug: string;
-    display_name: string;
-    organization_display_name: string;
-    role: string;
-  } | null>(null);
+  const [acceptedWorkspace, setAcceptedWorkspace] = useState<AcceptedWorkspace | null>(null);
 
   useEffect(() => {
     const token = searchParams.get("token") ?? searchParams.get("invite_token") ?? "";
@@ -116,6 +227,12 @@ function AcceptInvitationPageContent() {
               <p className="mt-1">
                 Copy once, paste here, and accept before the one-time token expires or is revoked. The action will attach to the SaaS user already signed in, so keep this browser session active.
               </p>
+              <p className="mt-2">
+                This page redeems a self-serve invite only. It does not send email, impersonate another user, or open support tooling for you.
+              </p>
+              <p className="mt-2">
+                If acceptance is blocked by session identity or seat limits, re-open <code>/session</code> first, then ask a workspace owner to adjust access or plan capacity.
+              </p>
             </div>
             <Button
               disabled={isSubmitting || inviteToken.trim() === ""}
@@ -132,7 +249,7 @@ function AcceptInvitationPageContent() {
                   });
                 } catch (error) {
                   setAcceptedWorkspace(null);
-                  setErrorMessage(error instanceof Error ? error.message : "Invitation accept failed");
+                  setErrorMessage(formatInvitationAcceptError(error));
                 } finally {
                   setIsSubmitting(false);
                 }
@@ -141,7 +258,15 @@ function AcceptInvitationPageContent() {
               {isSubmitting ? "Accepting..." : "Accept invitation"}
             </Button>
 
-            {errorMessage ? <p className="text-sm text-muted">{errorMessage}</p> : null}
+            {errorMessage ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50/80 p-3 text-xs text-red-700">
+                <p className="font-medium text-red-800">Invitation accept issue</p>
+                <p className="mt-1">{errorMessage}</p>
+                <p className="mt-2">
+                  This page only redeems the token for the current SaaS user. It does not repair session state, reopen expired invitations, or bypass workspace/member seat policy.
+                </p>
+              </div>
+            ) : null}
 
             {acceptedWorkspace ? (
               <>
@@ -149,53 +274,38 @@ function AcceptInvitationPageContent() {
                   <p className="text-sm font-medium text-foreground">
                     Joined {acceptedWorkspace.organization_display_name} / {acceptedWorkspace.display_name}
                   </p>
-                  <p className="mt-1 text-xs text-muted">Workspace role: {acceptedWorkspace.role}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Workspace role: {formatRoleLabel(acceptedWorkspace.role)}
+                  </p>
                   <p className="mt-1 text-xs text-muted">
                     The actions below will switch your current workspace context to{" "}
                     <span className="font-medium text-foreground">{acceptedWorkspace.workspace_slug}</span> first.
                   </p>
+                  <p className="mt-1 text-xs text-muted">
+                    After switching, continue the manual lane (billing, verification, go-live, etc.) that matches the assigned role.
+                  </p>
                 </div>
                 <div className="rounded-2xl border border-border bg-background p-3 text-xs text-muted">
-                  <p className="font-medium text-foreground">Suggested next steps</p>
+                  <p className="font-medium text-foreground">Role lane</p>
                   <p className="mt-1">
-                    Viewers can head straight to verification or usage to review audit and billing context, operators usually ensure the first run via the playground, and approvers revisit the Week 8 checklist before signing off.
+                    {getRoleLaneSummary(acceptedWorkspace.role)}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isSwitchingWorkspace}
-                      onClick={() => void openWorkspaceSurface(buildOnboardingPath("/members"))}
-                    >
-                      {isSwitchingWorkspace ? "Switching..." : "Confirm members"}
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isSwitchingWorkspace}
-                      onClick={() => void openWorkspaceSurface(buildOnboardingPath("/playground"))}
-                    >
-                      {isSwitchingWorkspace ? "Switching..." : "Run a demo"}
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isSwitchingWorkspace}
-                      onClick={() =>
-                        void openWorkspaceSurface(buildOnboardingPath("/verification?surface=verification"))
-                      }
-                    >
-                      {isSwitchingWorkspace ? "Switching..." : "Open Week 8 checklist"}
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isSwitchingWorkspace}
-                      onClick={() => void openWorkspaceSurface(buildOnboardingPath("/go-live?surface=go_live"))}
-                    >
-                      {isSwitchingWorkspace ? "Switching..." : "Open mock go-live drill"}
-                    </button>
+                    {getRoleLandingActions(acceptedWorkspace.role).map((action) => (
+                      <button
+                        key={action.path}
+                        type="button"
+                        className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isSwitchingWorkspace}
+                        onClick={() => void openWorkspaceSurface(buildOnboardingPath(action.path))}
+                      >
+                        {isSwitchingWorkspace ? "Switching..." : action.label}
+                      </button>
+                    ))}
                   </div>
+                  <p className="mt-3">
+                    Switching the workspace context is the only automatic step here. The follow-up surfaces remain manual review and action lanes.
+                  </p>
                 </div>
               </>
             ) : null}

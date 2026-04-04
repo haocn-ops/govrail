@@ -35,7 +35,8 @@ test("billing portal return intent stays aligned with settings manage/resolve gu
   );
   assert.match(
     settingsSource,
-    /Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean\./,
+    /Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane\./,
   );
   assert.match(settingsSource, /const session = await createBillingPortalSession\(\{\s*return_url: window\.location\.href,\s*\}\);/s);
+  assert.match(settingsSource, /Open billing action lane/);
 });

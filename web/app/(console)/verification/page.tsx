@@ -1,7 +1,11 @@
+import Link from "next/link";
+
 import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
 import { WorkspaceDeliveryTrackPanel } from "@/components/delivery/workspace-delivery-track-panel";
 import { PageHeader } from "@/components/page-header";
 import { Week8VerificationChecklist } from "@/components/verification/week8-verification-checklist";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildAdminReturnHref, buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
@@ -125,6 +129,47 @@ export default async function VerificationPage({
   );
   const showAttentionHandoff = handoffSource === "admin-attention" && handoffSurface === "verification";
   const showReadinessHandoff = handoffSource === "admin-readiness";
+  const showAdminReturn = showAttentionHandoff || showReadinessHandoff;
+  const adminReturnLabel = showAttentionHandoff ? "Return to admin queue" : "Return to admin readiness view";
+  const adminQueueSurface =
+    handoffSurface === "verification" || handoffSurface === "go_live"
+      ? handoffSurface
+      : recentTrackKey === "verification" || recentTrackKey === "go_live"
+        ? recentTrackKey
+        : null;
+  const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {
+    source:
+      handoffSource === "admin-attention" || handoffSource === "admin-readiness" || handoffSource === "onboarding"
+        ? handoffSource
+        : null,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace,
+    attentionOrganization: handoffOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount,
+    recentOwnerLabel: recentOwnerDisplayName ?? recentOwnerEmail,
+  };
+  const adminReturnHref = buildAdminReturnHref("/admin", {
+    source:
+      handoffSource === "admin-attention" || handoffSource === "admin-readiness" ? handoffSource : null,
+    queueSurface: adminQueueSurface,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace ?? workspaceContext.workspace.slug,
+    attentionOrganization: handoffOrganization,
+    deliveryContext: deliveryContext === "recent_activity" ? deliveryContext : null,
+    recentUpdateKind:
+      recentUpdateKind === "verification" ||
+      recentUpdateKind === "go_live" ||
+      recentUpdateKind === "verification_completed" ||
+      recentUpdateKind === "go_live_completed" ||
+      recentUpdateKind === "evidence_only"
+        ? recentUpdateKind
+        : null,
+    evidenceCount,
+    recentOwnerLabel: recentOwnerDisplayName ?? recentOwnerEmail,
+  });
 
   return (
     <div className="space-y-8">
@@ -164,6 +209,65 @@ export default async function VerificationPage({
         title="Week 8 launch checklist"
         description="Walk through onboarding, billing posture, first-run validation, and evidence capture before treating a workspace as ready for a mock go-live drill."
       />
+      <Card>
+        <CardHeader>
+          <CardTitle>Verification evidence lane</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted">
+          <p>
+            Keep verification grounded in the current workspace session:{" "}
+            <span className="font-medium text-foreground">{workspaceContext.workspace.slug}</span> via{" "}
+            <span className="font-medium text-foreground">{workspaceContext.source_detail.label}</span>. This page is
+            the manual point where onboarding, billing posture, first-run evidence, and go-live preparation are tied
+            into one audit trail.
+          </p>
+          <p>
+            Use the links below to revisit the original run context, confirm the usage signal, review settings and
+            billing posture, then continue into the mock go-live rehearsal. Nothing here triggers automation or changes
+            identity.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={buildVerificationChecklistHandoffHref({ pathname: "/playground", ...handoffHrefArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review playground run
+            </Link>
+            <Link
+              href={buildVerificationChecklistHandoffHref({ pathname: "/usage", ...handoffHrefArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Confirm usage signal
+            </Link>
+            <Link
+              href={buildVerificationChecklistHandoffHref({ pathname: "/settings", ...handoffHrefArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review settings + billing
+            </Link>
+            <Link
+              href={buildVerificationChecklistHandoffHref({ pathname: "/artifacts", ...handoffHrefArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review artifacts evidence
+            </Link>
+            <Link
+              href={buildVerificationChecklistHandoffHref({ pathname: "/go-live?surface=go_live", ...handoffHrefArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Continue to go-live drill
+            </Link>
+            {showAdminReturn ? (
+              <Link
+                href={adminReturnHref}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                {adminReturnLabel}
+              </Link>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
       <Week8VerificationChecklist
         workspaceSlug={workspaceContext.workspace.slug}
         source={handoffSource}

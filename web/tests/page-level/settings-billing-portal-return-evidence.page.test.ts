@@ -25,11 +25,11 @@ test("settings panel keeps portal-return notices coupled to billing evidence han
   assert.match(source, /title: normalizedSource === "onboarding" \? "Onboarding billing evidence" : "Billing evidence handoff"/);
   assert.match(
     source,
-    /Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean\./,
+    /Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane\./,
   );
   assert.match(
     source,
-    /actions:\s*normalizedSource === "onboarding"\s*\?\s*\[[\s\S]*?\]\s*:\s*\[\s*\{ label: "Return to Week 8 checklist", href: verificationHref \},\s*\{ label: "Continue to go-live drill", href: goLiveHref \},\s*\]/s,
+    /actions:\s*normalizedSource === "onboarding"\s*\?\s*\[[\s\S]*?\]\s*:\s*\[\s*\{ label: "Return to Week 8 checklist", href: verificationHref \},\s*\{ label: "Continue to go-live drill", href: goLiveHref \},\s*\{ label: "Return to admin readiness view", href: adminReturnHref \},\s*\]/s,
   );
   assert.match(source, /subscriptionAction\.notice \? \(\s*<p className="text-xs text-emerald-700">\{subscriptionAction\.notice\}<\/p>\s*\) : null/s);
   assert.match(
@@ -39,5 +39,9 @@ test("settings panel keeps portal-return notices coupled to billing evidence han
   assert.match(
     source,
     /setSubscriptionAction\(\{\s*openingPortal: false,\s*cancelling: false,\s*resuming: false,\s*error: null,\s*notice: "Automatic renewal has been restored for this subscription\.",/s,
+  );
+  assert.match(
+    source,
+    /These navigation cues keep checkout, portal, and audit evidence linked to the same workspace timeline; they do not open support workflows, automate remediation, or impersonate any role\./,
   );
 });

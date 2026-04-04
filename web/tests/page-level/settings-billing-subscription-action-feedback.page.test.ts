@@ -46,6 +46,6 @@ test("settings panel keeps subscription action feedback copy lockstep with evide
   );
   assert.match(
     source,
-    /Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean\./,
+    /These navigation cues keep checkout, portal, and audit evidence linked to the same workspace timeline; they do not open support workflows, automate remediation, or impersonate any role\./,
   );
 });

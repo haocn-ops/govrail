@@ -217,6 +217,40 @@
   - 上述覆蓋層級歸入 `W12-E01` 的 source-assisted+execution non-browser smoke 與 page/source contract 主回歸網。
   - 這不是完整 browser e2e，不宣告真實跨頁點擊時序、渲染與導航全覆蓋。
 
+### 3.0.7 Backend slices 同步（2026-04-04）
+
+本輪已完成、且需要回寫到執行口徑的 backend slices 如下：
+
+- session / workspace identity boundary 已收緊：
+  - `/api/v1/saas/*` 的 user resolution 現只接受可信 authenticated subject header：`x-authenticated-subject` 或 `cf-access-authenticated-user-email`。
+  - 直接依賴 `x-subject-id` 的 SaaS session 解析已被拒絕；web `workspace-context` 也已同步成只有在有可信 subject 時才會打 `/api/v1/saas/me`，否則誠實回落到 `env-fallback` / `preview-fallback`，不再用 env 預設 subject 假裝 live metadata session。
+- workspace / organization access gate 已收緊：
+  - SaaS workspace 存取現在同時要求 active workspace、active organization、active workspace membership 與 active organization membership。
+  - disabled workspace、disabled organization membership 與不再 active 的 access path，現已從 `/api/v1/saas/me` 與 workspace detail 主鏈路中被排除。
+- invitation / seat-limit guard 已收緊：
+  - invitation 建立與接受都會套用 `member_seats` 限額，pending invitation 會一併計入 seat reservation。
+  - disabled workspace / organization、disabled membership 與非 pending invitation 不再可被接受，避免 invitation path 繞過 workspace 狀態與 seat gate。
+  - web `accept-invitation` page 也已把這批保護邊界轉成可見敘事：trusted session 缺失、seat-limit、revoked/expired token，以及 disabled workspace / organization 都有獨立文案，不再只把 backend 原始錯誤直接丟給使用者。
+- usage / billing period 對齊已完成：
+  - `src/app.ts` 的 usage ledger 寫入與 plan-limit 判定現已統一跟隨 subscription billing period，不再混用與訂閱週期脫節的時間窗。
+  - `run`、`replay`、`tool-provider` 等會消耗配額的路徑，現在都會把 subscription period 一起帶入 usage 記錄與 limit 判斷，避免 usage 顯示、billing 週期與限流報錯三者各說各話。
+  - `web/components/usage/workspace-usage-dashboard.tsx` 也會把 `period_start` / `period_end` 顯式展示成 `Current usage window`，並在 over-limit 時保留回到 settings / upgrade lane 的可見 CTA，方便把 period boundary 帶進 verification evidence。
+- plan-limit detail contract 已標準化：
+  - workspace / run / provider / seat-limit 等 `plan_limit_exceeded` 類錯誤，現已對齊為同一組 detail 欄位：`scope`、`used`、`limit`、`remaining`、`workspace_id`、`plan_id`、`plan_code`、`upgrade_href`、`period_start`、`period_end`。
+  - `web/services/control-plane.ts` 已同步擴充 `PlanLimitState` 與 `parsePlanLimitError(...)`，控制台不再只拿到局部 limit 訊息，而能顯示剩餘額度、升級導流與計費週期邊界。
+- `workspace_onboarding_states` 持久化已落地：
+  - 已新增 `migrations/0007_workspace_onboarding_states.sql`，作為 onboarding 狀態持久化的最小表結構。
+  - workspace create 會持久化 `workspace_created` 初始狀態；bootstrap 完成後會把 bootstrap summary 一起寫回；`buildWorkspaceOnboardingState(...)` 也已改為合併持久化狀態，而不是僅依賴即時計算。
+  - 這代表 onboarding 已從「僅靠當下 API 現算」前進到「可回看、可恢復、可延續」的 state persistence 基線，但目前持久化主體仍聚焦在 create/bootstrap summary，尚未擴展到所有 demo/evidence milestone。
+- root smoke / web service test 覆蓋已同步補齊：
+  - 倉庫根層 `npm run smoke` 已新增並固定以下 backend mainline：workspace create idempotency（含 plan 回傳）、disabled workspace / inactive org membership guard、invitation seat limit、bootstrap provider limit、usage/billing period 對齊、plan-limit detail contract、bootstrap onboarding persistence、trusted subject identity requirement、disabled workspace invitation accept guard。
+  - web service 單元契約已由 `web/lib/__tests__/control-plane-service.test.ts` 補上 plan-limit 擴展欄位斷言，固定 `remaining`、`planId`、`planCode`、`upgradeHref`、`periodStart`、`periodEnd` 等解析結果，避免 backend detail contract 與 web service parsing 再次漂移。
+  - 本輪對應驗證口徑已包含：
+    - `npm run check`
+    - `npm run smoke`
+    - `npm --prefix web run check`
+    - `node --import tsx --test lib/__tests__/control-plane-service.test.ts`（在 `web/` 目錄下）
+
 ### 3.1 成功標準
 
 至少達成以下結果：
@@ -589,6 +623,9 @@
 
 ### 下一輪建議並行槽位（更新）
 
+- 槽位 0：L5 dashboard / launchpad continuity
+  - 目標：把 `/` launchpad dashboard 也拉進 shared handoff continuity，讓 `source` / `week8_focus` / `attention_workspace` / `attention_organization` / `delivery_context` / recent metadata 可以從首頁繼續帶往 `session`、`usage`、`settings`、`verification`、`go-live` 等 launch surfaces，同時維持 navigation-only 邊界。
+  - 當前狀態：`completed`（`/` dashboard page 現已與 onboarding/usage/settings 同級解析 `source` / `week8_focus` / `attention_workspace` / `attention_organization` / `delivery_context` / recent metadata，並透過 `WorkspaceLaunchpad` 將 shared handoff continuity 帶往 `session`、`usage`、`settings`、`verification`、`go-live` 等 launch surfaces；對應 page/source contract 與 non-browser smoke 也已同步更新，且仍維持 navigation-only 邊界與 `verification/go-live` explicit `surface` semantics）。
 - 槽位 1：S4 settings page-level guard
   - 目標：補 `settings` enterprise surface（SSO / dedicated saved sections + live-write submit/error semantics）與 `settings -> verification/go-live` handoff affordance 的 page-level/source contract 護欄，並把 shared handoff helper 的導流語義收斂到統一契約，防止展示、提交流程與導流語義回歸。
   - 當前狀態：`completed`（已納入 `web/tests/page-level/workspace-context-hardening.page.test.ts`、`web/tests/page-level/settings-enterprise-write.page.test.ts`、`web/tests/page-level/settings-saved-refresh-coupling.page.test.ts`、`web/tests/page-level/verification-go-live-handoff.page.test.ts`、`web/tests/page-level/delivery-track-context-handoff.page.test.ts`；其中 `W12-P04` 聚焦 submit/error/success/preflight + handoff query passthrough，`W12-P05` 聚焦 saved sections + submit payload + draft hydration + audit/export handoff，`W12-P06` 補齊 settings affordance，`W12-P07/P08/P09` 補齊 shared handoff helper 與 delivery panel continuity 契約）。
@@ -601,6 +638,9 @@
 
 ### 下一輪建議並行槽位（預同步：execution harness）
 
+- 槽位 0：browser-e2e spike（後置但可先做最小基座）
+  - 目標：在不誇大 coverage 的前提下，補一條更接近真實操作時序的 browser e2e 或最小基座探針，優先覆蓋 `launchpad/session/onboarding/settings/verification/go-live` 之間的一小段 continuity，作為後續完整瀏覽器 e2e 的落腳點。
+  - 當前狀態：`in_progress`（已從單純 probe 前推到一組最小 true browser smoke：`web/playwright.config.ts` 會以本機 Chrome 啟動 browser runner。其一，[`web/tests/browser/launchpad-session-onboarding.smoke.spec.ts`](./../web/tests/browser/launchpad-session-onboarding.smoke.spec.ts) 已覆蓋 `launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin` 的最小真實導航與 handoff continuity，且顯式保留 `/verification?surface=verification`、`/go-live?surface=go_live`，並在 `/admin` 恢復 `readiness_returned=1` 與 Week 8 readiness return banner；其二，[`web/tests/browser/admin-attention-queue-return.smoke.spec.ts`](./../web/tests/browser/admin-attention-queue-return.smoke.spec.ts) 與 [`web/tests/browser/admin-attention-verification-go-live-return.smoke.spec.ts`](./../web/tests/browser/admin-attention-verification-go-live-return.smoke.spec.ts) 已分別覆蓋 `admin-attention -> verification -> admin` 與 `admin-attention -> verification -> go-live -> admin` 的最小真實導航與 queue-return continuity，驗證 `Return to admin queue`、`Continue to go-live drill` 與 `/admin` 上的 `Admin queue focus restored`；其三，[`web/tests/browser/admin-recent-activity-verification-return.smoke.spec.ts`](./../web/tests/browser/admin-recent-activity-verification-return.smoke.spec.ts) 與 [`web/tests/browser/admin-recent-activity-verification-go-live-return.smoke.spec.ts`](./../web/tests/browser/admin-recent-activity-verification-go-live-return.smoke.spec.ts) 已補上 `admin recent delivery activity -> verification -> admin` 與 `admin recent delivery activity -> verification -> go-live -> admin` 的 recent-context continuity，顯式保留 `delivery_context=recent_activity` 並驗證 recent metadata 與 admin return；其四，[`web/tests/browser/admin-organization-focus-return.smoke.spec.ts`](./../web/tests/browser/admin-organization-focus-return.smoke.spec.ts) 已補上 `admin organization focus -> verification -> admin` 的 focus continuity，顯式保留 `attention_organization` 並驗證 Governance focus chip、`Focused organization`、queue-return banner 與 `Clear all focus`；其五，[`web/tests/browser/admin-focus-chip-clear.smoke.spec.ts`](./../web/tests/browser/admin-focus-chip-clear.smoke.spec.ts) 已補上 `organization + workspace + queue return` 疊加時的 per-chip clear continuity，驗證 `Workspace`、`Follow-up return`、`Organization` 的 `Clear` 會逐層放寬 focus；其六，[`web/tests/browser/admin-readiness-baseline-onboarding-return.smoke.spec.ts`](./../web/tests/browser/admin-readiness-baseline-onboarding-return.smoke.spec.ts) 已補上 `admin readiness baseline -> onboarding -> admin` 的最小真實導航與 readiness-return continuity，驗證 `week8_focus=baseline`、`Drill-down active: Baseline gaps`、`Open onboarding flow`、`Finish onboarding`、workspace surface 上的 `Return to admin readiness view`，以及返回 `/admin` 後的 `Returned from Week 8 readiness` / `Clear readiness focus`；其七，[`web/tests/browser/admin-readiness-chip-toggle.smoke.spec.ts`](./../web/tests/browser/admin-readiness-chip-toggle.smoke.spec.ts) 已補上純 `/admin` 內的 readiness chip clear/toggle continuity，驗證 `Clear readiness focus` 與 `Credentials ready` drill-down toggle 只會增減 `week8_focus`，而不會把 `attention_organization` / `attention_workspace` 一起清掉；其八，[`web/tests/browser/admin-readiness-billing-warning-settings-return.smoke.spec.ts`](./../web/tests/browser/admin-readiness-billing-warning-settings-return.smoke.spec.ts) 與 [`web/tests/browser/admin-readiness-demo-run-verification-return.smoke.spec.ts`](./../web/tests/browser/admin-readiness-demo-run-verification-return.smoke.spec.ts) 已補上 readiness workspace/surface action variants，分別驗證 `billing_warning -> settings -> admin` 與 `demo_run -> verification -> admin` 的 summary primary action continuity、`Return to admin readiness view` 與 admin return banner；其九，[`web/tests/browser/admin-readiness-go-live-ready-go-live-return.smoke.spec.ts`](./../web/tests/browser/admin-readiness-go-live-ready-go-live-return.smoke.spec.ts) 與 [`web/tests/browser/admin-readiness-demo-run-verification-go-live-return.smoke.spec.ts`](./../web/tests/browser/admin-readiness-demo-run-verification-go-live-return.smoke.spec.ts) 已補上 readiness 到 go-live 的 follow-up variants，分別驗證 `go_live_ready -> go-live -> admin` 與 `demo_run -> verification -> go-live -> admin` 的 continuity；其十，[`web/tests/browser/admin-readiness-billing-warning-settings-verification-return.smoke.spec.ts`](./../web/tests/browser/admin-readiness-billing-warning-settings-verification-return.smoke.spec.ts) 與 [`web/tests/browser/admin-readiness-billing-warning-settings-go-live-return.smoke.spec.ts`](./../web/tests/browser/admin-readiness-billing-warning-settings-go-live-return.smoke.spec.ts) 已補上 settings workspace-level follow-up variants，驗證 `billing_warning -> settings -> verification -> admin` 與 `billing_warning -> settings -> go-live -> admin` 的 continuity。`npm --prefix web run test:browser:smoke` 可直接執行；`web/scripts/browser-e2e-spike.mjs` 與 `npm --prefix web run test:browser:spike` 則保留為主線 readiness report，固定 direct dependency / resolvable / config / system browser / smoke spec 的對齊。這仍不是完整 browser e2e，也不宣告真實跨頁點擊與渲染時序已全面覆蓋；下一小段轉到 `go_live_ready` 與 `demo_run` 的更多 workspace-level action variants。）
 - 槽位 1：members service execution
   - 目標：為 `fetchWorkspaceMembersViewModel` 補 service execution 單元測試，覆蓋 `live / workspace_context_not_metadata / fallback_feature_gate / fallback_control_plane_unavailable / fallback_error` 語義映射。
   - 當前狀態：`completed`（已納入 `web/lib/__tests__/control-plane-service.test.ts` 並可由 `web:test:unit` 執行；同檔已補 enterprise save mutation 的 non-2xx throw contract）。
@@ -610,6 +650,15 @@
 - 槽位 3：e2e 後置
   - 目標：維持 `unit -> contract -> page` 主回歸網，`e2e` 仍待執行基座穩定後再引入。
   - 當前狀態：`in_progress`（`web:test:e2e` 與最小 non-browser smoke 已落地，`W12-E01` 已從 skeleton/skip 推進為可執行；smoke 邊界外的完整跨頁 continuity（含真實導航時序）與真實瀏覽器互動仍由 page/source contract + 後置瀏覽器 e2e 承擔，不作為當前阻塞項）。
+
+### 本輪文檔口徑補記（2026-04-04）
+
+- `session` 已升級為 Week 3 / Week 8 的顯式 trusted-session checkpoint：它會提示只有 metadata-backed SaaS session 才應被視為可信 launch point，並把 `onboarding`、`settings`、`verification`、`go-live`、`members`、`usage` 等 lane 明確標記為 navigation-only follow-up。
+- `members -> accept-invitation -> onboarding/usage/verification` 的 continuity 已補齊：pending invitations 會占用 `member_seats` reservation，invite redemption 也已明確要求從 recipient 自己的 trusted SaaS session 完成，避免把 borrowed browser / fallback context 誤當成可信登入。
+- `settings` 現口徑已明確是 self-serve billing follow-up lane：portal / checkout / subscription action / audit export 相關 CTA 與 evidence handoff 仍是 workspace-scoped navigation/status cues，不是 support workflow、不是 automation，也不是 impersonation。
+- `admin readiness` 與 `attention queue` 的 return continuity 已收斂到共享治理契約：workspace surfaces 會顯式提供 `Return to admin queue` 或 `Return to admin readiness view`，並把 `queue_surface`、`week8_focus`、organization/workspace context 與 recent metadata 帶回 `/admin`。
+- `launchpad / onboarding / usage` 現已具備 page/source contract 與 non-browser smoke 護欄，且首頁 dashboard 也已補齊 shared handoff query passthrough；這代表首頁入口 continuity 已進入可回歸狀態，但驗收邊界仍是 page/source contract + non-browser smoke，不應把它寫成完整 browser e2e 已覆蓋。
+- browser harness 現已具備一組最小真實 smoke：主線 `launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin` 可在 Playwright + 本機 Chrome 下執行，補到真實瀏覽器導航時序的一小段驗收，且顯式保留 `surface=verification` / `surface=go_live`，並在 `/admin` 恢復 `readiness_returned=1` 後展示 `Returned from Week 8 readiness` / `Focus restored` banner；另外也已有 attention 分支 `admin -> verification -> admin`、`admin -> verification -> go-live -> admin`，recent-delivery 分支 `admin recent delivery activity -> verification -> admin`、`admin recent delivery activity -> verification -> go-live -> admin`，organization-focus 分支 `admin organization focus -> verification -> admin`，focus-chip 分支 `admin organization + workspace + return focus -> per-chip clear`，readiness 導航分支 `admin readiness baseline -> onboarding -> admin`，readiness admin-only 分支 `admin readiness baseline -> clear readiness focus -> credentials toggle -> clear`，readiness action-variant 分支 `admin readiness billing_warning -> settings -> admin`、`admin readiness demo_run -> verification -> admin`，readiness go-live 分支 `admin readiness go_live_ready -> go-live -> admin`、`admin readiness demo_run -> verification -> go-live -> admin`，以及 settings workspace-level 分支 `admin readiness billing_warning -> settings -> verification -> admin`、`admin readiness billing_warning -> settings -> go-live -> admin`，用來驗證 `admin-attention` / `admin-readiness` source、`delivery_context=recent_activity`、`week8_focus=baseline|credentials|billing_warning|demo_run|go_live_ready`、`attention_organization`、`attention_workspace`、`Return to admin queue`、`Return to admin readiness view`、`Continue to go-live drill`、`Clear all focus`、per-chip `Clear`、`Clear readiness focus`，以及 `/admin` 上的 `Admin queue focus restored` / `Returned from Week 8 readiness`。其中本輪還修正了 `buildVerificationChecklistHandoffHref` 從 `use client` 模組被 server page 直接引用的邊界風險，改由 `web/lib/handoff-query.ts` 提供 server-safe helper 給 `playground/usage/verification` server pages 使用；但這仍不等於 full browser e2e，下一小段會轉到 `go_live_ready` 與 `demo_run` 的更多 workspace-level readiness 交互。
 
 ## 8. 建議任務卡格式
 

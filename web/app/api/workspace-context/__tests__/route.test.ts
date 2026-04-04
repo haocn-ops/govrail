@@ -235,6 +235,56 @@ test(
 );
 
 test(
+  "GET /api/workspace-context ignores legacy x-subject-id and stays on fallback sources without trusted auth headers",
+  { concurrency: false },
+  async () =>
+    withCleanWorkspaceEnv(async () => {
+      process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.example";
+      process.env.CONTROL_PLANE_WORKSPACES_JSON = JSON.stringify([
+        {
+          workspace_id: "ws_fallback_alpha",
+          slug: "fallback-alpha",
+          display_name: "Fallback Alpha",
+          tenant_id: "tenant_fallback_alpha",
+        },
+      ]);
+
+      let fetchCallCount = 0;
+      const response = await withMockFetch(async () => {
+        fetchCallCount += 1;
+        throw new Error("metadata fetch should not run for legacy x-subject-id headers");
+      }, () =>
+        GET(
+          new Request("http://localhost/api/workspace-context", {
+            headers: {
+              "x-subject-id": "spoofed@example.com",
+            },
+          }),
+        ),
+      );
+
+      assert.equal(fetchCallCount, 0);
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as {
+        data: {
+          source: string;
+          source_detail: { is_fallback: boolean };
+          workspace: { workspace_id: string; slug: string };
+          session_user: null;
+        };
+      };
+
+      assert.equal(payload.data.source, "env-fallback");
+      assert.equal(payload.data.source_detail.is_fallback, true);
+      assert.equal(payload.data.workspace.workspace_id, "ws_fallback_alpha");
+      assert.equal(payload.data.workspace.slug, "fallback-alpha");
+      assert.equal(payload.data.session_user, null);
+      assert.equal(response.headers.get("x-govrail-workspace-context-source"), "env-fallback");
+      assert.equal(response.headers.get("x-govrail-workspace-context-fallback"), "1");
+    }),
+);
+
+test(
   "GET /api/workspace-context emits warning header when fallback source warns",
   { concurrency: false },
   async () =>
@@ -259,6 +309,60 @@ test(
 );
 
 test(
+  "GET /api/workspace-context does not treat x-subject-id as a trusted metadata identity",
+  { concurrency: false },
+  async () =>
+    withCleanWorkspaceEnv(async () => {
+      process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.example";
+      process.env.CONTROL_PLANE_WORKSPACES_JSON = JSON.stringify([
+        {
+          workspace_id: "ws_env_only",
+          slug: "env-only",
+          display_name: "Env Only",
+          tenant_id: "tenant_env_only",
+        },
+      ]);
+      process.env.CONTROL_PLANE_SUBJECT_ID = "fallback-user@example.com";
+      process.env.CONTROL_PLANE_SUBJECT_ROLES = "platform_admin";
+
+      let fetchCallCount = 0;
+      const response = await withMockFetch(async () => {
+        fetchCallCount += 1;
+        throw new Error("metadata fetch should not run for x-subject-id");
+      }, () =>
+        GET(
+          new Request("http://localhost/api/workspace-context", {
+            headers: {
+              "x-subject-id": "spoof@example.com",
+              "x-workspace-slug": "env-only",
+            },
+          }),
+        ),
+      );
+
+      assert.equal(fetchCallCount, 0);
+      assert.equal(response.status, 200);
+
+      const payload = (await response.json()) as {
+        data: {
+          source: string;
+          source_detail: { is_fallback: boolean };
+          workspace: { workspace_id: string; slug: string };
+          session_user: null;
+        };
+      };
+
+      assert.equal(payload.data.source, "env-fallback");
+      assert.equal(payload.data.source_detail.is_fallback, true);
+      assert.equal(payload.data.workspace.workspace_id, "ws_env_only");
+      assert.equal(payload.data.workspace.slug, "env-only");
+      assert.equal(payload.data.session_user, null);
+      assert.equal(response.headers.get("x-govrail-workspace-context-source"), "env-fallback");
+      assert.equal(response.headers.get("x-govrail-workspace-context-fallback"), "1");
+    }),
+);
+
+test(
   "POST /api/workspace-context keeps warning header when fallback selection persists",
   { concurrency: false },
   async () =>
@@ -279,6 +383,78 @@ test(
         data: { source_detail: { warning: string | null } };
       };
       assert.equal(response.headers.get("x-govrail-workspace-context-warning"), payload.data.source_detail.warning);
+    }),
+);
+
+test(
+  "POST /api/workspace-context ignores legacy x-subject-id and keeps fallback selection semantics",
+  { concurrency: false },
+  async () =>
+    withCleanWorkspaceEnv(async () => {
+      process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.example";
+      process.env.CONTROL_PLANE_WORKSPACES_JSON = JSON.stringify([
+        {
+          workspace_id: "ws_fallback_alpha",
+          slug: "fallback-alpha",
+          display_name: "Fallback Alpha",
+          tenant_id: "tenant_fallback_alpha",
+        },
+        {
+          workspace_id: "ws_fallback_beta",
+          slug: "fallback-beta",
+          display_name: "Fallback Beta",
+          tenant_id: "tenant_fallback_beta",
+        },
+      ]);
+
+      let fetchCallCount = 0;
+      const response = await withMockFetch(async () => {
+        fetchCallCount += 1;
+        throw new Error("metadata fetch should not run for legacy x-subject-id headers");
+      }, () =>
+        POST(
+          new Request("http://localhost/api/workspace-context", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-subject-id": "spoofed@example.com",
+              cookie: "govrail_workspace=fallback-alpha",
+            },
+            body: JSON.stringify({
+              workspace_id: "ws_fallback_beta",
+              workspace_slug: "fallback-alpha",
+            }),
+          }),
+        ),
+      );
+
+      assert.equal(fetchCallCount, 0);
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as {
+        data: {
+          source: string;
+          source_detail: { is_fallback: boolean };
+          workspace: { workspace_id: string; slug: string };
+          selection: {
+            requested_workspace_id: string | null;
+            requested_workspace_slug: string | null;
+            cookie_workspace: string | null;
+          };
+          session_user: null;
+        };
+      };
+
+      assert.equal(payload.data.source, "env-fallback");
+      assert.equal(payload.data.source_detail.is_fallback, true);
+      assert.equal(payload.data.workspace.workspace_id, "ws_fallback_beta");
+      assert.equal(payload.data.workspace.slug, "fallback-beta");
+      assert.equal(payload.data.selection.requested_workspace_id, "ws_fallback_beta");
+      assert.equal(payload.data.selection.requested_workspace_slug, "fallback-alpha");
+      assert.equal(payload.data.selection.cookie_workspace, "fallback-alpha");
+      assert.equal(payload.data.session_user, null);
+      assert.match(response.headers.get("set-cookie") ?? "", /govrail_workspace=fallback-beta/);
+      assert.equal(response.headers.get("x-govrail-workspace-context-source"), "env-fallback");
+      assert.equal(response.headers.get("x-govrail-workspace-context-fallback"), "1");
     }),
 );
 
@@ -361,6 +537,74 @@ test(
       assert.equal(payload.data.session_user?.auth_subject, "explicit@example.com");
       assert.equal(response.headers.get("x-govrail-workspace-context-source"), "metadata");
       assert.equal(response.headers.get("x-govrail-workspace-context-fallback"), "0");
+    }),
+);
+
+test(
+  "GET /api/workspace-context ignores legacy x-subject-id when trusted auth headers are present",
+  { concurrency: false },
+  async () =>
+    withCleanWorkspaceEnv(async () => {
+      process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.example";
+
+      let fetchCallCount = 0;
+      const response = await withMockFetch(async (input, init) => {
+        fetchCallCount += 1;
+        assert.equal(String(input), "https://control-plane.example/api/v1/saas/me");
+        const headers = init?.headers as Record<string, string> | undefined;
+        assert.equal(headers?.accept, "application/json");
+        assert.equal(headers?.["x-authenticated-subject"], "trusted@example.com");
+        assert.equal(headers?.["x-authenticated-roles"], "workspace_admin");
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              user: {
+                user_id: "usr_trusted_get_1",
+                email: "trusted@example.com",
+                auth_provider: "cf_access",
+                auth_subject: "trusted@example.com",
+              },
+              workspaces: [
+                {
+                  workspace_id: "ws_trusted_alpha",
+                  slug: "trusted-alpha",
+                  display_name: "Trusted Alpha",
+                  tenant_id: "tenant_trusted_alpha",
+                },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }, () =>
+        GET(
+          new Request("http://localhost/api/workspace-context", {
+            headers: {
+              "x-authenticated-subject": "trusted@example.com",
+              "x-authenticated-roles": "workspace_admin",
+              "x-subject-id": "spoofed@example.com",
+            },
+          }),
+        ),
+      );
+
+      assert.equal(fetchCallCount, 1);
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as {
+        data: {
+          source: string;
+          workspace: { workspace_id: string };
+          session_user: { auth_subject: string } | null;
+        };
+      };
+
+      assert.equal(payload.data.source, "metadata");
+      assert.equal(payload.data.workspace.workspace_id, "ws_trusted_alpha");
+      assert.equal(payload.data.session_user?.auth_subject, "trusted@example.com");
     }),
 );
 
@@ -786,6 +1030,88 @@ test(
       assert.match(response.headers.get("set-cookie") ?? "", /govrail_workspace=beta/);
       assert.equal(response.headers.get("x-govrail-workspace-context-source"), "metadata");
       assert.equal(response.headers.get("x-govrail-workspace-context-fallback"), "0");
+    }),
+);
+
+test(
+  "POST /api/workspace-context ignores legacy x-subject-id when trusted auth headers are present",
+  { concurrency: false },
+  async () =>
+    withCleanWorkspaceEnv(async () => {
+      process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.example";
+
+      let fetchCallCount = 0;
+      const response = await withMockFetch(async (input, init) => {
+        fetchCallCount += 1;
+        assert.equal(String(input), "https://control-plane.example/api/v1/saas/me");
+        const headers = init?.headers as Record<string, string> | undefined;
+        assert.equal(headers?.accept, "application/json");
+        assert.equal(headers?.["x-authenticated-subject"], "trusted-post@example.com");
+        assert.equal(headers?.["x-authenticated-roles"], "workspace_owner");
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              user: {
+                user_id: "usr_trusted_post_1",
+                email: "trusted-post@example.com",
+                auth_provider: "cf_access",
+                auth_subject: "trusted-post@example.com",
+              },
+              workspaces: [
+                {
+                  workspace_id: "ws_post_alpha",
+                  slug: "post-alpha",
+                  display_name: "Post Alpha",
+                  tenant_id: "tenant_post_alpha",
+                },
+                {
+                  workspace_id: "ws_post_beta",
+                  slug: "post-beta",
+                  display_name: "Post Beta",
+                  tenant_id: "tenant_post_beta",
+                },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }, () =>
+        POST(
+          new Request("http://localhost/api/workspace-context", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-authenticated-subject": "trusted-post@example.com",
+              "x-authenticated-roles": "workspace_owner",
+              "x-subject-id": "spoofed-post@example.com",
+              cookie: "govrail_workspace=post-alpha",
+            },
+            body: JSON.stringify({
+              workspace_slug: "post-beta",
+            }),
+          }),
+        ),
+      );
+
+      assert.equal(fetchCallCount, 1);
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as {
+        data: {
+          source: string;
+          workspace: { workspace_id: string; slug: string };
+          session_user: { auth_subject: string } | null;
+        };
+      };
+
+      assert.equal(payload.data.source, "metadata");
+      assert.equal(payload.data.workspace.workspace_id, "ws_post_beta");
+      assert.equal(payload.data.workspace.slug, "post-beta");
+      assert.equal(payload.data.session_user?.auth_subject, "trusted-post@example.com");
+      assert.match(response.headers.get("set-cookie") ?? "", /govrail_workspace=post-beta/);
     }),
 );
 

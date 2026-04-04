@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -40,7 +41,21 @@ function formatApiKeyError(error: unknown): string {
   return "API key request failed. Check workspace permissions.";
 }
 
-export function CreateApiKeyForm({ workspaceSlug }: { workspaceSlug: string }) {
+export function CreateApiKeyForm({
+  workspaceSlug,
+  serviceAccountsHref = "/service-accounts",
+  usageHref = "/usage",
+  settingsHref = "/settings?intent=manage-plan",
+  playgroundHref = "/playground",
+  verificationHref = "/verification?surface=verification",
+}: {
+  workspaceSlug: string;
+  serviceAccountsHref?: string;
+  usageHref?: string;
+  settingsHref?: string;
+  playgroundHref?: string;
+  verificationHref?: string;
+}) {
   const queryClient = useQueryClient();
   const [serviceAccountId, setServiceAccountId] = useState("");
   const [scope, setScope] = useState(DEFAULT_SCOPE);
@@ -87,6 +102,33 @@ export function CreateApiKeyForm({ workspaceSlug }: { workspaceSlug: string }) {
         value={expiresAt}
         onChange={(event) => setExpiresAt(event.currentTarget.value)}
       />
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-950">
+        <p className="font-medium text-amber-950">Manual preflight reminder</p>
+        <p className="mt-1 text-amber-900">
+          Confirm the target service account, current usage pressure, and any manual billing follow-up before
+          generating a new secret. This lane stays navigation-only and does not auto-block issuance for you.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link
+            href={serviceAccountsHref}
+            className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100/60"
+          >
+            Review service account
+          </Link>
+          <Link
+            href={usageHref}
+            className="inline-flex items-center justify-center rounded-xl border border-amber-950 px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100"
+          >
+            Review usage pressure
+          </Link>
+          <Link
+            href={settingsHref}
+            className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100/60"
+          >
+            Confirm plan and billing
+          </Link>
+        </div>
+      </div>
       <Button disabled={mutation.isPending} onClick={() => mutation.mutate()}>
         {mutation.isPending ? "Creating key..." : "Create key"}
       </Button>
@@ -108,6 +150,33 @@ export function CreateApiKeyForm({ workspaceSlug }: { workspaceSlug: string }) {
             <pre className="mt-3 overflow-x-auto rounded-xl border border-border bg-background p-3 text-xs text-foreground">
               <code>{buildRunQuickstart(revealedSecret)}</code>
             </pre>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-xs text-emerald-950">
+            <p className="font-medium text-emerald-950">Next evidence lane</p>
+            <p className="mt-1 text-emerald-900">
+              Keep this secret in your own vault, run the first governed demo, confirm the resulting usage trace,
+              then attach the same run context in verification before widening scope.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={playgroundHref}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-950 px-3 py-2 font-medium text-emerald-950 transition hover:bg-emerald-100"
+              >
+                Open Playground
+              </Link>
+              <Link
+                href={usageHref}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-3 py-2 font-medium text-emerald-950 transition hover:bg-emerald-100/60"
+              >
+                Confirm usage signal
+              </Link>
+              <Link
+                href={verificationHref}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-3 py-2 font-medium text-emerald-950 transition hover:bg-emerald-100/60"
+              >
+                Record verification evidence
+              </Link>
+            </div>
           </div>
         </div>
       ) : null}

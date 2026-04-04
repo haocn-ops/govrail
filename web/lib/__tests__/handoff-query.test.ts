@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyHandoffQuery, buildAdminReturnHref, buildHandoffHref } from "../handoff-query";
+import {
+  applyHandoffQuery,
+  buildAdminReturnHref,
+  buildHandoffHref,
+  buildVerificationChecklistHandoffHref,
+  resolveAdminQueueSurface,
+} from "../handoff-query";
 
 type AdminReturnArgs = {
   source?: string | null;
@@ -93,4 +99,40 @@ test("admin-return helper keeps admin-readiness return URL query contract", () =
   assert.equal(parsed.searchParams.get("attention_organization"), "org-readiness");
   assert.equal(parsed.searchParams.has("queue_surface"), false);
   assert.equal(parsed.searchParams.has("queue_returned"), false);
+});
+
+test("resolveAdminQueueSurface normalizes current governance queue surfaces", () => {
+  assert.equal(resolveAdminQueueSurface("verification"), "verification");
+  assert.equal(resolveAdminQueueSurface("go_live"), "go_live");
+  assert.equal(resolveAdminQueueSurface("go-live"), "go_live");
+  assert.equal(resolveAdminQueueSurface("usage"), null);
+  assert.equal(resolveAdminQueueSurface(null), null);
+});
+
+test("buildVerificationChecklistHandoffHref preserves existing query and normalizes shared continuity keys", () => {
+  const href = buildVerificationChecklistHandoffHref({
+    pathname: "/settings?intent=manage-plan",
+    source: "admin-readiness",
+    week8Focus: "credentials",
+    attentionWorkspace: "ws-alpha",
+    attentionOrganization: "org-alpha",
+    deliveryContext: "week8",
+    recentTrackKey: "go-live",
+    recentUpdateKind: "go_live_completed",
+    evidenceCount: 2,
+    recentOwnerLabel: "Alice",
+  });
+
+  const parsed = new URL(`https://example.test${href}`);
+  assert.equal(parsed.pathname, "/settings");
+  assert.equal(parsed.searchParams.get("intent"), "manage-plan");
+  assert.equal(parsed.searchParams.get("source"), "admin-readiness");
+  assert.equal(parsed.searchParams.get("week8_focus"), "credentials");
+  assert.equal(parsed.searchParams.get("attention_workspace"), "ws-alpha");
+  assert.equal(parsed.searchParams.get("attention_organization"), "org-alpha");
+  assert.equal(parsed.searchParams.get("recent_track_key"), "go_live");
+  assert.equal(parsed.searchParams.get("recent_update_kind"), "go_live_completed");
+  assert.equal(parsed.searchParams.get("evidence_count"), "2");
+  assert.equal(parsed.searchParams.get("recent_owner_label"), "Alice");
+  assert.equal(parsed.searchParams.has("delivery_context"), false);
 });

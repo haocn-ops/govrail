@@ -5,7 +5,7 @@ import { MockGoLiveDrillPanel } from "@/components/go-live/mock-go-live-drill-pa
 import { PageHeader } from "@/components/page-header";
 import { WorkspaceDeliveryTrackPanel } from "@/components/delivery/workspace-delivery-track-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildHandoffHref } from "@/lib/handoff-query";
+import { buildAdminReturnHref, buildHandoffHref } from "@/lib/handoff-query";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ function parseRecentDeliveryMetadata(
     getParam(searchParams?.recent_owner_display_name) ?? getParam(searchParams?.recent_owner_label);
   const ownerEmail = getParam(searchParams?.recent_owner_email);
   const evidenceCount =
-    evidenceCountParam && !Number.isNaN(Number(evidenceCountParam))
+    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam))
       ? Number(evidenceCountParam)
       : null;
 
@@ -132,7 +132,7 @@ function buildGoLiveHref(args: {
     evidenceCount: args.evidenceCount,
     recentOwnerDisplayName: args.recentOwnerDisplayName,
     recentOwnerEmail: args.recentOwnerEmail,
-  });
+  }, { preserveExistingQuery: true });
 }
 
 export default async function GoLivePage({
@@ -157,9 +157,105 @@ export default async function GoLivePage({
     recentEvidenceCount != null ? String(recentEvidenceCount) : null;
   const showAttentionHandoff = handoffSource === "admin-attention" && handoffSurface === "go_live";
   const showReadinessHandoff = handoffSource === "admin-readiness";
+  const showAdminReturn = showAttentionHandoff || showReadinessHandoff;
+  const adminReturnLabel = showAttentionHandoff ? "Return to admin queue" : "Return to admin readiness view";
+  const adminQueueSurface =
+    handoffSurface === "verification" || handoffSurface === "go_live"
+      ? handoffSurface
+      : recentTrackKey === "verification" || recentTrackKey === "go_live"
+        ? recentTrackKey
+        : null;
   const goLiveDeliveryBase =
     "Track go-live drill status, experiments, and evidence references for this workspace.";
   const goLiveDeliveryDescription = buildRecentDeliveryDescription(goLiveDeliveryBase, goLiveMetadata);
+  const verificationHref = buildGoLiveHref({
+    pathname: "/verification?surface=verification",
+    source: handoffSource,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace,
+    attentionOrganization: handoffOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount: recentEvidenceCountParam,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  });
+  const usageHref = buildGoLiveHref({
+    pathname: "/usage",
+    source: handoffSource,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace,
+    attentionOrganization: handoffOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount: recentEvidenceCountParam,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  });
+  const settingsHref = buildGoLiveHref({
+    pathname: "/settings",
+    source: handoffSource,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace,
+    attentionOrganization: handoffOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount: recentEvidenceCountParam,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  });
+  const playgroundHref = buildGoLiveHref({
+    pathname: "/playground",
+    source: handoffSource,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace,
+    attentionOrganization: handoffOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount: recentEvidenceCountParam,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  });
+  const artifactsHref = buildGoLiveHref({
+    pathname: "/artifacts",
+    source: handoffSource,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace,
+    attentionOrganization: handoffOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount: recentEvidenceCountParam,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  });
+  const adminReturnHref = buildAdminReturnHref("/admin", {
+    source:
+      handoffSource === "admin-attention" || handoffSource === "admin-readiness" ? handoffSource : null,
+    queueSurface: adminQueueSurface,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace ?? workspaceContext.workspace.slug,
+    attentionOrganization: handoffOrganization,
+    deliveryContext: deliveryContext === "recent_activity" ? deliveryContext : null,
+    recentUpdateKind:
+      recentUpdateKind === "verification" ||
+      recentUpdateKind === "go_live" ||
+      recentUpdateKind === "verification_completed" ||
+      recentUpdateKind === "go_live_completed" ||
+      recentUpdateKind === "evidence_only"
+        ? recentUpdateKind
+        : null,
+    evidenceCount: recentEvidenceCount,
+    recentOwnerLabel: recentOwnerDisplayName ?? recentOwnerEmail,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  });
+  const adminHref = showAdminReturn ? adminReturnHref : "/admin";
+  const adminLinkLabel = showAdminReturn ? adminReturnLabel : "Admin overview";
 
   return (
     <div className="space-y-8">
@@ -201,6 +297,62 @@ export default async function GoLivePage({
       />
       <Card>
         <CardHeader>
+          <CardTitle>Session-aware drill lane</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted">
+          <p>
+            Rehearse the drill inside the active workspace session for{" "}
+            <span className="font-medium text-foreground">{workspaceContext.workspace.slug}</span>. Current context
+            source: <span className="font-medium text-foreground">{workspaceContext.source_detail.label}</span>.
+          </p>
+          <p>
+            This lane stays manual: revisit verification evidence, confirm usage pressure and billing posture, then log
+            drill notes here. Navigation context is preserved across surfaces, but no step is executed automatically.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={verificationHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Reopen verification evidence
+            </Link>
+            <Link
+              href={usageHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Confirm usage posture
+            </Link>
+            <Link
+              href={settingsHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review billing + settings
+            </Link>
+            <Link
+              href={playgroundHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Revisit playground run
+            </Link>
+            <Link
+              href={artifactsHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Inspect artifacts evidence
+            </Link>
+            {showAdminReturn ? (
+              <Link
+                href={adminReturnHref}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                {adminReturnLabel}
+              </Link>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
           <CardTitle>Governance recap</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted">
@@ -208,42 +360,19 @@ export default async function GoLivePage({
             Use this drill surface once the verification checklist, billing posture, and usage pressure have been
             reviewed. Keep the same workspace context, capture evidence in
             <Link
-              href={buildGoLiveHref({
-                pathname: "/verification?surface=verification",
-                source: handoffSource,
-                week8Focus,
-                attentionWorkspace: handoffWorkspace,
-                attentionOrganization: handoffOrganization,
-                deliveryContext,
-                recentTrackKey,
-                recentUpdateKind,
-                evidenceCount: recentEvidenceCountParam,
-                recentOwnerDisplayName,
-                recentOwnerEmail,
-              })}
+              href={verificationHref}
             >
               Verification
             </Link>
             , collect the usage trace via{" "}
             <Link
-              href={buildGoLiveHref({
-                pathname: "/usage",
-                source: handoffSource,
-                week8Focus,
-                attentionWorkspace: handoffWorkspace,
-                attentionOrganization: handoffOrganization,
-                deliveryContext,
-                recentTrackKey,
-                recentUpdateKind,
-                evidenceCount: recentEvidenceCountParam,
-                recentOwnerDisplayName,
-                recentOwnerEmail,
-              })}
+              href={usageHref}
             >
               Usage
             </Link>
-            , and record the experiment notes in the delivery tracker here. These links only steer the navigation;
-            they do not impersonate the admin or automate any step.
+            , inspect the concrete bundle in <Link href={artifactsHref}>Artifacts</Link>, and record the experiment
+            notes in the delivery tracker here before ending the loop in <Link href={adminHref}>{adminLinkLabel}</Link>.
+            These links only steer the navigation; they do not impersonate the admin or automate any step.
           </p>
         </CardContent>
       </Card>

@@ -90,8 +90,14 @@ export async function listWorkspacesForUser(env: Env, userId: string): Promise<W
           ON w.workspace_id = wm.workspace_id
        INNER JOIN organizations o
           ON o.organization_id = w.organization_id
+       INNER JOIN organization_memberships om
+          ON om.organization_id = w.organization_id
+         AND om.user_id = wm.user_id
       WHERE wm.user_id = ?1
         AND wm.status = 'active'
+        AND w.status = 'active'
+        AND o.status = 'active'
+        AND om.status = 'active'
       ORDER BY o.display_name ASC, w.display_name ASC`,
   )
     .bind(userId)
@@ -170,9 +176,15 @@ export async function getWorkspaceAccessByIdForUser(
           ON w.workspace_id = wm.workspace_id
        INNER JOIN organizations o
           ON o.organization_id = w.organization_id
+       INNER JOIN organization_memberships om
+          ON om.organization_id = w.organization_id
+         AND om.user_id = wm.user_id
       WHERE wm.workspace_id = ?1
         AND wm.user_id = ?2
-        AND wm.status = 'active'`,
+        AND wm.status = 'active'
+        AND w.status = 'active'
+        AND o.status = 'active'
+        AND om.status = 'active'`,
   )
     .bind(workspaceId, userId)
     .first<WorkspaceAccessRow>();

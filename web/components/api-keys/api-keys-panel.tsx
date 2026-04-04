@@ -224,6 +224,36 @@ function buildInitialRotateState(key: {
   };
 }
 
+function apiKeyStatusVariant(status: string): "strong" | "default" | "subtle" {
+  if (status === "active") {
+    return "strong";
+  }
+  if (status === "revoked") {
+    return "subtle";
+  }
+  return "default";
+}
+
+function apiKeyStatusSummary(status: string): string {
+  if (status === "active") {
+    return "This key can still back a governed workspace flow, so keep scope and evidence follow-up aligned.";
+  }
+  if (status === "revoked") {
+    return "This key is historical only. Keep any prior run evidence, but do not rely on it for new workspace traffic.";
+  }
+  return "This key needs manual review before it is treated as safe for further workspace follow-up.";
+}
+
+function apiKeyNextLane(status: string, scope: string[]): string {
+  if (status !== "active") {
+    return "Next lane: verification, artifacts, or audit review for historical evidence.";
+  }
+  if (scope.includes("runs:write")) {
+    return "Next lane: Playground -> Usage -> Verification.";
+  }
+  return "Next lane: confirm scope intent, then continue through the matching manual workspace surface.";
+}
+
 export function ApiKeysPanel({
   workspaceSlug,
   source,
@@ -415,6 +445,18 @@ export function ApiKeysPanel({
         </Card>
         <Card className="rounded-2xl border border-border bg-card p-4 text-sm">
           <CardHeader>
+            <CardTitle className="text-sm">Status semantics</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs text-muted">
+            <p>
+              `active` means the key can still participate in a governed workspace flow. `revoked` means the key is
+              historical only and should not back new traffic. Any other state should be treated as manual-review
+              territory before it is used again.
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border border-border bg-card p-4 text-sm">
+          <CardHeader>
             <CardTitle className="text-sm">Onboarding handoff</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-xs text-muted">
@@ -482,11 +524,13 @@ export function ApiKeysPanel({
                   <p className="mt-1 text-xs text-muted">Key ID: {key.api_key_id}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={isActive ? "strong" : "default"}>{key.status}</Badge>
+                  <Badge variant={apiKeyStatusVariant(key.status)}>{key.status}</Badge>
                 </div>
               </div>
 
               <p className="mt-2 text-sm text-muted">{formatScope(key.scope)}</p>
+              <p className="mt-1 text-xs text-muted">{apiKeyStatusSummary(key.status)}</p>
+              <p className="mt-1 text-xs text-muted">{apiKeyNextLane(key.status, key.scope)}</p>
               <p className="mt-1 text-xs text-muted">
                 Service account: {key.service_account_name ?? key.service_account_id ?? "workspace default"}
               </p>

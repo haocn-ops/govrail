@@ -116,6 +116,43 @@ function getActionableErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function formatUsageMetricLabel(key: string): string {
+  switch (key) {
+    case "runs_created":
+      return "Runs created";
+    case "active_tool_providers":
+      return "Tool providers";
+    case "artifact_storage_bytes":
+      return "Artifact storage";
+    case "artifact_egress_bytes":
+      return "Artifact egress";
+    default:
+      return key.replaceAll("_", " ");
+  }
+}
+
+function formatUsageMetricValue(key: string, value: number): string {
+  if (key.includes("_bytes")) {
+    if (value >= 1024 * 1024 * 1024) {
+      return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    }
+    if (value >= 1024 * 1024) {
+      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    if (value >= 1024) {
+      return `${(value / 1024).toFixed(1)} KB`;
+    }
+  }
+  return String(value);
+}
+
+function formatUsageWindowDate(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  return new Date(value).toLocaleDateString();
+}
+
 type OnboardingSource = "admin-attention" | "admin-readiness" | "onboarding";
 
 type OnboardingSurface =
@@ -388,6 +425,8 @@ export function WorkspaceOnboardingWizard({
       : null;
   const activeWorkspace = createdWorkspace ?? persistedWorkspace;
   const onboardingState = workspaceQuery.data?.onboarding ?? null;
+  const usageSummary = workspaceQuery.data?.usage ?? null;
+  const billingSummary = workspaceQuery.data?.billing_summary ?? null;
   const bootstrapSummary = bootstrapResult?.summary ?? onboardingState?.summary ?? null;
   const nextActions = bootstrapResult?.next_actions ?? onboardingState?.next_actions ?? [];
   const onboardingGuide = getGuideFromState(onboardingState);
@@ -530,6 +569,18 @@ export function WorkspaceOnboardingWizard({
     pathname: "/verification?surface=verification",
     ...handoffHrefArgs,
   });
+  const sessionCheckpointHref = buildVerificationChecklistHandoffHref({
+    pathname: "/session",
+    ...handoffHrefArgs,
+  });
+  const usageCheckpointHref = buildVerificationChecklistHandoffHref({
+    pathname: "/usage",
+    ...handoffHrefArgs,
+  });
+  const settingsBillingHref = buildVerificationChecklistHandoffHref({
+    pathname: "/settings?intent=manage-plan",
+    ...handoffHrefArgs,
+  });
   const goLiveDrillHref = buildVerificationChecklistHandoffHref({
     pathname: "/go-live?surface=go_live",
     ...handoffHrefArgs,
@@ -537,6 +588,14 @@ export function WorkspaceOnboardingWizard({
   const expandedNextActions = [...nextActions.map((action) => action)];
   const contextSource = contextSourceQuery.data;
   const showContextNotice = contextSource?.isFallback === true;
+  const usageHighlights =
+    usageSummary && Object.keys(usageSummary.metrics).length > 0
+      ? Object.entries(usageSummary.metrics)
+          .slice()
+          .sort((left, right) => Number(right[1].over_limit) - Number(left[1].over_limit))
+          .slice(0, 3)
+      : [];
+  const hasUsagePressure = usageHighlights.some(([, metric]) => metric.over_limit);
   const contextNoticeBody =
     contextSource?.warning ??
     "Workspace context is running in fallback mode. Treat this as local/demo state instead of production identity state.";
@@ -583,6 +642,36 @@ export function WorkspaceOnboardingWizard({
           </CardContent>
         </Card>
       ) : null}
+      <Card>
+        <CardHeader>
+          <CardTitle>Step 0. Confirm session and launch context</CardTitle>
+          <CardDescription>
+            Treat session, workspace, and plan posture as the first onboarding checkpoint before mutating anything.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted">
+          <p>
+            This wizard is still a manual launch hub. Before creating a workspace, bootstrapping baseline, or issuing
+            credentials, confirm the active session context and decide whether current plan posture leaves room for the
+            first run.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link href={sessionCheckpointHref}>
+              <Button size="sm" variant="secondary">Open session checkpoint</Button>
+            </Link>
+            <Link href={usageCheckpointHref}>
+              <Button size="sm" variant="ghost">Review usage pressure</Button>
+            </Link>
+            <Link href={settingsBillingHref}>
+              <Button size="sm" variant="ghost">Review plan and billing lane</Button>
+            </Link>
+          </div>
+          <p className="text-xs text-muted">
+            Nothing here auto-provisions a customer workspace end-to-end. The wizard helps sequence the work, but the
+            operator still owns each launch decision and evidence handoff.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
@@ -635,6 +724,10 @@ export function WorkspaceOnboardingWizard({
                 <p className="mt-1 text-xs text-muted">Tenant: {activeWorkspace.tenant_id}</p>
               </div>
             ) : null}
+            <p className="text-xs text-muted">
+              After creation, return to the session checkpoint if the new workspace or tenant binding looks wrong
+              before continuing with bootstrap or credentials.
+            </p>
           </CardContent>
         </Card>
 
@@ -688,11 +781,22 @@ export function WorkspaceOnboardingWizard({
             <p className="text-xs text-muted">
               This creates a small, deterministic seed set based on the workspace id, so re-running does not create duplicates.
             </p>
+            <p className="text-xs text-muted">
+              Baseline bootstrap is still a guided operator step. It does not send support requests or complete the
+              rest of onboarding automatically after providers/policies land.
+            </p>
             {bootstrapErrorMessage ? (
               <p className="text-xs text-muted">{bootstrapErrorMessage}</p>
             ) : null}
             {bootstrapSummary ? (
               <div className="space-y-3 rounded-2xl border border-border bg-background p-4 text-sm">
+                <div className="rounded-xl border border-border bg-card p-3 text-xs text-muted">
+                  <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Persisted bootstrap summary</p>
+                  <p className="mt-1">
+                    The counts below come from the persisted workspace onboarding summary, so they survive refresh and
+                    keep Members, Onboarding, Usage, and Verification aligned on the same baseline story.
+                  </p>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <p className="text-xs uppercase tracking-[0.15em] text-muted">Providers</p>
@@ -814,6 +918,59 @@ export function WorkspaceOnboardingWizard({
                 </div>
               ) : null}
             </div>
+            <div className="rounded-2xl border border-border bg-background p-4 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-foreground">Plan and usage awareness</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Before sending the first governed run, confirm that plan posture and current-period usage still
+                    support the lane you are about to exercise.
+                  </p>
+                </div>
+                {billingSummary?.status_label ? (
+                  <Badge variant={hasUsagePressure ? "default" : "subtle"}>{billingSummary.status_label}</Badge>
+                ) : null}
+              </div>
+              {usageHighlights.length > 0 ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  {usageHighlights.map(([key, metric]) => (
+                    <div key={key} className="rounded-xl border border-border bg-card p-3">
+                      <p className="text-xs text-muted">{formatUsageMetricLabel(key)}</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {formatUsageMetricValue(key, metric.used)}
+                        {metric.limit !== null ? ` / ${formatUsageMetricValue(key, metric.limit)}` : " / unlimited"}
+                      </p>
+                      <Badge className="mt-2" variant={metric.over_limit ? "default" : "subtle"}>
+                        {metric.over_limit ? "Needs follow-up" : "Tracked"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted">
+                  Usage is still empty for this workspace period, which is normal before the first run. Keep this lane
+                  in mind so the first run has a clear plan and billing story.
+                </p>
+              )}
+              <div className="mt-3 rounded-xl border border-border bg-background p-3 text-xs text-muted">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Current usage window</p>
+                <p className="mt-1 font-medium text-foreground">
+                  {usageSummary ? `${formatUsageWindowDate(usageSummary.period_start)} to ${formatUsageWindowDate(usageSummary.period_end)}` : "-"}
+                </p>
+                <p className="mt-1">
+                  Carry this billing window into verification evidence so plan pressure, onboarding readiness, and
+                  upgrade follow-up stay tied to the same period boundary.
+                </p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={usageCheckpointHref}>
+                  <Button size="sm" variant="ghost">Open usage checkpoint</Button>
+                </Link>
+                <Link href={settingsBillingHref}>
+                  <Button size="sm" variant="ghost">Open settings billing lane</Button>
+                </Link>
+              </div>
+            </div>
             <div className="flex items-center justify-between rounded-2xl border border-border bg-background p-4 text-sm">
               <div>
                 <p className="font-medium text-foreground">First demo run</p>
@@ -856,6 +1013,11 @@ export function WorkspaceOnboardingWizard({
                   Capture verification evidence before widening rollout, and keep rollback ownership, settings review,
                   and run replay context ready in case the first demo needs another pass.
                 </p>
+                <p className="mt-2">
+                  The clean manual relay is: Playground proves the run, Usage confirms the signal, Verification records
+                  the notes, Go-live rehearses the next gate, and Session remains the safe place to re-check context if
+                  anything feels off.
+                </p>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link
@@ -882,6 +1044,9 @@ export function WorkspaceOnboardingWizard({
                     <Button size="sm" variant="ghost">Open go-live drill</Button>
                   </Link>
                 ) : null}
+                <Link href={sessionCheckpointHref}>
+                  <Button size="sm" variant="ghost">Return to session checkpoint</Button>
+                </Link>
               </div>
               <p className="mt-3 text-xs text-muted">Use these actions to continue the guided walkthrough.</p>
             </div>

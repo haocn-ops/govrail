@@ -1,7 +1,10 @@
+import Link from "next/link";
+
 import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
 import { WorkspaceSettingsPanel } from "@/components/settings/workspace-settings-panel";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildHandoffHref } from "@/lib/handoff-query";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 type SettingsIntent = "upgrade" | "manage-plan" | "resolve-billing" | null;
@@ -40,11 +43,24 @@ export default async function SettingsPage({
   const recentUpdateKind = getParam(searchParams?.recent_update_kind);
   const evidenceCountParam = getParam(searchParams?.evidence_count);
   const evidenceCount =
-    evidenceCountParam && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
+    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
   const ownerLabel =
     getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
   const showReadinessHandoff = handoffSource === "admin-readiness";
   const showAttentionHandoff = handoffSource === "admin-attention";
+  const handoffArgs = {
+    source: handoffSource,
+    week8Focus,
+    attentionWorkspace: handoffWorkspace,
+    attentionOrganization: handoffOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount,
+    recentOwnerLabel: ownerLabel,
+  };
+  const buildSettingsPageHref = (pathname: string) =>
+    buildHandoffHref(pathname, handoffArgs, { preserveExistingQuery: true });
 
   return (
     <div className="space-y-8">
@@ -80,8 +96,51 @@ export default async function SettingsPage({
       <PageHeader
         eyebrow="Settings"
         title="Workspace configuration"
-        description="Tune workspace tenancy, plan posture, billing subscription status, member access, and retention defaults."
+        description="Review workspace tenancy, self-serve billing follow-up, subscription status, and retention defaults while keeping the verification/go-live/admin-readiness governance lane connected."
       />
+      <Card>
+        <CardHeader>
+          <CardTitle>Enterprise evidence lane</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted">
+          <p>
+            Use Settings as the manual governance surface for self-serve billing follow-up, portal-return status,
+            audit export, SSO readiness, and dedicated-environment planning. This page helps you review what the
+            current workspace is entitled to, then carry the same evidence trail into verification, go-live, or admin
+            readiness.
+          </p>
+          <p className="text-xs text-muted">
+            These controls only preserve workspace handoff context and surface billing/status cues. They do not open
+            support workflows, trigger automatic remediation, or impersonate another role.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={buildSettingsPageHref("/usage")}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review usage pressure
+            </Link>
+            <Link
+              href={buildSettingsPageHref("/verification?surface=verification")}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Capture verification evidence
+            </Link>
+            <Link
+              href={buildSettingsPageHref("/go-live?surface=go_live")}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Rehearse go-live readiness
+            </Link>
+            <Link
+              href={buildSettingsPageHref("/admin")}
+              className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+            >
+              Return to admin readiness view
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
 
       <WorkspaceSettingsPanel
         workspaceSlug={workspaceContext.workspace.slug}

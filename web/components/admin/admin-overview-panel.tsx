@@ -962,6 +962,51 @@ export function AdminOverviewPanel({
 
       <Card>
         <CardHeader>
+          <CardTitle>Focus & return loop</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p className="text-muted">
+            {readinessFocus
+              ? `Readiness focus: ${readinessFocusLabel(readinessFocus)}.`
+              : "No Week 8 readiness focus is currently set."}{" "}
+            Use this highlight to know which surface should be opened for the next verification or go-live follow-up.
+          </p>
+          <p className="text-muted">
+            The attention queue lists workspaces that still need manual review. Open a workspace from the list, perform
+            the governance work on verification/go-live/etc., capture evidence or operator notes on that surface, then
+            close the loop by using the return links below to restore the admin overview.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {clearReadinessHref ? (
+              <Link
+                href={clearReadinessHref}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Clear readiness focus
+              </Link>
+            ) : null}
+            {clearQueueReturnedHref ? (
+              <Link
+                href={clearQueueReturnedHref}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Clear queue return
+              </Link>
+            ) : null}
+            {clearAllHref ? (
+              <Link
+                href={clearAllHref}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Return to admin overview
+              </Link>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Platform snapshot</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
@@ -1108,6 +1153,9 @@ export function AdminOverviewPanel({
       <AdminWeek8ReadinessCard
         description="A platform-level Week 8 view that rolls up onboarding, billing posture, and first-run validation so operators can see which workspaces are genuinely approaching mock go-live readiness."
         metrics={readinessMetrics}
+        focusLabel={readinessFocusLabelText || null}
+        focusHint={readinessFollowUp?.hint ?? null}
+        clearFocusHref={clearReadinessHref}
         primaryAction={
           readinessFollowUp
             ? {
@@ -1129,7 +1177,7 @@ export function AdminOverviewPanel({
           <p className="text-muted">
             Use this list to move from a readiness metric into the specific workspaces that still need onboarding,
             billing, verification, or mock go-live follow-up. These actions only switch workspace context and open the
-            relevant surface.
+            relevant surface; they do not trigger remediation or automate evidence capture for the operator.
           </p>
           {readinessFollowUp ? (
             <div className="rounded-xl border border-border bg-background px-3 py-3 text-xs text-muted">
@@ -1219,7 +1267,10 @@ export function AdminOverviewPanel({
                     </Badge>
                   </div>
                   <p className="text-xs text-muted">Next step: {actionDetail}</p>
-                  <p className="text-[0.65rem] text-muted">{summarizeReadinessStatus(workspace)}</p>
+                  <p className="text-[0.65rem] text-muted">
+                    {summarizeReadinessStatus(workspace)} Keep this drill manual, record the outcome on the target
+                    surface, then return here with the same focus.
+                  </p>
                 </div>
               );
             })
@@ -1240,6 +1291,10 @@ export function AdminOverviewPanel({
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted">
             Workspaces that need follow-up are listed here with a direct jump to the right surface.
+          </p>
+          <p className="text-xs text-muted">
+            Once the workspace surface is handled, use the clear links (shown when you return from a workspace) to go
+            back to admin, keep the attention cluster aligned, and show the full overview again.
           </p>
           {attentionSummary ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">

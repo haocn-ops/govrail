@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 
-import type { ControlPlaneAdminDeliveryUpdateKind } from "@/lib/control-plane-types";
+import type {
+  ControlPlaneAdminDeliveryUpdateKind,
+  ControlPlaneAdminWeek8ReadinessFocus,
+} from "@/lib/control-plane-types";
 import { buildAdminReturnHref } from "@/lib/handoff-query";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,6 +118,39 @@ function deliveryTrackLabel(track?: "verification" | "go_live" | null): string {
   return "verification";
 }
 
+function followUpSourceLabel(source: FollowUpSource): string {
+  return source === "admin-readiness" ? "Week 8 readiness" : "Attention queue";
+}
+
+function normalizeWeek8Focus(value?: string | null): ControlPlaneAdminWeek8ReadinessFocus | null {
+  if (
+    value === "baseline" ||
+    value === "credentials" ||
+    value === "demo_run" ||
+    value === "billing_warning" ||
+    value === "go_live_ready"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function week8FocusLabel(focus: ControlPlaneAdminWeek8ReadinessFocus): string {
+  if (focus === "baseline") {
+    return "Baseline gaps";
+  }
+  if (focus === "credentials") {
+    return "Credentials";
+  }
+  if (focus === "demo_run") {
+    return "Demo run";
+  }
+  if (focus === "billing_warning") {
+    return "Billing warning";
+  }
+  return "Go-live ready";
+}
+
 function describeRecentDeliveryContext(context: RecentDeliveryContext): string | null {
   if (!context.recentTrackKey && !context.recentUpdateKind && context.evidenceCount == null && !context.ownerDisplayName && !context.ownerEmail) {
     return null;
@@ -190,12 +226,13 @@ export function AdminFollowUpNotice({
   const returnWorkspaceSlug = sourceWorkspaceSlug && sourceWorkspaceSlug.trim() !== "" ? sourceWorkspaceSlug : workspaceSlug;
   const isReadinessFlow = source === "admin-readiness";
   const description = isReadinessFlow
-    ? "You navigated here via the admin Week 8 readiness summary. Continue the targeted onboarding, billing, verification, or go-live review for this workspace, then return to the filtered admin readiness view when you are done. This is only navigation context and does not change identity or automate remediation."
-    : "You navigated here via the admin attention queue. Continue updating delivery tracking in this workspace and return to the queue tracking view once the follow-up is complete. This is only navigation context and does not change identity or automate remediation.";
+    ? "You navigated here via the admin Week 8 readiness summary. Continue the targeted onboarding, billing, verification, or go-live review for this workspace, capture the outcome on that surface, then return to the filtered admin readiness view. This is navigation-only context and does not change identity, impersonate a member, or automate remediation."
+    : "You navigated here via the admin attention queue. Continue the manual delivery follow-up in this workspace, capture the evidence or note on the opened surface, then return to the filtered queue view. This is navigation-only context and does not change identity, impersonate a member, or automate remediation.";
   const normalizedDeliveryContext = normalizeDeliveryContext(deliveryContext);
   const normalizedRecentTrackKey = normalizeRecentTrackKey(recentTrackKey);
   const normalizedRecentUpdateKind = normalizeRecentUpdateKind(recentUpdateKind);
   const normalizedEvidenceCount = normalizeEvidenceCount(evidenceCount);
+  const normalizedWeek8Focus = normalizeWeek8Focus(week8Focus);
   const recentContextDescription =
     normalizedDeliveryContext === "recent_activity"
       ? describeRecentDeliveryContext({
@@ -217,6 +254,12 @@ export function AdminFollowUpNotice({
     week8Focus,
     attentionWorkspace: returnWorkspaceSlug,
     attentionOrganization,
+    deliveryContext: normalizedDeliveryContext,
+    recentUpdateKind: normalizedRecentUpdateKind,
+    evidenceCount: normalizedEvidenceCount,
+    recentOwnerLabel: formatDeliveryOwnerLabel(ownerDisplayName, ownerEmail),
+    recentOwnerDisplayName: ownerDisplayName ?? null,
+    recentOwnerEmail: ownerEmail ?? null,
   });
 
   return (
@@ -229,6 +272,15 @@ export function AdminFollowUpNotice({
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted">{description}</p>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <Badge variant="subtle">{followUpSourceLabel(source)}</Badge>
+          {isReadinessFlow && normalizedWeek8Focus ? (
+            <Badge variant="default">Focus {week8FocusLabel(normalizedWeek8Focus)}</Badge>
+          ) : null}
+          <Badge variant={currentWorkspaceMatches ? "strong" : "default"}>
+            {currentWorkspaceMatches ? "Workspace aligned" : "Workspace check needed"}
+          </Badge>
+        </div>
         {recentContextDescription ? (
           <p className="text-xs text-muted">{recentContextDescription}</p>
         ) : null}
@@ -243,9 +295,17 @@ export function AdminFollowUpNotice({
           {isReadinessFlow && week8Focus ? (
             <>
               {" "}
-              · Week 8 focus: <span className="font-medium text-foreground">{week8Focus}</span>
+              · Week 8 focus:{" "}
+              <span className="font-medium text-foreground">
+                {normalizedWeek8Focus ? week8FocusLabel(normalizedWeek8Focus) : week8Focus}
+              </span>
             </>
           ) : null}
+        </p>
+        <p className="text-xs text-muted">
+          Treat this as the manual admin → workspace surface → admin loop: follow the requested surface, capture
+          evidence or outcome notes there, then use the return link below to restore the admin context and keep the
+          focus state aligned.
         </p>
         {!currentWorkspaceMatches ? (
           <p className="text-xs text-foreground">
@@ -261,6 +321,10 @@ export function AdminFollowUpNotice({
             {returnLabel}
           </Link>
         </div>
+        <p className="text-[0.7rem] text-muted">
+          Returning keeps the same admin filter state in place so the operator can continue the governance review
+          without rerunning the drill-down manually.
+        </p>
       </CardContent>
     </Card>
   );

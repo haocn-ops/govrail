@@ -11,6 +11,8 @@
     "test:contract": "node --import tsx --test lib/__tests__/workspace-context-metadata-guard.test.ts lib/__tests__/enterprise-surface-routes.test.ts app/api/**/__tests__/*.test.ts tests/route-wrapper-consistency.test.ts",
     "test:page": "node --import tsx --test components/__tests__/*.test.ts tests/page-level/*.test.ts",
     "test:e2e": "node --import tsx --test tests/e2e/*.test.ts",
+    "test:browser:smoke": "playwright test --config playwright.config.ts",
+    "test:browser:spike": "node scripts/browser-e2e-spike.mjs",
     "preview": "opennextjs-cloudflare build && node scripts/patch-opennext-output.mjs && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && node scripts/patch-opennext-output.mjs && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && node scripts/patch-opennext-output.mjs && opennextjs-cloudflare upload",
@@ -33,6 +35,7 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "1.8.2",
+    "@playwright/test": "^1.59.1",
     "@types/node": "^24.3.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

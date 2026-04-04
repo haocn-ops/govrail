@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { ReadinessTile } from "@/components/home/readiness-tile";
+import { buildVerificationChecklistHandoffHref } from "@/components/verification/week8-verification-checklist";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildAdminReturnHref, resolveAdminQueueSurface } from "@/lib/handoff-query";
 import { fetchCurrentWorkspace, fetchWorkspaceDeliveryTrack } from "@/services/control-plane";
 
 type OnboardingSurface =
@@ -21,6 +23,21 @@ type OnboardingSurface =
   | "settings"
   | "go_live"
   | "go-live";
+
+type LaunchpadSource = "admin-attention" | "admin-readiness" | "onboarding";
+
+function normalizeRecentUpdateKind(value?: string | null): string | null {
+  if (
+    value === "verification" ||
+    value === "go_live" ||
+    value === "verification_completed" ||
+    value === "go_live_completed" ||
+    value === "evidence_only"
+  ) {
+    return value;
+  }
+  return null;
+}
 
 function toneFromState(isReady: boolean, isInProgress = false): "ready" | "in_progress" | "blocked" {
   if (isReady) {
@@ -44,6 +61,53 @@ function formatDateLabel(value?: string | null): string {
     return "-";
   }
   return new Date(value).toLocaleDateString();
+}
+
+function formatDeliveryStatusLabel(value?: "pending" | "in_progress" | "complete" | null): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value === "in_progress") {
+    return "In progress";
+  }
+  if (value === "complete") {
+    return "Complete";
+  }
+  return "Pending";
+}
+
+function formatMetricLabel(key: string): string {
+  switch (key) {
+    case "runs_created":
+      return "Runs created";
+    case "active_tool_providers":
+      return "Tool providers";
+    case "artifact_storage_bytes":
+      return "Artifact storage";
+    case "artifact_egress_bytes":
+      return "Artifact egress";
+    case "approval_decisions":
+      return "Approval decisions";
+    case "replays_created":
+      return "Replays";
+    default:
+      return key.replaceAll("_", " ");
+  }
+}
+
+function formatMetricValue(key: string, value: number): string {
+  if (key.includes("_bytes")) {
+    if (value >= 1024 * 1024 * 1024) {
+      return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    }
+    if (value >= 1024 * 1024) {
+      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    if (value >= 1024) {
+      return `${(value / 1024).toFixed(1)} KB`;
+    }
+  }
+  return String(value);
 }
 
 const nextStepLinks: Array<{ label: string; surface: OnboardingSurface }> = [
@@ -168,10 +232,126 @@ function filterTextLines(lines: Array<string | null | undefined>): string[] {
   return lines.filter((line): line is string => typeof line === "string" && line.trim() !== "");
 }
 
+function normalizeRole(roleValue?: string | null): string | null {
+  if (!roleValue) {
+    return null;
+  }
+  const firstToken = roleValue
+    .split(/[,|/]/)
+    .map((token) => token.trim().toLowerCase())
+    .find((token) => token.length > 0);
+  if (!firstToken) {
+    return null;
+  }
+  if (firstToken.includes("owner")) {
+    return "owner";
+  }
+  if (firstToken.includes("admin")) {
+    return "admin";
+  }
+  if (firstToken.includes("approver")) {
+    return "approver";
+  }
+  if (firstToken.includes("operator")) {
+    return "operator";
+  }
+  if (firstToken.includes("auditor")) {
+    return "auditor";
+  }
+  if (firstToken.includes("viewer") || firstToken.includes("read")) {
+    return "viewer";
+  }
+  return firstToken;
+}
+
+function roleGuidance(args: {
+  role?: string | null;
+  fallbackSurface: OnboardingSurface;
+}): {
+  roleLabel: string;
+  surface: OnboardingSurface;
+  action: string;
+  reason: string;
+  secondarySurface: OnboardingSurface;
+  secondaryAction: string;
+} {
+  const normalizedRole = normalizeRole(args.role);
+  if (normalizedRole === "viewer" || normalizedRole === "auditor") {
+    return {
+      roleLabel: normalizedRole,
+      surface: "verification",
+      action: "Review verification evidence",
+      reason: "Read-only roles can validate posture and evidence trails before handing off.",
+      secondarySurface: "usage",
+      secondaryAction: "Inspect usage posture",
+    };
+  }
+  if (normalizedRole === "operator") {
+    return {
+      roleLabel: normalizedRole,
+      surface: "playground",
+      action: "Run or validate first governed flow",
+      reason: "Operator lanes usually focus on execution evidence and run health.",
+      secondarySurface: "verification",
+      secondaryAction: "Capture verification evidence",
+    };
+  }
+  if (normalizedRole === "approver") {
+    return {
+      roleLabel: normalizedRole,
+      surface: "go-live",
+      action: "Review go-live checklist",
+      reason: "Approver lanes are best aligned to final readiness and release gating review.",
+      secondarySurface: "verification",
+      secondaryAction: "Cross-check verification records",
+    };
+  }
+  if (normalizedRole === "admin" || normalizedRole === "owner") {
+    return {
+      roleLabel: normalizedRole,
+      surface: "settings",
+      action: "Confirm workspace governance settings",
+      reason: "Admin lanes should confirm policy, billing posture, and rollout safeguards first.",
+      secondarySurface: "members",
+      secondaryAction: "Review member access",
+    };
+  }
+  return {
+    roleLabel: normalizedRole ?? "unscoped",
+    surface: args.fallbackSurface,
+    action: "Continue recommended launch lane",
+    reason: "Role scope is not explicit; use onboarding guidance as the default path.",
+    secondarySurface: "settings",
+    secondaryAction: "Review workspace settings",
+  };
+}
+
 export function WorkspaceLaunchpad({
   workspaceSlug,
+  workspaceRole,
+  contextSourceLabel,
+  source,
+  week8Focus,
+  attentionWorkspace,
+  attentionOrganization,
+  deliveryContext,
+  recentTrackKey,
+  recentUpdateKind,
+  evidenceCount,
+  recentOwnerLabel,
 }: {
   workspaceSlug: string;
+  workspaceRole?: string | null;
+  contextSourceLabel?: string;
+  source?: string | null;
+  week8Focus?: string | null;
+  attentionWorkspace?: string | null;
+  attentionOrganization?: string | null;
+  deliveryContext?: string | null;
+  recentTrackKey?: string | null;
+  recentUpdateKind?: string | null;
+  evidenceCount?: number | null;
+  recentOwnerLabel?: string | null;
 }) {
   const workspaceQuery = useQuery({
     queryKey: ["home-launchpad-workspace", workspaceSlug],
@@ -187,6 +367,7 @@ export function WorkspaceLaunchpad({
   const plan = workspaceQuery.data?.plan;
   const onboarding = workspaceQuery.data?.onboarding;
   const billing = workspaceQuery.data?.billing_summary;
+  const usage = workspaceQuery.data?.usage;
   const delivery = deliveryQuery.data;
 
   const onboardingReady = onboarding?.checklist.baseline_ready === true;
@@ -202,6 +383,10 @@ export function WorkspaceLaunchpad({
   const goLiveReady = delivery?.go_live.status === "complete";
   const mockGoLiveReadinessReady = goLiveReady || (verificationReady && demoRunReady && billingReady);
   const recommendedNextStep = getRecommendedNextStep({ onboardingStatus: onboarding });
+  const roleAwareStep = roleGuidance({
+    role: workspaceRole,
+    fallbackSurface: recommendedNextStep.surface,
+  });
   const onboardingBlockers = getBlockers({ onboardingStatus: onboarding });
   const onboardingRecoveryTitle = latestDemoRunHint?.needs_attention
     ? latestDemoRunHint.is_terminal
@@ -233,9 +418,92 @@ export function WorkspaceLaunchpad({
     latestDemoRunHint?.suggested_action,
     deliveryGuidance?.summary,
   ]);
+  const usageEntries = usage ? Object.entries(usage.metrics) : [];
+  const usageHighlights =
+    usageEntries.length > 0
+      ? usageEntries
+          .slice()
+          .sort((left, right) => Number(right[1].over_limit) - Number(left[1].over_limit))
+          .slice(0, 3)
+      : [];
+  const hasUsagePressure = usageEntries.some(([, metric]) => metric.over_limit);
+  const normalizedSource: LaunchpadSource | null =
+    source === "admin-attention" || source === "admin-readiness" || source === "onboarding" ? source : null;
+  const showAdminAttention = normalizedSource === "admin-attention";
+  const showAdminReadiness = normalizedSource === "admin-readiness";
+  const adminReturnLabel = showAdminAttention ? "Return to admin queue" : "Return to admin readiness view";
+  const adminReturnHref =
+    showAdminAttention || showAdminReadiness
+      ? buildAdminReturnHref("/admin", {
+          source: normalizedSource,
+          queueSurface: showAdminAttention ? resolveAdminQueueSurface(recentTrackKey) : null,
+          week8Focus,
+          attentionWorkspace: attentionWorkspace ?? workspaceSlug,
+          attentionOrganization,
+          deliveryContext,
+          recentUpdateKind: normalizeRecentUpdateKind(recentUpdateKind),
+          evidenceCount,
+          recentOwnerLabel,
+        })
+      : null;
+  const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {
+    source: normalizedSource,
+    week8Focus,
+    attentionWorkspace,
+    attentionOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount,
+    recentOwnerLabel,
+  };
+
+  function buildLaunchpadHref(pathname: string): string {
+    return buildVerificationChecklistHandoffHref({ pathname, ...handoffHrefArgs });
+  }
 
   return (
     <div className="space-y-8">
+      {showAdminAttention || showAdminReadiness ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{showAdminAttention ? "Admin attention follow-up" : "Admin readiness follow-up"}</CardTitle>
+            <CardDescription>
+              {showAdminAttention
+                ? "This launchpad was opened from the admin attention queue. Use it to keep the workspace follow-up in the same governance context, then return to the filtered queue view."
+                : "This launchpad was opened from the Week 8 readiness view. Keep the same readiness focus while you move through session, usage, verification, and go-live follow-up, then return to the filtered admin view."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted">
+            <p>
+              This remains navigation-only context. It does not impersonate a member, trigger support automation, or
+              auto-resolve readiness issues for you.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {adminReturnHref ? (
+                <Link
+                  href={adminReturnHref}
+                  className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+                >
+                  {adminReturnLabel}
+                </Link>
+              ) : null}
+              <Link
+                href={buildLaunchpadHref("/verification?surface=verification")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Open verification lane
+              </Link>
+              <Link
+                href={buildLaunchpadHref("/go-live?surface=go_live")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Open go-live lane
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-3">
@@ -283,6 +551,7 @@ export function WorkspaceLaunchpad({
               ? "Baseline provider/policy bundle is ready."
               : "Bootstrap baseline before moving to credential steps."
           }
+          meta={contextSourceLabel ? `Context source: ${contextSourceLabel}` : undefined}
           hint="Source: onboarding checklist baseline flag."
           tone={toneFromState(onboardingReady)}
         />
@@ -293,6 +562,7 @@ export function WorkspaceLaunchpad({
               ? "Service account and API key are both present."
               : "Create at least one service account and one API key."
           }
+          meta={workspaceRole ? `Role scope: ${workspaceRole}` : "Role scope: not provided"}
           hint="Source: onboarding checklist credential flags."
           tone={toneFromState(credentialsReady)}
         />
@@ -305,6 +575,7 @@ export function WorkspaceLaunchpad({
               ? "A demo run exists; validate completion in Playground."
               : "Run a first demo flow to produce run/trace evidence."
           }
+          meta={latestDemoRunHint?.status_label ?? undefined}
           hint="Source: onboarding run checklist and latest demo state."
           tone={toneFromState(demoRunReady, demoRunCreated)}
         />
@@ -315,6 +586,7 @@ export function WorkspaceLaunchpad({
               ? "Billing posture is not currently warning."
               : "Billing warning is active. Resolve in Settings before go-live."
           }
+          meta={billing?.status_label ? `Status: ${billing.status_label}` : undefined}
           hint="Source: workspace billing summary tone/status."
           tone={toneFromState(billingReady)}
         />
@@ -324,6 +596,10 @@ export function WorkspaceLaunchpad({
             mockGoLiveReadinessReady
               ? "Verification and prerequisite posture support mock go-live rehearsal."
               : "Complete verification and clear billing/demo prerequisites first."
+          }
+          meta={
+            formatDeliveryStatusLabel(delivery?.go_live.status) ??
+            formatDeliveryStatusLabel(delivery?.verification.status)
           }
           hint="Source: delivery track plus onboarding/billing status."
           tone={toneFromState(mockGoLiveReadinessReady, verificationReady || demoRunReady)}
@@ -350,13 +626,13 @@ export function WorkspaceLaunchpad({
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Link
-              href={toSurfacePath(onboardingRecoveryPrimary.surface)}
+              href={buildLaunchpadHref(toSurfacePath(onboardingRecoveryPrimary.surface))}
               className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
             >
               {onboardingRecoveryPrimary.label}
             </Link>
             <Link
-              href={toSurfacePath(onboardingRecoverySecondary.surface)}
+              href={buildLaunchpadHref(toSurfacePath(onboardingRecoverySecondary.surface))}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
             >
               {onboardingRecoverySecondary.label}
@@ -364,6 +640,135 @@ export function WorkspaceLaunchpad({
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Manual launch state machine</CardTitle>
+            <CardDescription>
+              Follow one operator-owned lane from session confirmation through evidence relay.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Step 0</p>
+                <p className="mt-2 font-medium text-foreground">Confirm session and workspace context</p>
+                <p className="mt-1 text-xs text-muted">
+                  Verify the active identity, workspace, tenant, and context source before touching onboarding,
+                  billing, or evidence surfaces.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Step 1</p>
+                <p className="mt-2 font-medium text-foreground">Bootstrap baseline and credentials</p>
+                <p className="mt-1 text-xs text-muted">
+                  Keep provider/policy setup, service accounts, and API keys attached to the same workspace story.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Step 2</p>
+                <p className="mt-2 font-medium text-foreground">Run the first governed flow</p>
+                <p className="mt-1 text-xs text-muted">
+                  Create a real run, then confirm the usage signal before widening scope or inviting more pressure.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Step 3</p>
+                <p className="mt-2 font-medium text-foreground">Relay evidence and rehearse go-live</p>
+                <p className="mt-1 text-xs text-muted">
+                  Capture verification notes, review settings when needed, rehearse mock go-live, then return to the
+                  right queue or readiness focus manually.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+            <Link
+                href={buildLaunchpadHref("/session")}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Step 0: confirm session context
+              </Link>
+              <Link
+                href={buildLaunchpadHref(toSurfacePath(recommendedNextStep.surface))}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Step 1: {recommendedNextStep.action}
+              </Link>
+              <Link
+                href={buildLaunchpadHref("/usage")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Step 2: confirm usage signal
+              </Link>
+              <Link
+                href={buildLaunchpadHref("/verification?surface=verification")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Step 3: relay evidence
+              </Link>
+            </div>
+            <p className="text-xs text-muted">
+              This hub is still navigation-only. It does not provision on your behalf, send invitations, or enforce
+              plan gates automatically.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Plan and usage checkpoint</CardTitle>
+            <CardDescription>
+              Keep Week 6 plan posture visible before the first run or before widening scope.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <p className="text-muted">
+              {hasUsagePressure
+                ? "One or more current-period metrics are already over limit. Resolve the plan or billing posture before you widen onboarding or keep pushing the go-live lane."
+                : usageHighlights.length > 0
+                  ? "Current-period usage is visible. Treat this as a manual checkpoint before creating more credentials or sending more operator traffic."
+                  : "Usage has not accumulated yet for the current period. Keep this checkpoint in the loop so the first governed run has a clear billing and plan story."}
+            </p>
+            {usageHighlights.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {usageHighlights.map(([key, metric]) => (
+                  <div key={key} className="rounded-2xl border border-border bg-background p-3">
+                    <p className="text-xs text-muted">{formatMetricLabel(key)}</p>
+                    <p className="mt-1 font-medium text-foreground">
+                      {formatMetricValue(key, metric.used)}
+                      {metric.limit !== null ? ` / ${formatMetricValue(key, metric.limit)}` : " / unlimited"}
+                    </p>
+                    <Badge className="mt-2" variant={metric.over_limit ? "default" : "subtle"}>
+                      {metric.over_limit ? "Needs plan follow-up" : "Tracked"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={buildLaunchpadHref("/usage")}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Review usage dashboard
+              </Link>
+              <Link
+                href={buildLaunchpadHref("/settings?intent=manage-plan")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Review plan and billing lane
+              </Link>
+              <Link
+                href={buildLaunchpadHref("/session")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Return to session checkpoint
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -378,10 +783,68 @@ export function WorkspaceLaunchpad({
             <p className="mt-1 text-xs text-muted">{recommendedNextStep.reason}</p>
             <div className="mt-3">
               <Link
-                href={toSurfacePath(recommendedNextStep.surface)}
+                href={buildLaunchpadHref(toSurfacePath(recommendedNextStep.surface))}
                 className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
               >
                 Open {recommendedNextStep.surface.replaceAll("_", " ")}
+              </Link>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-border bg-background p-4 text-sm">
+            <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Role/session-aware lane</p>
+            <p className="mt-2 font-medium text-foreground">{roleAwareStep.action}</p>
+            <p className="mt-1 text-xs text-muted">{roleAwareStep.reason}</p>
+            <p className="mt-2 text-xs text-muted">
+              Role: {roleAwareStep.roleLabel}
+              {contextSourceLabel ? ` · Context source: ${contextSourceLabel}` : ""}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={buildLaunchpadHref(toSurfacePath(roleAwareStep.surface))}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Open {roleAwareStep.surface.replaceAll("_", " ")}
+              </Link>
+              <Link
+                href={buildLaunchpadHref(toSurfacePath(roleAwareStep.secondarySurface))}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                {roleAwareStep.secondaryAction}
+              </Link>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-border bg-background p-4 text-sm">
+            <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Session/context checkpoint</p>
+            <p className="mt-2 font-medium text-foreground">Confirm the active workspace session before deeper changes</p>
+            <p className="mt-1 text-xs text-muted">
+              Week 3 depends on session-backed workspace routing. Check identity, roles, and accessible workspaces
+              before onboarding, billing review, verification updates, or the mock go-live drill.
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              {workspaceRole ? `Current role scope: ${workspaceRole}` : "Current role scope is not explicit yet"}
+              {contextSourceLabel ? ` · Context source: ${contextSourceLabel}` : ""}
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              Trusted session guidance still applies here: only carry this lane forward if the session page confirms a
+              metadata-backed workspace context for the same workspace you plan to onboard, measure in usage, and cite
+              in verification or go-live evidence.
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              Returning to Session is the safe fallback whenever a workspace feels off. That is cheaper than cleaning
+              up keys, billing actions, or evidence attached to the wrong tenant later.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={buildLaunchpadHref("/session")}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Return to session checkpoint
+              </Link>
+              <Link
+                href={buildLaunchpadHref("/members")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Review member access
               </Link>
             </div>
           </div>
@@ -400,7 +863,7 @@ export function WorkspaceLaunchpad({
             {nextStepLinks.map((entry) => (
               <Link
                 key={entry.label}
-                href={toSurfacePath(entry.surface)}
+                href={buildLaunchpadHref(toSurfacePath(entry.surface))}
                 className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
               >
                 {entry.label}

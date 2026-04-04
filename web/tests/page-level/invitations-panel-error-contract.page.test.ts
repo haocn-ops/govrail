@@ -14,4 +14,5 @@ test("Invitations panel keeps revoke action error contract", async () => {
   assert.match(source, /function formatInvitationRevokeError/);
   assert.match(source, /Invitation revoke failed:/);
   assert.match(source, /text-red-600/);
+  assert.match(source, /Pending invitations also reserve member seats until they are redeemed, revoked, or expire/);
 });

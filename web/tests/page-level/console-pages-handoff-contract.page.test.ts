@@ -5,10 +5,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
+const adminPagePath = path.resolve(testDir, "../../app/(console)/admin/page.tsx");
 const artifactsPagePath = path.resolve(testDir, "../../app/(console)/artifacts/page.tsx");
 const logsPagePath = path.resolve(testDir, "../../app/(console)/logs/page.tsx");
 const membersPagePath = path.resolve(testDir, "../../app/(console)/members/page.tsx");
 const serviceAccountsPagePath = path.resolve(testDir, "../../app/(console)/service-accounts/page.tsx");
+const adminFocusBarPath = path.resolve(testDir, "../../components/admin/admin-focus-bar.tsx");
+const adminFollowUpNoticePath = path.resolve(testDir, "../../components/admin/admin-follow-up-notice.tsx");
+const adminReadinessReturnBannerPath = path.resolve(testDir, "../../components/admin/admin-readiness-return-banner.tsx");
+const verificationChecklistPath = path.resolve(testDir, "../../components/verification/week8-verification-checklist.tsx");
 
 async function readSource(filePath: string): Promise<string> {
   return readFile(filePath, "utf8");
@@ -63,11 +68,14 @@ test("Members and service-accounts pages keep shared handoff helper and onboardi
     /const handoffArgs = \{\s*source,\s*week8Focus,\s*attentionWorkspace: handoffWorkspace,\s*attentionOrganization: handoffOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel: ownerLabel,\s*\};/s,
   );
   assert.match(membersSource, /href=\{buildHandoffHref\("\/accept-invitation", handoffArgs\)\}/);
+  assert.match(membersSource, /href=\{buildHandoffHref\("\/session", handoffArgs\)\}/);
   assert.match(membersSource, /href=\{buildHandoffHref\("\/service-accounts", handoffArgs\)\}/);
+  assert.match(membersSource, /<CardTitle>Manual onboarding handoff<\/CardTitle>/);
+  assert.match(membersSource, /Self-serve invite lane/);
 
   assert.match(
     serviceAccountsSource,
-    /href=\{buildHandoffHref\("\/api-keys", \{\s*source,\s*week8Focus,\s*attentionWorkspace: handoffWorkspace,\s*attentionOrganization: handoffOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel: ownerLabel,\s*\}\)\}/s,
+    /const apiKeysHref = buildHandoffHref\("\/api-keys", handoffArgs\);/,
   );
   assert.match(serviceAccountsSource, /function normalizeRecentTrackKey\(value\?: string \| null\): "verification" \| "go_live" \| null/);
   assert.match(serviceAccountsSource, /recentTrackKey=\{recentTrackKey\}/);
@@ -127,7 +135,7 @@ test("Console pages keep query parsing and handoff-arg continuity for source and
     assert.match(source, /const evidenceCountParam = getParam\(searchParams\?\.evidence_count\);/);
     assert.match(
       source,
-      /const evidenceCount =\s*evidenceCountParam && !Number\.isNaN\(Number\(evidenceCountParam\)\) \? Number\(evidenceCountParam\) : null;/s,
+      /const evidenceCount =\s*(?:evidenceCountParam !== null && !Number\.isNaN\(Number\(evidenceCountParam\)\)|evidenceCountParam && !Number\.isNaN\(Number\(evidenceCountParam\)\))\s*\? Number\(evidenceCountParam\) : null;/s,
     );
     assert.match(
       source,
@@ -193,9 +201,65 @@ test("Members onboarding next-step keeps label, onboarding gating, and shared ha
   assert.match(source, /\{showOnboardingFlow \? \(/);
   assert.match(source, /href=\{buildHandoffHref\("\/service-accounts", handoffArgs\)\}/);
   assert.match(source, /Next: service accounts/);
+  assert.match(source, /Walk the newcomer through this manual lane:/);
+  assert.match(source, /Confirm session context/);
   assert.match(
     source,
     /const handoffArgs = \{\s*source,\s*week8Focus,\s*attentionWorkspace: handoffWorkspace,\s*attentionOrganization: handoffOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel: ownerLabel,\s*\};/s,
   );
   assert.match(source, /href=\{buildHandoffHref\("\/accept-invitation", handoffArgs\)\}/);
+});
+
+test("Admin-focused console contracts keep governance-only cues, explicit return labels, and Week 8 query parsing", async () => {
+  const [adminPageSource, adminFocusBarSource, adminFollowUpNoticeSource, adminReadinessReturnBannerSource, verificationChecklistSource] =
+    await Promise.all([
+      readSource(adminPagePath),
+      readSource(adminFocusBarPath),
+      readSource(adminFollowUpNoticePath),
+      readSource(adminReadinessReturnBannerPath),
+      readSource(verificationChecklistPath),
+    ]);
+
+  assert.match(adminPageSource, /const requestedSurface = getParam\(searchParams\?\.queue_surface\);/);
+  assert.match(adminPageSource, /const attentionWorkspace = getParam\(searchParams\?\.attention_workspace\);/);
+  assert.match(adminPageSource, /const attentionOrganization = getParam\(searchParams\?\.attention_organization\);/);
+  assert.match(adminPageSource, /const queueReturned = getParam\(searchParams\?\.queue_returned\) === "1";/);
+  assert.match(adminPageSource, /const readinessReturned = getParam\(searchParams\?\.readiness_returned\) === "1";/);
+  assert.match(adminPageSource, /const requestedReadinessFocus = getParam\(searchParams\?\.week8_focus\);/);
+  assert.match(adminPageSource, /initialSurfaceFilter=\{normalizedSurface\}/);
+  assert.match(adminPageSource, /initialReadinessFocus=\{normalizedReadinessFocus\}/);
+  assert.match(adminPageSource, /attentionWorkspaceSlug=\{attentionWorkspace\}/);
+  assert.match(adminPageSource, /attentionOrganizationId=\{attentionOrganization\}/);
+  assert.match(adminPageSource, /queueReturned=\{queueReturned\}/);
+  assert.match(adminPageSource, /readinessReturned=\{readinessReturned\}/);
+
+  assert.match(
+    adminFocusBarSource,
+    /These chips preserve the current admin review scope across readiness drill-down, workspace follow-up, and[\s\S]*return navigation\./,
+  );
+  assert.match(
+    adminFocusBarSource,
+    /Navigation only: changing or clearing focus restores the admin view state, but it does not automate any[\s\S]*remediation or alter workspace data by itself\./,
+  );
+  assert.match(adminReadinessReturnBannerSource, /<span>Returned from Week 8 readiness<\/span>/);
+  assert.match(adminReadinessReturnBannerSource, /<Badge variant="default">Focus restored<\/Badge>/);
+  assert.match(
+    adminReadinessReturnBannerSource,
+    /Use this banner after you come back from onboarding, verification, settings, usage, or the mock go-live[\s\S]*drill\./,
+  );
+  assert.match(
+    adminReadinessReturnBannerSource,
+    /It restores the filtered admin view only; it does not imply that any follow-up was auto-resolved\./,
+  );
+
+  assert.match(adminFollowUpNoticeSource, /const baseReturnLabel = isReadinessFlow \? "Return to admin readiness view" : "Return to admin queue";/);
+  assert.match(adminFollowUpNoticeSource, /returnLabel = trackLabel \? `\$\{baseReturnLabel\} \(continue \$\{trackLabel\}\)` : baseReturnLabel;/);
+  assert.match(adminFollowUpNoticeSource, /returnHref = buildAdminReturnHref\("\/admin", \{/);
+  assert.match(adminFollowUpNoticeSource, /queueSurface,/);
+  assert.match(adminFollowUpNoticeSource, /This is navigation-only context and does not change identity, impersonate a member, or automate remediation\./);
+  assert.match(adminFollowUpNoticeSource, /Treat this as the manual admin → workspace surface → admin loop/);
+
+  assert.match(verificationChecklistSource, /Each step stays navigation-only—no automation, support,/);
+  assert.match(verificationChecklistSource, /or impersonation is implied\./);
+  assert.match(verificationChecklistSource, /Each link simply switches context back to the workspace and carries the readiness/);
 });

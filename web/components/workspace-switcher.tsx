@@ -10,6 +10,10 @@ type WorkspaceOption = {
   display_name: string;
 };
 
+function workspaceCountLabel(count: number): string {
+  return count === 1 ? "1 reachable workspace" : `${count} reachable workspaces`;
+}
+
 export function WorkspaceSwitcher({
   currentWorkspaceSlug,
   workspaces,
@@ -80,14 +84,27 @@ export function WorkspaceSwitcher({
           }}
           aria-label="Select workspace"
         >
-          {workspaces.map((workspace) => (
-            <option key={workspace.workspace_id} value={workspace.slug}>
-              {workspace.display_name}
-            </option>
-          ))}
-        </select>
-        {isSaving ? <span className="text-[10px] text-muted">syncing...</span> : null}
-      </label>
+        {workspaces.map((workspace) => (
+          <option key={workspace.workspace_id} value={workspace.slug}>
+            {workspace.display_name}
+          </option>
+        ))}
+      </select>
+      {isSaving ? <span className="text-[10px] text-muted">syncing...</span> : null}
+    </label>
+    <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
+      <span>{workspaceCountLabel(workspaces.length)}</span>
+      <span>·</span>
+      <span>current: {currentWorkspaceSlug}</span>
+    </div>
+    <p className="text-[10px] text-muted">
+      Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
+      verification, or go-live with the correct context.
+    </p>
+    <p className="text-[10px] text-muted">
+      This switcher only changes the manual workspace context for the console. It does not impersonate another member,
+      edit roles, or trigger support-side automation.
+    </p>
       {errorMessage ? (
         <p className="text-[10px] text-amber-700" role="status">
           {errorMessage}

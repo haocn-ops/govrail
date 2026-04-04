@@ -378,6 +378,24 @@ export function Week8VerificationChecklist({
       state: plan?.features ? "complete" : "pending",
     },
     {
+      id: "evidence-artifacts",
+      label: "Artifacts and audit evidence reviewed",
+      description: "Artifacts, audit payloads, and exported evidence can be traced back to the same workspace handoff.",
+      href: buildVerificationChecklistHandoffHref({
+        pathname: "/artifacts",
+        source: normalizedSource,
+        week8Focus,
+        attentionWorkspace,
+        attentionOrganization,
+        deliveryContext: normalizedDeliveryContext,
+        recentTrackKey: normalizedRecentTrackKey,
+        recentUpdateKind: normalizedRecentUpdateKind,
+        evidenceCount,
+        recentOwnerLabel,
+      }),
+      state: latestDemoRun ? "in_progress" : "pending",
+    },
+    {
       id: "evidence-admin",
       label: "Platform snapshot reviewed",
       description: "Admin overview reviewed with latest rollout and plan distribution.",
@@ -477,6 +495,17 @@ export function Week8VerificationChecklist({
                   Collect usage evidence
                 </Link>
               ) : null}
+              {latestDemoRun ? (
+                <Link
+                  href={buildVerificationChecklistHandoffHref({
+                    pathname: "/artifacts",
+                    ...handoffHrefArgs,
+                  })}
+                  className="inline-flex items-center justify-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+                >
+                  Review artifacts
+                </Link>
+              ) : null}
               {goLiveStatus === "complete" ? (
                 <Link
                   href={buildVerificationChecklistHandoffHref({
@@ -545,7 +574,8 @@ export function Week8VerificationChecklist({
             After ticking the Week 8 checklist, keep the same workspace context and use this page as the launch pad
             for the mock go-live drill. Record the run trace in{" "}
             <Link href={buildVerificationChecklistHandoffHref({ pathname: "/usage", source: normalizedSource, week8Focus, attentionWorkspace, attentionOrganization, deliveryContext: normalizedDeliveryContext, recentTrackKey: normalizedRecentTrackKey, recentUpdateKind: normalizedRecentUpdateKind, evidenceCount, recentOwnerLabel })}>Usage</Link>, verify handoff
-            notes in the delivery tracking panel on this page, and then open the{" "}
+            notes in the delivery tracking panel on this page, inspect supporting bundles in{" "}
+            <Link href={buildVerificationChecklistHandoffHref({ pathname: "/artifacts", source: normalizedSource, week8Focus, attentionWorkspace, attentionOrganization, deliveryContext: normalizedDeliveryContext, recentTrackKey: normalizedRecentTrackKey, recentUpdateKind: normalizedRecentUpdateKind, evidenceCount, recentOwnerLabel })}>Artifacts</Link>, and then open the{" "}
             <Link href={buildVerificationChecklistHandoffHref({ pathname: "/go-live?surface=go_live", source: normalizedSource, week8Focus, attentionWorkspace, attentionOrganization, deliveryContext: normalizedDeliveryContext, recentTrackKey: normalizedRecentTrackKey, recentUpdateKind: normalizedRecentUpdateKind, evidenceCount, recentOwnerLabel })}>Go-live drill</Link> to
             rehearse the full flow. Each link simply switches context back to the workspace and carries the readiness
             focus along.

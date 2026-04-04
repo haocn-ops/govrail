@@ -55,6 +55,19 @@ function formatMetricValue(key: string, value: number): string {
   return String(value);
 }
 
+function formatMetricLabel(key: string): string {
+  switch (key) {
+    case "runs_created":
+      return "Runs created";
+    case "active_tool_providers":
+      return "Active tool providers";
+    case "artifact_storage_bytes":
+      return "Artifact storage";
+    default:
+      return key.replace(/_/g, " ");
+  }
+}
+
 function formatDate(value?: string | null): string {
   if (!value) {
     return "-";
@@ -880,6 +893,9 @@ export function WorkspaceSettingsPanel({
   const usageHref = buildSettingsHref({ pathname: "/usage", ...handoffHrefArgs });
   const verificationHref = buildSettingsHref({ pathname: "/verification?surface=verification", ...handoffHrefArgs });
   const goLiveHref = buildSettingsHref({ pathname: "/go-live?surface=go_live", ...handoffHrefArgs });
+  const managePlanIntentHref = buildSettingsIntentHref("manage-plan", handoffHrefArgs);
+  const resolveBillingIntentHref = buildSettingsIntentHref("resolve-billing", handoffHrefArgs);
+  const artifactsEarlyHref = buildSettingsHref({ pathname: "/artifacts", ...handoffHrefArgs });
   const upgradeIntentHref = buildSettingsIntentHref("upgrade", handoffHrefArgs);
   const billingActionHref = billingSummary?.action
     ? buildSettingsHref({
@@ -1063,7 +1079,7 @@ export function WorkspaceSettingsPanel({
     "resolve-billing": {
       title: "Resolve billing warning intent",
       body:
-        "This path lands you in settings to resolve past-due or warning statuses. Finish the billing cleanup before returning to the Week 8 checkpoint or admin readiness focus.",
+        "This path lands you in settings to resolve past-due or warning statuses. Finish the billing cleanup and confirm the portal-return or local renewal status before returning to the Week 8 checkpoint or admin readiness focus.",
       actions: [
         { label: "Return to Week 8 checklist", href: verificationHref },
         { label: "Return to admin readiness view", href: adminReturnHref },
@@ -1073,7 +1089,7 @@ export function WorkspaceSettingsPanel({
     upgrade: {
       title: "Upgrade intent",
       body:
-        "You landed here to complete the upgrade and gate the new features. Confirm audit export and feature toggles before continuing to the go-live drill or verification evidence.",
+        "You landed here to complete the self-serve upgrade lane and gate the new features. Confirm audit export and feature toggles before continuing to the go-live drill or verification evidence.",
       actions: [
         { label: "Continue to go-live drill", href: goLiveHref },
         { label: "Confirm usage evidence", href: usageHref },
@@ -1084,13 +1100,64 @@ export function WorkspaceSettingsPanel({
   const intentCard = highlightIntent ? intentContextMap[highlightIntent] : null;
   const showBillingFollowUpCard =
     !intentCard && (normalizedSource || checkout.session || subscriptionAction.notice || auditExport.notice);
+  const governanceClosureCard = {
+    title: "Billing and readiness closure lane",
+    body:
+      "Use this lane to keep plan/billing, audit-export, and feature-gating follow-up in one governance path: resolve settings changes here, attach verification evidence, rehearse go-live readiness, then return to admin readiness focus.",
+    actions: [
+      {
+        label: billingSummary?.status_tone === "warning" ? "Resolve billing warning lane" : "Review plan and billing lane",
+        href: billingSummary?.status_tone === "warning" ? resolveBillingIntentHref : managePlanIntentHref,
+      },
+      { label: "Capture verification evidence", href: verificationHref },
+      { label: "Rehearse go-live readiness", href: goLiveHref },
+      { label: "Return to admin readiness view", href: adminReturnHref },
+    ],
+    footnote:
+      "Navigation only: these links preserve governance context across settings, verification, go-live, and admin readiness without automation, support tooling, or impersonation.",
+  };
+  const usagePressureCard = {
+    title: "Plan limit and usage pressure",
+    body:
+      overLimitMetrics.length > 0
+        ? "One or more workspace metrics are already over plan. Resolve the limit pressure, confirm the billing or upgrade path, then carry the same evidence trail into verification and admin follow-up."
+        : metrics.length > 0
+          ? "Use this lane to compare plan limits with current usage before limits block a first demo, a provider expansion, or later Week 8 follow-up."
+          : "Usage has not accumulated yet for the current period. Keep this lane ready so the first run, storage growth, and provider expansion can be checked against plan limits when they appear."
+    ,
+    highlights:
+      metrics.length > 0
+        ? metrics.slice(0, 3).map(([key, metric]) => ({
+            label: formatMetricLabel(key),
+            value: `${formatMetricValue(key, metric.used)}${metric.limit !== null ? ` / ${formatMetricValue(key, metric.limit)}` : " / unlimited"}`,
+            tone: metric.over_limit ? "warning" : "neutral",
+          }))
+        : [
+            {
+              label: "Current period",
+              value: `${formatDate(usage?.period_start)} to ${formatDate(usage?.period_end)}`,
+              tone: "neutral" as const,
+            },
+          ],
+    actions: [
+      { label: "Review usage pressure", href: usageHref },
+      {
+        label: billingSummary?.status_tone === "warning" ? "Resolve billing warning lane" : "Review plan and billing lane",
+        href: billingSummary?.status_tone === "warning" ? resolveBillingIntentHref : managePlanIntentHref,
+      },
+      { label: "Capture verification evidence", href: verificationHref },
+      { label: "Return to admin readiness view", href: adminReturnHref },
+    ],
+    footnote:
+      "This lane is still navigation-only: compare usage against plan limits, decide whether billing action is needed, then keep the same workspace evidence path through verification and back to admin.",
+  };
   const billingFollowUpCard = showBillingFollowUpCard
     ? {
         title: normalizedSource === "onboarding" ? "Onboarding billing evidence" : "Billing evidence handoff",
         body:
           normalizedSource === "onboarding"
             ? "Once the billing action (upgrade, checkout, or portal return) is ready, use this panel to capture notes and evidence before you navigate back to verification, usage, or the go-live drill."
-            : "Document the billing update, audit export, or portal interaction so the verification/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean.",
+            : "Document the billing update, audit export, or portal interaction so the verification/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane.",
         actions:
           normalizedSource === "onboarding"
             ? [
@@ -1100,8 +1167,10 @@ export function WorkspaceSettingsPanel({
             : [
                 { label: "Return to Week 8 checklist", href: verificationHref },
                 { label: "Continue to go-live drill", href: goLiveHref },
+                { label: "Return to admin readiness view", href: adminReturnHref },
               ],
-        footnote: "These navigation cues keep checkout and audit evidence linked to the same workspace; they do not automate or impersonate any role.",
+        footnote:
+          "These navigation cues keep checkout, portal, and audit evidence linked to the same workspace timeline; they do not open support workflows, automate remediation, or impersonate any role.",
       }
     : null;
 
@@ -1744,6 +1813,57 @@ export function WorkspaceSettingsPanel({
       ) : null}
       <Card>
         <CardHeader>
+          <CardTitle>{governanceClosureCard.title}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-muted">{governanceClosureCard.body}</p>
+          <div className="flex flex-wrap gap-2">
+            {governanceClosureCard.actions.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                {action.label}
+              </Link>
+            ))}
+          </div>
+          <p className="text-xs text-muted">{governanceClosureCard.footnote}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{usagePressureCard.title}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-muted">{usagePressureCard.body}</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {usagePressureCard.highlights.map((item) => (
+              <div key={item.label} className="rounded-xl border border-border bg-background p-3">
+                <p className="text-xs text-muted">{item.label}</p>
+                <p className="mt-1 font-medium text-foreground">{item.value}</p>
+                <Badge className="mt-2" variant={item.tone === "warning" ? "default" : "subtle"}>
+                  {item.tone === "warning" ? "Needs follow-up" : "Tracked"}
+                </Badge>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {usagePressureCard.actions.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                {action.label}
+              </Link>
+            ))}
+          </div>
+          <p className="text-xs text-muted">{usagePressureCard.footnote}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
           <CardTitle>Workspace</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
@@ -2092,9 +2212,55 @@ export function WorkspaceSettingsPanel({
                 </Link>
               </div>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      ) : null}
+    </CardContent>
+  </Card>
+
+  <Card>
+    <CardHeader>
+      <CardTitle>SSO evidence lane</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-3 text-sm text-muted">
+      <p>
+        After the SSO preflight and controlled write, capture the verification run, status, and notes that prove the
+        identity provider can gate the workspace. Keep those references tied to the same workspace context.
+      </p>
+      <p className="text-xs text-muted">
+        {ssoFeatureEnabled
+          ? "SSO is already included in this plan, so keep the verification details and linked artifacts stitched into the Week 7/8 governance trail."
+          : "SSO remains plan gated; keep this lane ready with the recorded run notes so the supported upgrade can reference them once it is unlocked."}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={verificationHref}
+          className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+        >
+          Capture verification evidence
+        </Link>
+        <Link
+          href={artifactsEarlyHref}
+          className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+        >
+          Review aligned artifacts
+        </Link>
+        <Link
+          href={goLiveHref}
+          className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+        >
+          Continue to go-live
+        </Link>
+        <Link
+          href={adminReturnHref}
+          className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+        >
+          Return to admin readiness
+        </Link>
+      </div>
+      <p className="text-xs text-muted">
+        Navigation only—this lane keeps the manual verification flow, artifact linkage, and admin-return path together.
+      </p>
+    </CardContent>
+  </Card>
 
       <Card>
         <CardHeader>
@@ -2420,13 +2586,59 @@ export function WorkspaceSettingsPanel({
                 </Link>
               </div>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      ) : null}
+    </CardContent>
+  </Card>
 
-      <Card className={highlightBillingCard ? "border-amber-300 shadow-[0_0_0_1px_rgba(245,158,11,0.35)]" : undefined}>
-        <CardHeader>
-          <CardTitle>Billing and subscription</CardTitle>
+  <Card>
+    <CardHeader>
+      <CardTitle>Dedicated environment evidence lane</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-3 text-sm text-muted">
+      <p>
+        Dedicated environment provisioning is staged. Keep the associated delivery notes, compliance summaries, and
+        operator decisions tied to verification and go-live so the readiness path is transparent.
+      </p>
+      <p className="text-xs text-muted">
+        {dedicatedEnvironmentFeatureEnabled
+          ? "The plan already gates the dedicated deployment, so keep delivery notes, compliance context, and artifacts together as the environment provisions."
+          : "Dedicated environment is still plan gated; once the workspace upgrade unlocks it, keep this lane ready with the recorded readiness notes before returning to admin readiness."}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={verificationHref}
+          className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+        >
+          Capture verification evidence
+        </Link>
+        <Link
+          href={artifactsEarlyHref}
+          className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+        >
+          Review aligned artifacts
+        </Link>
+        <Link
+          href={goLiveHref}
+          className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+        >
+          Document go-live drill notes
+        </Link>
+        <Link
+          href={adminReturnHref}
+          className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+        >
+          Return to admin readiness
+        </Link>
+      </div>
+      <p className="text-xs text-muted">
+        Navigation only—keep the manual handoff path, documented notes, and admin return process tied to this lane.
+      </p>
+    </CardContent>
+  </Card>
+
+  <Card className={highlightBillingCard ? "border-amber-300 shadow-[0_0_0_1px_rgba(245,158,11,0.35)]" : undefined}>
+    <CardHeader>
+      <CardTitle>Billing and subscription</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="flex flex-wrap items-center gap-3">
@@ -2558,7 +2770,7 @@ export function WorkspaceSettingsPanel({
                     href={billingActionHref}
                     className="inline-flex items-center justify-center rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition hover:bg-background"
                   >
-                    Focus billing section
+                    Open billing action lane
                   </Link>
                 ) : null}
                 {canStartCheckout ? (
@@ -2573,7 +2785,9 @@ export function WorkspaceSettingsPanel({
               </div>
               <p className="mt-2 text-xs text-muted">
                 After the checkout tracker is ready, revisit <Link href={usageHref}>usage pressure</Link>, update the{" "}
-                <Link href={verificationHref}>Week 8 checklist</Link>, and review the <Link href={goLiveHref}>go-live drill</Link> notes to keep the evidence path aligned before returning to the admin view; use the audit export control later on this panel for downloadable evidence.
+                <Link href={verificationHref}>Week 8 checklist</Link>, and review the <Link href={goLiveHref}>go-live drill</Link>{" "}
+                notes to keep the evidence path aligned before returning to the admin view. These are self-serve
+                navigation and status cues only; provider completion and support follow-up remain manual.
               </p>
             </div>
           ) : null}
@@ -2684,6 +2898,12 @@ export function WorkspaceSettingsPanel({
             ) : null}
             <p className="mt-2 text-xs text-muted">
               Date filters are applied as UTC day boundaries in this slice.
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              Governance closure tip: export audit events here, then attach the file in{" "}
+              <Link href={verificationHref}>verification</Link>, carry it into the{" "}
+              <Link href={goLiveHref}>go-live drill</Link>, and end the loop by returning to the{" "}
+              <Link href={adminReturnHref}>admin readiness view</Link>.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-border bg-card p-3 sm:col-span-1">
@@ -2841,12 +3061,58 @@ export function WorkspaceSettingsPanel({
               </div>
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+      </CardContent>
+    </Card>
 
-      <Card className="xl:col-span-2">
-        <CardHeader>
-          <CardTitle>Usage dashboard</CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle>Audit export evidence lane</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm text-muted">
+        <p>
+          Audit exports are the recorded events used for compliance verification—keep each download, filter note, and file
+          hash tied to this workspace before you carry the evidence into verification or go-live.
+        </p>
+        <p className="text-xs text-muted">
+          {auditExportEnabled
+            ? "Audit export is available for this plan, so catalog the filters and download details alongside verification, go-live, and admin readiness."
+            : "Audit export is still plan gated; once the upgrade unlocks it, return here to note the intended download parameters before continuing the Week 7/8 trail."}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={verificationHref}
+            className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+          >
+            Attach in verification
+          </Link>
+          <Link
+            href={artifactsEarlyHref}
+            className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+          >
+            Review aligned artifacts
+          </Link>
+          <Link
+            href={goLiveHref}
+            className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+          >
+            Carry to go-live drill
+          </Link>
+          <Link
+            href={adminReturnHref}
+            className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+          >
+            Return to admin readiness
+          </Link>
+        </div>
+        <p className="text-xs text-muted">
+          Navigation only—keep the manual export evidence path aligned with the verification/go-live lane before you slide back into admin readiness.
+        </p>
+      </CardContent>
+    </Card>
+
+    <Card className="xl:col-span-2">
+      <CardHeader>
+        <CardTitle>Usage dashboard</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <p className="text-muted">

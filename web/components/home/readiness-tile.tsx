@@ -29,11 +29,13 @@ export function ReadinessTile({
   title,
   detail,
   hint,
+  meta,
   tone,
 }: {
   title: string;
   detail: string;
   hint: string;
+  meta?: string;
   tone: ReadinessTone;
 }) {
   return (
@@ -46,6 +48,11 @@ export function ReadinessTile({
       </CardHeader>
       <CardContent className="space-y-2 pt-0 text-sm">
         <p className="font-medium text-foreground">{detail}</p>
+        {meta ? (
+          <p className="inline-flex w-fit items-center rounded-full border border-border bg-background px-2 py-1 text-[0.65rem] uppercase tracking-[0.12em] text-muted">
+            {meta}
+          </p>
+        ) : null}
         <p className="text-xs text-muted">{hint}</p>
       </CardContent>
     </Card>

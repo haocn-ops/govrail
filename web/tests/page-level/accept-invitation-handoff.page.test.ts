@@ -39,20 +39,13 @@ test("accept-invitation page keeps onboarding continuity query keys and preserve
 test("accept-invitation suggested actions keep explicit verification/go-live surface paths", async () => {
   const source = await readSource(acceptInvitationPagePath);
 
-  assert.match(source, /onClick=\{\(\) => void openWorkspaceSurface\(buildOnboardingPath\("\/members"\)\)\}/);
-  assert.match(source, /onClick=\{\(\) => void openWorkspaceSurface\(buildOnboardingPath\("\/playground"\)\)\}/);
-  assert.match(
-    source,
-    /onClick=\{\(\) =>\s*void openWorkspaceSurface\(buildOnboardingPath\("\/verification\?surface=verification"\)\)\s*\}/s,
-  );
-  assert.match(
-    source,
-    /onClick=\{\(\) => void openWorkspaceSurface\(buildOnboardingPath\("\/go-live\?surface=go_live"\)\)\}/,
-  );
-  assert.match(source, /buildOnboardingPath\("\/members"\)/);
-  assert.match(source, /buildOnboardingPath\("\/playground"\)/);
-  assert.match(source, /buildOnboardingPath\("\/verification\?surface=verification"\)/);
-  assert.match(source, /buildOnboardingPath\("\/go-live\?surface=go_live"\)/);
+  assert.match(source, /function getRoleLandingActions\(role: string\): WorkspaceLandingAction\[] \{/);
+  assert.match(source, /\{ label: "Confirm members", path: "\/members" \}/);
+  assert.match(source, /\{ label: "Run a demo", path: "\/playground" \}/);
+  assert.match(source, /\{ label: "Open verification", path: "\/verification\?surface=verification" \}/);
+  assert.match(source, /\{ label: "Open Week 8 checklist", path: "\/verification\?surface=verification" \}/);
+  assert.match(source, /\{ label: "Review go-live drill", path: "\/go-live\?surface=go_live" \}/);
+  assert.match(source, /onClick=\{\(\) => void openWorkspaceSurface\(buildOnboardingPath\(action\.path\)\)\}/);
   assert.match(source, /Open Week 8 checklist/);
-  assert.match(source, /Open mock go-live drill/);
+  assert.match(source, /Review go-live drill/);
 });

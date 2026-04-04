@@ -124,6 +124,10 @@ export function MockGoLiveDrillPanel({
     week8Focus,
     attentionWorkspace: attentionWorkspace ?? workspaceSlug,
     attentionOrganization,
+    deliveryContext: normalizeDeliveryContext(deliveryContext),
+    recentUpdateKind,
+    evidenceCount,
+    recentOwnerLabel,
   });
   const phases: Array<{ title: string; description: string; steps: DrillStep[] }> = [
     {
@@ -253,6 +257,36 @@ export function MockGoLiveDrillPanel({
           <p className="text-muted">
             This is a rehearsal surface for a pilot customer launch. It does not provision anything automatically; it
             sequences the existing onboarding, billing, run, and evidence surfaces into one operator-facing drill.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={buildHref("/verification?surface=verification")}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Reopen verification
+            </Link>
+            <Link
+              href={buildHref("/artifacts")}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review artifacts
+            </Link>
+            <Link
+              href={buildHref("/usage")}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Confirm usage signal
+            </Link>
+            <Link
+              href={adminReturnHref}
+              className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+            >
+              Return to admin overview
+            </Link>
+          </div>
+          <p className="text-xs text-muted">
+            Treat this as an evidence relay: verification establishes readiness, artifacts preserve outputs, usage
+            confirms pressure, and the admin view closes the governance loop.
           </p>
         </CardContent>
       </Card>

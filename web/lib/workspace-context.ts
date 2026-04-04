@@ -321,22 +321,21 @@ async function fetchSaasMeAndWorkspaces(args: {
     };
   }
 
-  const fallbackSubject = getBaseSubjectId();
-  const fallbackRoles = getBaseSubjectRoles();
-  const attempts: Array<{ subjectId: string; subjectRoles: string }> = [];
   const preferredSubjectId = args.preferredSubjectId?.trim() ?? "";
-  if (preferredSubjectId !== "") {
-    attempts.push({
+  if (preferredSubjectId === "") {
+    return {
+      sessionUser: null,
+      workspaces: [],
+    };
+  }
+
+  const fallbackRoles = getBaseSubjectRoles();
+  const attempts: Array<{ subjectId: string; subjectRoles: string }> = [
+    {
       subjectId: preferredSubjectId,
       subjectRoles: normalizeRolesHeader(args.preferredSubjectRoles) || fallbackRoles,
-    });
-  }
-  if (!attempts.some((attempt) => attempt.subjectId === fallbackSubject)) {
-    attempts.push({
-      subjectId: fallbackSubject,
-      subjectRoles: fallbackRoles,
-    });
-  }
+    },
+  ];
 
   for (const attempt of attempts) {
     try {

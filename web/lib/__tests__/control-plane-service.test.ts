@@ -16,6 +16,7 @@ import {
   downloadWorkspaceAuditExportViewModel,
   fetchAdminOverview,
   bootstrapWorkspace,
+  fetchCurrentWorkspace,
   fetchWorkspaceDeliveryTrack,
   fetchWorkspaceDedicatedEnvironmentReadiness,
   fetchWorkspaceMembersViewModel,
@@ -1681,6 +1682,80 @@ test("acceptWorkspaceInvitation posts invite token and returns payload", async (
   });
 });
 
+test("acceptWorkspaceInvitation surfaces structured ControlPlaneRequestError for disabled workspace and seat-limit flows", async () => {
+  await withMockFetch(async () => {
+    return new Response(
+      JSON.stringify({
+        error: {
+          code: "invalid_state_transition",
+          message: "Invitation workspace is not active",
+          details: {
+            workspace_id: "ws_123",
+            workspace_status: "disabled",
+          },
+        },
+      }),
+      { status: 409, headers: { "content-type": "application/json" } },
+    );
+  }, async () => {
+    await assert.rejects(
+      async () => acceptWorkspaceInvitation("invite_token_disabled"),
+      (error: unknown) =>
+        assertControlPlaneRequestError(error, {
+          status: 409,
+          code: "invalid_state_transition",
+          message: "Invitation workspace is not active",
+          details: {
+            workspace_id: "ws_123",
+            workspace_status: "disabled",
+          },
+        }),
+    );
+  });
+
+  await withMockFetch(async () => {
+    return new Response(
+      JSON.stringify({
+        error: {
+          code: "plan_limit_exceeded",
+          message: "Workspace has reached the member seat limit",
+          details: {
+            scope: "member_seats",
+            used: 3,
+            limit: 3,
+            remaining: 0,
+            workspace_id: "ws_123",
+            plan_id: "plan_free",
+            plan_code: "free",
+            upgrade_href: "/settings?intent=upgrade",
+          },
+        },
+      }),
+      { status: 429, headers: { "content-type": "application/json" } },
+    );
+  }, async () => {
+    await assert.rejects(
+      async () => acceptWorkspaceInvitation("invite_token_seat_limit"),
+      (error: unknown) =>
+        assertControlPlaneRequestError(error, {
+          status: 429,
+          code: "plan_limit_exceeded",
+          message: "Workspace has reached the member seat limit",
+          details: {
+            scope: "member_seats",
+            used: 3,
+            limit: 3,
+            remaining: 0,
+            workspace_id: "ws_123",
+            plan_id: "plan_free",
+            plan_code: "free",
+            upgrade_href: "/settings?intent=upgrade",
+          },
+        }),
+    );
+  });
+});
+
 test("createToolProvider attaches plan-limit metadata to structured error", async () => {
   await withMockFetch(async () => {
     return new Response(
@@ -1692,6 +1767,12 @@ test("createToolProvider attaches plan-limit metadata to structured error", asyn
             scope: "tool_providers",
             used: 5,
             limit: 5,
+            remaining: 0,
+            plan_id: "plan_free",
+            plan_code: "free",
+            upgrade_href: "/settings?intent=upgrade",
+            period_start: "2026-04-15T00:00:00.000Z",
+            period_end: "2026-05-15T00:00:00.000Z",
           },
         },
       }),
@@ -1715,6 +1796,12 @@ test("createToolProvider attaches plan-limit metadata to structured error", asyn
           scope: "tool_providers",
           used: 5,
           limit: 5,
+          remaining: 0,
+          planId: "plan_free",
+          planCode: "free",
+          upgradeHref: "/settings?intent=upgrade",
+          periodStart: "2026-04-15T00:00:00.000Z",
+          periodEnd: "2026-05-15T00:00:00.000Z",
           message: "Provider limit reached",
         });
         return true;
@@ -1758,4 +1845,128 @@ test("updateToolProviderStatus targets activate and disable routes with planLimi
     "/api/control-plane/tool-providers/tp_123 POST",
     "/api/control-plane/tool-providers/tp_123/disable POST",
   ]);
+});
+
+test("fetchCurrentWorkspace preserves persisted onboarding summary fields while normalizing visible surfaces", async () => {
+  await withMockFetch(async (input) => {
+    assert.equal(String(input), "/api/control-plane/workspace");
+    return new Response(
+      JSON.stringify({
+        data: {
+          workspace: {
+            workspace_id: "ws_123",
+            organization_id: "org_123",
+            organization_slug: "org",
+            organization_display_name: "Org",
+            tenant_id: "tenant_123",
+            slug: "alpha",
+            display_name: "Alpha",
+            status: "active",
+            created_at: "2026-04-01T00:00:00.000Z",
+            updated_at: "2026-04-04T00:00:00.000Z",
+          },
+          plan: null,
+          subscription: null,
+          billing_summary: {
+            provider: "stripe",
+            provider_customer_id: null,
+            provider_subscription_id: null,
+            provider_status: null,
+            billing_email: null,
+            current_period_start: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+            trial_ends_at: null,
+          },
+          billing_providers: [],
+          usage: {
+            window_start: "2026-04-01T00:00:00.000Z",
+            window_end: "2026-05-01T00:00:00.000Z",
+            runs_count: 0,
+            active_providers: 2,
+            storage_bytes: 0,
+          },
+          onboarding: {
+            status: "baseline_ready",
+            checklist: {
+              workspace_created: true,
+              baseline_ready: true,
+              service_account_created: false,
+              api_key_created: false,
+              demo_run_created: false,
+              demo_run_succeeded: false,
+            },
+            summary: {
+              providers_total: 2,
+              policies_total: 2,
+              providers_created: 1,
+              providers_existing: 1,
+              policies_created: 2,
+              policies_existing: 0,
+              service_accounts_total: 0,
+              api_keys_total: 0,
+              demo_runs_total: 0,
+            },
+            latest_demo_run: null,
+            latest_demo_run_hint: {
+              status_label: "Bootstrap ready",
+              is_terminal: false,
+              needs_attention: false,
+              suggested_action: "Create a demo credential",
+            },
+            next_actions: ["Create a service account", "Create an API key"],
+            blockers: [
+              {
+                code: "service_account_required",
+                severity: "blocking",
+                message: "Create a service account before the first demo run.",
+                surface: "service-accounts",
+                retryable: true,
+              },
+            ],
+            recommended_next: {
+              surface: "go-live",
+              action: "Finish the launch checklist",
+              reason: "Bootstrap completed and the workspace is ready for delivery planning.",
+            },
+            recommended_next_surface: "service-accounts",
+            recommended_next_action: "Ignored legacy action",
+            recommended_next_reason: "Ignored legacy reason",
+            delivery_guidance: {
+              verification_status: "in_progress",
+              go_live_status: "pending",
+              next_surface: "go-live",
+              summary: "Verification is in progress before go-live.",
+              updated_at: "2026-04-04T00:00:00.000Z",
+            },
+          },
+          members: [],
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }, async () => {
+    const result = await fetchCurrentWorkspace();
+    assert.equal(result.onboarding.summary.providers_created, 1);
+    assert.equal(result.onboarding.summary.providers_existing, 1);
+    assert.equal(result.onboarding.summary.policies_created, 2);
+    assert.equal(result.onboarding.blockers?.[0]?.surface, "service_accounts");
+    assert.equal(result.onboarding.recommended_next?.surface, "go_live");
+    assert.equal(result.onboarding.recommended_next_surface, "go_live");
+    assert.equal(result.onboarding.recommended_next_action, "Finish the launch checklist");
+    assert.equal(
+      result.onboarding.recommended_next_reason,
+      "Bootstrap completed and the workspace is ready for delivery planning.",
+    );
+    assert.equal(result.onboarding.delivery_guidance?.next_surface, "go_live");
+    assert.deepEqual(result.onboarding.latest_demo_run_hint, {
+      status_label: "Bootstrap ready",
+      is_terminal: false,
+      needs_attention: false,
+      suggested_action: "Create a demo credential",
+    });
+  });
 });

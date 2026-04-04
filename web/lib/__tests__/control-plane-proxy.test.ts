@@ -171,6 +171,9 @@ test(
       assert.match(source, /if \(!upstreamHeaders\.get\("x-workspace-slug"\)\)/);
       assert.match(source, /upstreamHeaders\.set\("x-workspace-id", args\.workspaceContext\.workspace\.workspace_id\)/);
       assert.match(source, /upstreamHeaders\.set\("x-workspace-slug", args\.workspaceContext\.workspace\.slug\)/);
+      assert.match(source, /upstreamHeaders\.delete\("x-subject-id"\)/);
+      assert.match(source, /upstreamHeaders\.delete\("x-subject-roles"\)/);
+      assert.match(source, /upstreamHeaders\.delete\("x-roles"\)/);
       assert.match(source, /if \(!upstreamHeaders\.get\("x-authenticated-subject"\)\)/);
       assert.match(source, /if \(!upstreamHeaders\.get\("x-authenticated-roles"\)\)/);
     }),
@@ -218,4 +221,21 @@ test("buildProxyControlPlaneHeaders omits tenant injection when includeTenant is
 
   assert.equal(headers.get("x-authenticated-subject"), "owner@govrail.dev");
   assert.equal(headers.get("x-tenant-id"), null);
+});
+
+test("buildProxyControlPlaneHeaders strips legacy untrusted identity override headers", async () => {
+  const headers = buildProxyControlPlaneHeaders({
+    workspaceContext: metadataWorkspaceContext,
+    headers: {
+      "x-subject-id": "spoofed@govrail.dev",
+      "x-subject-roles": "platform_owner",
+      "x-roles": "platform_owner",
+    },
+  });
+
+  assert.equal(headers.get("x-subject-id"), null);
+  assert.equal(headers.get("x-subject-roles"), null);
+  assert.equal(headers.get("x-roles"), null);
+  assert.equal(headers.get("x-authenticated-subject"), "owner@govrail.dev");
+  assert.equal(headers.get("x-authenticated-roles"), "workspace_owner,operator");
 });

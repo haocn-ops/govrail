@@ -27,6 +27,7 @@ const evidenceGuidance = {
   body:
     "Artifacts bundle execution evidence, logs, and audit payloads that support the verification checklist and mock go-live drill. This page does not change admin state; it only helps you carry the same workspace handoff into the next evidence surface.",
   links: [
+    { label: "Confirm usage signal", path: "/usage" },
     { label: "Continue to verification", path: "/verification?surface=verification" },
     { label: "Inspect go-live drill", path: "/go-live?surface=go_live" },
     { label: "Review logs", path: "/logs" },
@@ -108,12 +109,14 @@ export default async function ArtifactsPage({
   const recentUpdateKind = getParam(searchParams?.recent_update_kind);
   const evidenceCountParam = getParam(searchParams?.evidence_count);
   const evidenceCount =
-    evidenceCountParam && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
+    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
   const ownerLabel =
     getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
   const requestedRunId = getParam(searchParams?.run_id) ?? getParam(searchParams?.runId);
   const showAdminAttention = source === "admin-attention";
   const showAdminReadiness = source === "admin-readiness";
+  const showAdminReturn = showAdminAttention || showAdminReadiness;
+  const adminReturnLabel = showAdminAttention ? "Return to admin queue" : "Return to admin readiness";
   const handoffArgs = {
     source,
     week8Focus,
@@ -176,6 +179,54 @@ export default async function ArtifactsPage({
               </Link>
             ))}
           </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Enterprise evidence lane</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted">
+          <p>
+            This artifacts view also supports enterprise readiness evidence: use it together with audit export,
+            verification notes, and the mock go-live drill so plan-gated features like audit export, SSO readiness, and
+            dedicated-environment planning can all point back to the same workspace timeline.
+          </p>
+          <p className="text-xs text-muted">
+            The handoff is still manual. Download or inspect evidence in Settings, confirm the relevant verification
+            note, then return to admin readiness with the same workspace context if this review started there.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={buildArtifactsHandoffHref({ pathname: "/usage", ...handoffArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+            >
+              Confirm usage signal
+            </Link>
+            <Link
+              href={buildArtifactsHandoffHref({ pathname: "/settings", ...handoffArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+            >
+              Review settings evidence lane
+            </Link>
+            <Link
+              href={buildArtifactsHandoffHref({ pathname: "/verification?surface=verification", ...handoffArgs })}
+              className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+            >
+              Attach verification evidence
+            </Link>
+            {showAdminReturn ? (
+              <Link
+                href={buildArtifactsHandoffHref({ pathname: "/admin", ...handoffArgs })}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+              >
+                {adminReturnLabel}
+              </Link>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted">
+            A common manual path is: Usage confirms the meter signal, Artifacts confirms the output bundle, Verification
+            records the notes, Go-live captures the rehearsal result, then Admin closes the follow-up queue.
+          </p>
         </CardContent>
       </Card>
       {!runId ? (

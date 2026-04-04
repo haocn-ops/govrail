@@ -34,6 +34,10 @@ export function AdminReadinessReturnBanner({
           context. The follow-up list below still reflects the active focus.
         </p>
         {focusHint ? <p className="text-xs text-muted">{focusHint}</p> : null}
+        <p className="text-xs text-muted">
+          Use this banner after you come back from onboarding, verification, settings, usage, or the mock go-live
+          drill. It restores the filtered admin view only; it does not imply that any follow-up was auto-resolved.
+        </p>
         {clearHref || (followUpHref && followUpLabel) ? (
           <div className="flex flex-wrap gap-2">
             {followUpHref && followUpLabel ? (

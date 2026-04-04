@@ -5,6 +5,7 @@ import {
   describeWorkspaceContextSource,
   isWorkspaceContextFallbackSource,
   resolveCookieWorkspaceFromRawCookie,
+  resolveWorkspaceContextFromRequest,
   resolveWorkspaceContextFromValues,
 } from "../workspace-context";
 
@@ -245,7 +246,7 @@ test(
         assert.equal(init?.headers instanceof Headers, false);
         const headers = init?.headers as Record<string, string> | undefined;
         assert.equal(headers?.accept, "application/json");
-        assert.equal(headers?.["x-authenticated-subject"], "codex@local");
+        assert.equal(headers?.["x-authenticated-subject"], "owner@example.com");
         assert.equal(headers?.["x-authenticated-roles"], "workspace_owner,operator");
 
         return new Response(
@@ -281,6 +282,8 @@ test(
       }, async () => {
         const context = await resolveWorkspaceContextFromValues({
           requestedWorkspaceSlug: "live-two",
+          preferredSubjectId: "owner@example.com",
+          preferredSubjectRoles: "workspace_owner,operator",
         });
 
         assert.equal(context.source, "metadata");
@@ -291,6 +294,106 @@ test(
         assert.equal(context.available_workspaces.length, 2);
         assert.equal(context.session_user?.user_id, "usr_live_1");
         assert.equal(context.session_user?.email, "owner@example.com");
+      });
+
+      assert.equal(fetchCallCount, 1);
+    }),
+);
+
+test(
+  "resolveWorkspaceContextFromValues does not query metadata without a trusted subject and falls back locally",
+  { concurrency: false },
+  async () =>
+    withCleanWorkspaceEnv(async () => {
+      process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.example";
+      process.env.CONTROL_PLANE_WORKSPACES_JSON = JSON.stringify([
+        {
+          workspace_id: "ws_env_ops",
+          slug: "ops",
+          display_name: "Ops",
+          tenant_id: "tenant_ops",
+        },
+      ]);
+      process.env.CONTROL_PLANE_SUBJECT_ID = "fallback-user@example.com";
+      process.env.CONTROL_PLANE_SUBJECT_ROLES = "platform_admin";
+
+      let fetchCallCount = 0;
+      await withMockFetch(async () => {
+        fetchCallCount += 1;
+        throw new Error("metadata fetch should not run without a trusted subject");
+      }, async () => {
+        const context = await resolveWorkspaceContextFromValues({
+          requestedWorkspaceSlug: "ops",
+        });
+
+        assert.equal(context.source, "env-fallback");
+        assert.equal(context.workspace.workspace_id, "ws_env_ops");
+        assert.equal(context.workspace.slug, "ops");
+        assert.equal(context.workspace.subject_id, "fallback-user@example.com");
+        assert.equal(context.session_user, null);
+      });
+
+      assert.equal(fetchCallCount, 0);
+    }),
+);
+
+test(
+  "resolveWorkspaceContextFromRequest uses trusted authenticated subject and ignores x-subject-id for SaaS metadata identity",
+  { concurrency: false },
+  async () =>
+    withCleanWorkspaceEnv(async () => {
+      process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.example";
+      process.env.CONTROL_PLANE_SUBJECT_ID = "fallback-user@example.com";
+      process.env.CONTROL_PLANE_SUBJECT_ROLES = "platform_admin";
+
+      let fetchCallCount = 0;
+      await withMockFetch(async (input, init) => {
+        fetchCallCount += 1;
+        assert.equal(String(input), "https://control-plane.example/api/v1/saas/me");
+        const headers = init?.headers as Record<string, string> | undefined;
+        assert.equal(headers?.accept, "application/json");
+        assert.equal(headers?.["x-authenticated-subject"], "trusted-owner@example.com");
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              user: {
+                user_id: "usr_trusted_1",
+                email: "trusted-owner@example.com",
+                auth_provider: "cf_access",
+                auth_subject: "trusted-owner@example.com",
+              },
+              workspaces: [
+                {
+                  workspace_id: "ws_trusted_1",
+                  slug: "trusted-one",
+                  display_name: "Trusted One",
+                  tenant_id: "tenant_trusted_1",
+                },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }, async () => {
+        const context = await resolveWorkspaceContextFromRequest(
+          new Request("http://localhost/api/workspace-context", {
+            headers: {
+              "x-authenticated-subject": "trusted-owner@example.com",
+              "x-subject-id": "spoofed@example.com",
+              "x-workspace-slug": "trusted-one",
+            },
+          }),
+        );
+
+        assert.equal(context.source, "metadata");
+        assert.equal(context.workspace.workspace_id, "ws_trusted_1");
+        assert.equal(context.workspace.subject_id, "trusted-owner@example.com");
+        assert.equal(context.workspace.subject_roles, "platform_admin");
+        assert.equal(context.session_user?.auth_subject, "trusted-owner@example.com");
       });
 
       assert.equal(fetchCallCount, 1);
@@ -330,6 +433,8 @@ test(
       }, async () => {
         const context = await resolveWorkspaceContextFromValues({
           requestedWorkspaceSlug: "risk",
+          preferredSubjectId: "fallback-user@example.com",
+          preferredSubjectRoles: "platform_admin",
         });
 
         assert.equal(context.source, "env-fallback");

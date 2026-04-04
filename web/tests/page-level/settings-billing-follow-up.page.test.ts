@@ -18,12 +18,19 @@ test("settings panel follow-up text links cancellation/resume to Week 8 evidence
   assert.ok(source.includes("Automatic renewal has been restored for this subscription."));
   assert.ok(
     source.includes(
-      "Document the billing update, audit export, or portal interaction so the verification/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean.",
+      "Document the billing update, audit export, or portal interaction so the verification/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane.",
+    ),
+  );
+  assert.ok(
+    source.includes(
+      "Once the billing action (upgrade, checkout, or portal return) is ready, use this panel to capture notes and evidence before you navigate back to verification, usage, or the go-live drill.",
     ),
   );
   assert.ok(source.includes("Return to Week 8 checklist"));
   assert.ok(source.includes("Continue to go-live drill"));
+  assert.ok(source.includes("Return to admin readiness view"));
   assert.ok(source.includes("Resolve billing warning intent"));
   assert.ok(source.includes("Manage-plan billing intent"));
   assert.ok(source.includes("Upgrade intent"));
+  assert.ok(source.includes("Open billing action lane"));
 });

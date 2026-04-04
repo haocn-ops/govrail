@@ -452,6 +452,20 @@ export function PlaygroundPanel({
     evidenceCount,
     recentOwnerLabel,
   };
+  const usageHref = buildVerificationChecklistHandoffHref({ pathname: "/usage", ...handoffHrefArgs });
+  const settingsHref = buildVerificationChecklistHandoffHref({
+    pathname: "/settings?intent=manage-plan",
+    ...handoffHrefArgs,
+  });
+  const serviceAccountsHref = buildVerificationChecklistHandoffHref({
+    pathname: "/service-accounts",
+    ...handoffHrefArgs,
+  });
+  const apiKeysHref = buildVerificationChecklistHandoffHref({ pathname: "/api-keys", ...handoffHrefArgs });
+  const verificationHref = buildVerificationChecklistHandoffHref({
+    pathname: "/verification?surface=verification",
+    ...handoffHrefArgs,
+  });
   const demoFailedStatuses = new Set([
     "failed",
     "error",
@@ -551,6 +565,46 @@ export function PlaygroundPanel({
               ) : null}
             </div>
           ) : null}
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-950">
+            <p className="font-medium text-amber-950">Preflight reminder</p>
+            <p className="mt-1 text-amber-900">
+              Before you invoke a run, reconfirm key scope, plan boundary, usage pressure, and any manual billing
+              review that keeps delivery approved. This check is still a human step; there is no automated block in
+              place yet.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={serviceAccountsHref}
+                className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100/60"
+              >
+                Review service account
+              </Link>
+              <Link
+                href={apiKeysHref}
+                className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100/60"
+              >
+                Check API key scope
+              </Link>
+              <Link
+                href={usageHref}
+                className="inline-flex items-center justify-center rounded-xl border border-amber-950 px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100"
+              >
+                Review usage pressure
+              </Link>
+              <Link
+                href={settingsHref}
+                className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100/60"
+              >
+                Confirm plan and billing
+              </Link>
+              <Link
+                href={verificationHref}
+                className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100/60"
+              >
+                Prepare verification handoff
+              </Link>
+            </div>
+          </div>
           <MonacoEditor
             height="360px"
             theme="vs-dark"
@@ -573,13 +627,13 @@ export function PlaygroundPanel({
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link
-                  href={buildVerificationChecklistHandoffHref({ pathname: "/usage", ...handoffHrefArgs })}
+                  href={usageHref}
                   className="inline-flex items-center justify-center rounded-xl border border-amber-950 px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100"
                 >
                   Review usage
                 </Link>
                 <Link
-                  href={buildVerificationChecklistHandoffHref({ pathname: "/settings", ...handoffHrefArgs })}
+                  href={settingsHref}
                   className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-100/60"
                 >
                   Check plan and limits
@@ -592,19 +646,19 @@ export function PlaygroundPanel({
             <p className="mt-1">{getFirstRunTip({ source: normalizedSource, latestDemoRunHint, deliveryGuidance })}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Link
-                href={buildVerificationChecklistHandoffHref({ pathname: "/service-accounts", ...handoffHrefArgs })}
+                href={serviceAccountsHref}
                 className="inline-flex items-center justify-center rounded-xl border border-border px-3 py-2 font-medium text-foreground transition hover:bg-muted/60"
               >
                 Review service accounts
               </Link>
               <Link
-                href={buildVerificationChecklistHandoffHref({ pathname: "/api-keys", ...handoffHrefArgs })}
+                href={apiKeysHref}
                 className="inline-flex items-center justify-center rounded-xl border border-border px-3 py-2 font-medium text-foreground transition hover:bg-muted/60"
               >
                 Check API key scope
               </Link>
               <Link
-                href={buildVerificationChecklistHandoffHref({ pathname: "/verification?surface=verification", ...handoffHrefArgs })}
+                href={verificationHref}
                 className="inline-flex items-center justify-center rounded-xl border border-border px-3 py-2 font-medium text-foreground transition hover:bg-muted/60"
               >
                 Open verification

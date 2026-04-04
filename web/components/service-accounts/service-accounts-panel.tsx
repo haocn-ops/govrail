@@ -222,6 +222,36 @@ function formatTime(value: string | null): string {
   return new Date(value).toLocaleString();
 }
 
+function serviceAccountStatusVariant(status: string): "strong" | "default" | "subtle" {
+  if (status === "active") {
+    return "strong";
+  }
+  if (status === "disabled") {
+    return "subtle";
+  }
+  return "default";
+}
+
+function serviceAccountStatusSummary(status: string): string {
+  if (status === "active") {
+    return "This identity can still back key issuance and governed runtime attachment for the workspace.";
+  }
+  if (status === "disabled") {
+    return "This identity is historical or intentionally stopped. Existing keys may still need separate manual review.";
+  }
+  return "This identity needs manual review before it is treated as ready for another workspace lane.";
+}
+
+function serviceAccountNextLane(status: string): string {
+  if (status === "active") {
+    return "Next lane: issue or review API keys, then continue through Playground, Usage, and Verification.";
+  }
+  if (status === "disabled") {
+    return "Next lane: review surviving API keys and keep only the historical evidence you still need.";
+  }
+  return "Next lane: confirm identity intent and continue through the matching manual workspace surface.";
+}
+
 export function ServiceAccountsPanel({
   workspaceSlug,
   source,
@@ -396,6 +426,18 @@ export function ServiceAccountsPanel({
             </Link>
           </div>
         </Card>
+        <Card className="rounded-2xl border border-border bg-card p-4 text-sm">
+          <CardHeader>
+            <CardTitle className="text-sm">Status semantics</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs text-muted">
+            <p>
+              `active` means the service account can still participate in the governed credential path. `disabled`
+              means the identity should be treated as stopped or historical, with any surviving keys reviewed
+              separately. Any other state should be handled as manual-review territory.
+            </p>
+          </CardContent>
+        </Card>
 
         {serviceAccounts.map((serviceAccount) => (
           <div
@@ -409,7 +451,7 @@ export function ServiceAccountsPanel({
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="subtle">{serviceAccount.role}</Badge>
-                <Badge variant={serviceAccount.status === "active" ? "strong" : "default"}>
+                <Badge variant={serviceAccountStatusVariant(serviceAccount.status)}>
                   {serviceAccount.status}
                 </Badge>
               </div>
@@ -417,6 +459,8 @@ export function ServiceAccountsPanel({
             {serviceAccount.description ? (
               <p className="mt-2 text-sm text-muted">{serviceAccount.description}</p>
             ) : null}
+            <p className="mt-2 text-xs text-muted">{serviceAccountStatusSummary(serviceAccount.status)}</p>
+            <p className="mt-1 text-xs text-muted">{serviceAccountNextLane(serviceAccount.status)}</p>
             {serviceAccount.status === "active" ? (
               <p className="mt-2 text-xs text-muted">
                 Disabling this identity blocks future key issuance and new runtime attachment, but does not auto-revoke

@@ -23,11 +23,12 @@ test("settings panel keeps resolve-billing intent, portal return, and past-due m
   );
   assert.match(
     source,
-    /"Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean\."/,
+    /"Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane\."/,
   );
   assert.match(source, /"Open the billing provider portal to manage payment methods, invoices, and renewal settings\."/);
   assert.match(
     source,
     /"Manage renewal timing directly in this workspace while provider portal access is unavailable\."/,
   );
+  assert.match(source, />\s*Open billing action lane\s*</);
 });

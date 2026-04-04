@@ -81,6 +81,10 @@ export function AdminFocusBar({
         <CardTitle className="text-sm font-semibold">Governance focus</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-xs text-muted">
+        <p>
+          These chips preserve the current admin review scope across readiness drill-down, workspace follow-up, and
+          return navigation. Clear one dimension at a time when you want to widen the view again.
+        </p>
         <div className="flex flex-wrap gap-2">
           {chips.map((chip) => (
             <div
@@ -112,6 +116,10 @@ export function AdminFocusBar({
             </Link>
           </div>
         ) : null}
+        <p>
+          Navigation only: changing or clearing focus restores the admin view state, but it does not automate any
+          remediation or alter workspace data by itself.
+        </p>
       </CardContent>
     </Card>
   );

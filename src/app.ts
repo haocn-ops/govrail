@@ -925,10 +925,34 @@ async function requireSaasWorkspaceAccess(
   if (!workspace) {
     throw new ApiError(404, "workspace_not_found", "Workspace does not exist");
   }
+  if (workspace.status !== "active") {
+    throw new ApiError(403, "tenant_access_denied", "Workspace is not active", {
+      workspace_id: workspace.workspace_id,
+      workspace_status: workspace.status,
+    });
+  }
+
+  const organization = await getOrganizationById(env, workspace.organization_id);
+  if (!organization) {
+    throw new ApiError(500, "internal_error", "Workspace organization could not be loaded");
+  }
+  if (organization.status !== "active") {
+    throw new ApiError(403, "tenant_access_denied", "Workspace organization is not active", {
+      organization_id: organization.organization_id,
+      organization_status: organization.status,
+    });
+  }
 
   const membership = await getWorkspaceMembership(env, workspaceId, user.user_id);
   if (!membership || membership.status !== "active") {
     throw new ApiError(403, "tenant_access_denied", "Workspace is not accessible by current user");
+  }
+
+  const organizationMembership = await getOrganizationMembership(env, workspace.organization_id, user.user_id);
+  if (!organizationMembership || organizationMembership.status !== "active") {
+    throw new ApiError(403, "tenant_access_denied", "Workspace organization is not accessible by current user", {
+      organization_id: workspace.organization_id,
+    });
   }
 
   return {
@@ -2083,15 +2107,21 @@ async function createSaasWorkspace(request: Request, env: Env): Promise<Response
     if (!existingOrganization) {
       throw new ApiError(500, "internal_error", "Workspace organization could not be loaded");
     }
+    if (existingOrganization.status !== "active" || existingWorkspace.status !== "active") {
+      throw new ApiError(403, "tenant_access_denied", "Workspace is not accessible by current user");
+    }
 
     const existingMembership = await getWorkspaceMembership(env, existingWorkspace.workspace_id, user.user_id);
     if (!existingMembership || existingMembership.status !== "active") {
       throw new ApiError(403, "tenant_access_denied", "Workspace is not accessible by current user");
     }
 
+    const existingPlan = await getPricingPlanById(env, existingWorkspace.plan_id);
+
     return json(
       {
         workspace: serializeSaasWorkspaceDetail(existingWorkspace, existingOrganization, existingMembership),
+        plan: existingPlan ? serializePricingPlan(existingPlan) : null,
       },
       buildMeta(request),
     );
@@ -2100,6 +2130,12 @@ async function createSaasWorkspace(request: Request, env: Env): Promise<Response
   const organization = await getOrganizationById(env, body.organization_id);
   if (!organization) {
     throw new ApiError(404, "organization_not_found", "Organization does not exist");
+  }
+  if (organization.status !== "active") {
+    throw new ApiError(403, "tenant_access_denied", "Only active organizations can create workspaces", {
+      organization_id: organization.organization_id,
+      organization_status: organization.status,
+    });
   }
 
   const organizationMembership = await getOrganizationMembership(env, body.organization_id, user.user_id);
@@ -2190,6 +2226,15 @@ async function createSaasWorkspace(request: Request, env: Env): Promise<Response
     throw new ApiError(500, "internal_error", "Created workspace membership could not be loaded");
   }
 
+  await upsertWorkspaceOnboardingPersistence({
+    env,
+    workspace: createdWorkspace,
+    status: "workspace_created",
+    summary: {},
+    lastBootstrappedAt: null,
+    updatedAt: timestamp,
+  });
+
   return json(
     {
       workspace: serializeSaasWorkspaceDetail(createdWorkspace, organization, createdMembership),
@@ -2232,12 +2277,42 @@ async function bootstrapSaasWorkspace(
   let createdPolicies = 0;
   let existingPolicies = 0;
   const timestamp = nowIso();
+  const plan = await getPricingPlanById(env, workspace.plan_id);
+  const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
+  const usage = await getWorkspaceUsageSummary(env, workspace, plan, subscription);
+  const providerLimit = plan ? getPlanLimitNumber(plan, "tool_providers") : null;
 
   for (const provider of seed.providers) {
     const existing = await getToolProvider(env, workspace.tenant_id, provider.tool_provider_id);
     if (existing) {
       existingProviders += 1;
       continue;
+    }
+
+    if (providerLimit !== null && usage.metrics.active_tool_providers.used + createdProviders + 1 > providerLimit) {
+      if (!plan) {
+        throw new ApiError(429, "plan_limit_exceeded", "Workspace bootstrap would exceed the active tool provider limit", {
+          scope: "active_tool_providers",
+          workspace_id: workspace.workspace_id,
+        });
+      }
+      throw new ApiError(
+        429,
+        "plan_limit_exceeded",
+        "Workspace bootstrap would exceed the active tool provider limit",
+        buildWorkspacePlanLimitErrorDetails({
+          workspace,
+          plan,
+          scope: "active_tool_providers",
+          used: usage.metrics.active_tool_providers.used,
+          limit: providerLimit,
+          periodStart: usage.period_start,
+          periodEnd: usage.period_end,
+          extra: {
+            providers_required: createdProviders + 1,
+          },
+        }),
+      );
     }
 
     statements.push(
@@ -2304,15 +2379,26 @@ async function bootstrapSaasWorkspace(
   });
 
   const response = await buildWorkspaceBootstrapResponse(env, workspace);
+  const persistedBootstrapSummary = {
+    ...response.summary,
+    providers_created: createdProviders,
+    providers_existing: existingProviders,
+    policies_created: createdPolicies,
+    policies_existing: existingPolicies,
+  };
+  await upsertWorkspaceOnboardingPersistence({
+    env,
+    workspace,
+    status: "baseline_ready",
+    summary: persistedBootstrapSummary,
+    lastBootstrappedAt: timestamp,
+    updatedAt: timestamp,
+  });
   return json(
     {
       ...response,
       summary: {
-        ...response.summary,
-        providers_created: createdProviders,
-        providers_existing: existingProviders,
-        policies_created: createdPolicies,
-        policies_existing: existingPolicies,
+        ...persistedBootstrapSummary,
       },
     },
     buildMeta(request),
@@ -2623,6 +2709,14 @@ async function createSaasWorkspaceInvitation(
     throw new ApiError(409, "invitation_already_exists", "A pending invitation already exists for this email");
   }
 
+  await enforceWorkspaceMemberSeatLimit({
+    env,
+    workspace,
+    additionalReservations: 1,
+    errorCode: "invitation_limit_reached",
+    errorMessage: "Invitation limit reached",
+  });
+
   const invitationMaterial = await generateSaasInvitationMaterial();
   const invitationId = createId("inv");
   const now = nowIso();
@@ -2748,6 +2842,18 @@ async function acceptSaasInvitation(request: Request, env: Env): Promise<Respons
   if (!organization) {
     throw new ApiError(404, "organization_not_found", "Organization does not exist");
   }
+  if (organization.status !== "active") {
+    throw new ApiError(409, "invalid_state_transition", "Invitation organization is not active", {
+      organization_id: organization.organization_id,
+      organization_status: organization.status,
+    });
+  }
+  if (workspace.status !== "active") {
+    throw new ApiError(409, "invalid_state_transition", "Invitation workspace is not active", {
+      workspace_id: workspace.workspace_id,
+      workspace_status: workspace.status,
+    });
+  }
 
   if (user.email_normalized !== invitation.email_normalized) {
     throw new ApiError(403, "tenant_access_denied", "Invitation email does not match current user", {
@@ -2775,17 +2881,14 @@ async function acceptSaasInvitation(request: Request, env: Env): Promise<Respons
     }
 
     const acceptedMembership = await getWorkspaceMembership(env, workspace.workspace_id, user.user_id);
+    if (!acceptedMembership || acceptedMembership.status !== "active") {
+      throw new ApiError(500, "internal_error", "Accepted invitation membership could not be loaded");
+    }
     return json(
       {
         invitation: serializeSaasWorkspaceInvitation(invitation),
         workspace: serializeAcceptedInvitationWorkspace(workspace, organization),
-        membership: acceptedMembership
-          ? serializeAcceptedInvitationMembership(acceptedMembership)
-          : {
-              role: invitation.role,
-              status: "active",
-              joined_at: invitation.accepted_at,
-            },
+        membership: serializeAcceptedInvitationMembership(acceptedMembership),
       },
       buildMeta(request),
     );
@@ -2806,6 +2909,25 @@ async function acceptSaasInvitation(request: Request, env: Env): Promise<Respons
 
   const organizationMembership = await getOrganizationMembership(env, invitation.organization_id, user.user_id);
   const workspaceMembership = await getWorkspaceMembership(env, workspace.workspace_id, user.user_id);
+  if (organizationMembership?.status === "disabled") {
+    throw new ApiError(409, "invalid_state_transition", "Organization membership is disabled", {
+      organization_id: invitation.organization_id,
+      user_id: user.user_id,
+    });
+  }
+  if (workspaceMembership?.status === "disabled") {
+    throw new ApiError(409, "invalid_state_transition", "Workspace membership is disabled", {
+      workspace_id: workspace.workspace_id,
+      user_id: user.user_id,
+    });
+  }
+  await enforceWorkspaceMemberSeatLimit({
+    env,
+    workspace,
+    additionalReservations: 0,
+    errorCode: "plan_limit_exceeded",
+    errorMessage: "Workspace has reached the member seat limit",
+  });
 
   const statements = [];
   if (!organizationMembership) {
@@ -2863,11 +2985,16 @@ async function acceptSaasInvitation(request: Request, env: Env): Promise<Respons
               accepted_by_user_id = ?1,
               accepted_at = ?2,
               updated_at = ?2
-        WHERE invitation_id = ?3`,
+        WHERE invitation_id = ?3
+          AND status = 'pending'`,
     ).bind(user.user_id, now, invitation.invitation_id),
   );
 
-  await env.DB.batch(statements);
+  const batchResult = await env.DB.batch(statements);
+  const acceptanceMeta = batchResult.at(-1)?.meta as { changes?: number } | undefined;
+  if (acceptanceMeta?.changes !== undefined && acceptanceMeta.changes === 0) {
+    throw new ApiError(409, "invalid_state_transition", "Invitation is no longer pending");
+  }
 
   await putIdempotencyRecord({
     env,
@@ -5028,7 +5155,21 @@ async function rotateSaasWorkspaceApiKey(
 }
 
 async function resolveSaasUser(request: Request, env: Env): Promise<UserRow> {
-  const subjectId = getSubjectId(request, env).trim();
+  const trustedSubjectId =
+    request.headers.get("cf-access-authenticated-user-email") ??
+    request.headers.get("x-authenticated-subject");
+  if (!trustedSubjectId || trustedSubjectId.trim() === "") {
+    if (request.headers.has("x-subject-id")) {
+      throw new ApiError(
+        401,
+        "unauthorized",
+        "SaaS workspace routes require a trusted authenticated subject header",
+      );
+    }
+    throw new ApiError(401, "unauthorized", "SaaS workspace routes require an authenticated subject");
+  }
+
+  const subjectId = trustedSubjectId.trim();
   if (subjectId === "" || subjectId === "anonymous") {
     throw new ApiError(401, "unauthorized", "SaaS workspace routes require an authenticated subject");
   }
@@ -5038,8 +5179,7 @@ async function resolveSaasUser(request: Request, env: Env): Promise<UserRow> {
 
   const user =
     (await getUserByAuthIdentity(env, authProvider, subjectId)) ??
-    (await getUserByAuthIdentity(env, authProvider, normalizedSubject)) ??
-    (subjectId.includes("@") ? await getUserByEmailNormalized(env, normalizedSubject) : null);
+    (await getUserByAuthIdentity(env, authProvider, normalizedSubject));
 
   if (!user) {
     throw new ApiError(403, "tenant_access_denied", "Current subject is not mapped to a SaaS user", {
@@ -6196,6 +6336,69 @@ async function buildWorkspaceBootstrapResponse(
   };
 }
 
+async function getWorkspaceOnboardingPersistence(
+  env: Env,
+  workspaceId: string,
+): Promise<{
+  state_id: string;
+  workspace_id: string;
+  organization_id: string;
+  status: string;
+  summary_json: string;
+  last_bootstrapped_at: string | null;
+  created_at: string;
+  updated_at: string;
+} | null> {
+  return env.DB.prepare(
+    `SELECT state_id, workspace_id, organization_id, status, summary_json, last_bootstrapped_at, created_at, updated_at
+       FROM workspace_onboarding_states
+      WHERE workspace_id = ?1`,
+  )
+    .bind(workspaceId)
+    .first<{
+      state_id: string;
+      workspace_id: string;
+      organization_id: string;
+      status: string;
+      summary_json: string;
+      last_bootstrapped_at: string | null;
+      created_at: string;
+      updated_at: string;
+    }>();
+}
+
+async function upsertWorkspaceOnboardingPersistence(args: {
+  env: Env;
+  workspace: WorkspaceRow;
+  status: string;
+  summary: Record<string, unknown>;
+  lastBootstrappedAt?: string | null;
+  updatedAt?: string;
+}): Promise<void> {
+  const timestamp = args.updatedAt ?? nowIso();
+  await args.env.DB.prepare(
+    `INSERT INTO workspace_onboarding_states (
+        state_id, workspace_id, organization_id, status, summary_json, last_bootstrapped_at, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+      ON CONFLICT(workspace_id) DO UPDATE SET
+        organization_id = excluded.organization_id,
+        status = excluded.status,
+        summary_json = excluded.summary_json,
+        last_bootstrapped_at = excluded.last_bootstrapped_at,
+        updated_at = excluded.updated_at`,
+  )
+    .bind(
+      createId("wos"),
+      args.workspace.workspace_id,
+      args.workspace.organization_id,
+      args.status,
+      JSON.stringify(args.summary),
+      args.lastBootstrappedAt ?? null,
+      timestamp,
+    )
+    .run();
+}
+
 async function buildWorkspaceOnboardingState(
   env: Env,
   workspace: WorkspaceRow,
@@ -6296,6 +6499,10 @@ async function buildWorkspaceOnboardingState(
     .bind(workspace.tenant_id, workspace.slug, demoConversationId)
     .first<{ count: number | string | null }>();
   const bootstrap = await buildWorkspaceBootstrapResponse(env, workspace);
+  const persistedOnboardingState = await getWorkspaceOnboardingPersistence(env, workspace.workspace_id);
+  const persistedSummary = persistedOnboardingState
+    ? safeParseJsonObject(persistedOnboardingState.summary_json)
+    : {};
   const seed = buildWorkspaceBootstrapSeed(workspace);
   const serviceAccounts = await listWorkspaceServiceAccounts(env, workspace.workspace_id);
   const apiKeys = await listWorkspaceApiKeys(env, workspace.workspace_id);
@@ -6516,6 +6723,22 @@ async function buildWorkspaceOnboardingState(
     },
     summary: {
       ...bootstrap.summary,
+      providers_created:
+        typeof persistedSummary.providers_created === "number"
+          ? persistedSummary.providers_created
+          : bootstrap.summary.providers_created,
+      providers_existing:
+        typeof persistedSummary.providers_existing === "number"
+          ? persistedSummary.providers_existing
+          : bootstrap.summary.providers_existing,
+      policies_created:
+        typeof persistedSummary.policies_created === "number"
+          ? persistedSummary.policies_created
+          : bootstrap.summary.policies_created,
+      policies_existing:
+        typeof persistedSummary.policies_existing === "number"
+          ? persistedSummary.policies_existing
+          : bootstrap.summary.policies_existing,
       service_accounts_total: serviceAccounts.length,
       api_keys_total: apiKeys.length,
       demo_runs_total: demoRunsTotal,
@@ -6555,6 +6778,31 @@ function deriveUsagePeriod(subscription: WorkspacePlanSubscriptionRow | null): {
   return {
     period_start: monthStart.toISOString(),
     period_end: monthEnd.toISOString(),
+  };
+}
+
+function buildWorkspacePlanLimitErrorDetails(args: {
+  workspace: WorkspaceRow;
+  plan: PricingPlanRow;
+  scope: string;
+  used: number;
+  limit: number;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  extra?: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    scope: args.scope,
+    used: args.used,
+    limit: args.limit,
+    remaining: Math.max(0, args.limit - args.used),
+    workspace_id: args.workspace.workspace_id,
+    plan_id: args.plan.plan_id,
+    plan_code: args.plan.code,
+    upgrade_href: "/settings?intent=upgrade",
+    ...(args.periodStart ? { period_start: args.periodStart } : {}),
+    ...(args.periodEnd ? { period_end: args.periodEnd } : {}),
+    ...(args.extra ?? {}),
   };
 }
 
@@ -6642,6 +6890,7 @@ function getPlanLimitNumber(plan: PricingPlanRow, key: string): number | null {
 async function recordUsageLedgerEvent(args: {
   env: Env;
   workspace: WorkspaceRow;
+  subscription?: WorkspacePlanSubscriptionRow | null;
   meterName: string;
   quantity: number;
   sourceType: string;
@@ -6650,7 +6899,7 @@ async function recordUsageLedgerEvent(args: {
   createdAt?: string;
 }): Promise<void> {
   const createdAt = args.createdAt ?? nowIso();
-  const period = deriveUsagePeriod(null);
+  const period = deriveUsagePeriod(args.subscription ?? null);
   await args.env.DB.prepare(
     `INSERT INTO usage_ledger (
         usage_event_id, workspace_id, organization_id, tenant_id, meter_name, quantity,
@@ -6674,6 +6923,75 @@ async function recordUsageLedgerEvent(args: {
     .run();
 }
 
+async function getWorkspaceSeatUsage(env: Env, workspaceId: string): Promise<{
+  activeMemberships: number;
+  pendingInvitations: number;
+}> {
+  const [activeMembershipsResult, pendingInvitationsResult] = await Promise.all([
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total
+         FROM workspace_memberships
+        WHERE workspace_id = ?1
+          AND status = 'active'`,
+    )
+      .bind(workspaceId)
+      .first<{ total: number | null }>(),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total
+         FROM workspace_invitations
+        WHERE workspace_id = ?1
+          AND status = 'pending'`,
+    )
+      .bind(workspaceId)
+      .first<{ total: number | null }>(),
+  ]);
+
+  return {
+    activeMemberships: Number(activeMembershipsResult?.total ?? 0),
+    pendingInvitations: Number(pendingInvitationsResult?.total ?? 0),
+  };
+}
+
+async function enforceWorkspaceMemberSeatLimit(args: {
+  env: Env;
+  workspace: WorkspaceRow;
+  additionalReservations: number;
+  errorCode: string;
+  errorMessage: string;
+}): Promise<void> {
+  const plan = await getPricingPlanById(args.env, args.workspace.plan_id);
+  if (!plan || plan.status !== "active") {
+    return;
+  }
+
+  const seatLimit = getPlanLimitNumber(plan, "member_seats");
+  if (seatLimit === null) {
+    return;
+  }
+
+  const usage = await getWorkspaceSeatUsage(args.env, args.workspace.workspace_id);
+  const reservedSeats = usage.activeMemberships + usage.pendingInvitations;
+  const nextReservedSeats = reservedSeats + args.additionalReservations;
+  if (nextReservedSeats > seatLimit) {
+    throw new ApiError(
+      429,
+      args.errorCode,
+      args.errorMessage,
+      buildWorkspacePlanLimitErrorDetails({
+        workspace: args.workspace,
+        plan,
+        scope: "member_seats",
+        used: reservedSeats,
+        limit: seatLimit,
+        extra: {
+          active_memberships: usage.activeMemberships,
+          pending_invitations: usage.pendingInvitations,
+        },
+      }),
+    );
+  }
+}
+
 async function enforceWorkspaceRunPlanLimit(env: Env, tenantId: string): Promise<void> {
   const workspace = await getWorkspaceByTenantId(env, tenantId);
   if (!workspace) {
@@ -6685,17 +7003,24 @@ async function enforceWorkspaceRunPlanLimit(env: Env, tenantId: string): Promise
     return;
   }
 
-  const usage = await getWorkspaceUsageSummary(env, workspace, plan);
+  const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
+  const usage = await getWorkspaceUsageSummary(env, workspace, plan, subscription);
   const metric = usage.metrics.runs_created;
   if (metric.limit !== null && metric.used >= metric.limit) {
-    throw new ApiError(429, "plan_limit_exceeded", "Workspace has reached the monthly run limit", {
-      scope: "runs_created",
-      used: metric.used,
-      limit: metric.limit,
-      workspace_id: workspace.workspace_id,
-      period_start: usage.period_start,
-      period_end: usage.period_end,
-    });
+    throw new ApiError(
+      429,
+      "plan_limit_exceeded",
+      "Workspace has reached the monthly run limit",
+      buildWorkspacePlanLimitErrorDetails({
+        workspace,
+        plan,
+        scope: "runs_created",
+        used: metric.used,
+        limit: metric.limit,
+        periodStart: usage.period_start,
+        periodEnd: usage.period_end,
+      }),
+    );
   }
 }
 
@@ -6718,17 +7043,24 @@ async function enforceWorkspaceToolProviderPlanLimit(
     return;
   }
 
-  const usage = await getWorkspaceUsageSummary(env, workspace, plan);
+  const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
+  const usage = await getWorkspaceUsageSummary(env, workspace, plan, subscription);
   const metric = usage.metrics.active_tool_providers;
   if (metric.limit !== null && metric.used >= metric.limit) {
-    throw new ApiError(429, "plan_limit_exceeded", "Workspace has reached the active tool provider limit", {
-      scope: "active_tool_providers",
-      used: metric.used,
-      limit: metric.limit,
-      workspace_id: workspace.workspace_id,
-      period_start: usage.period_start,
-      period_end: usage.period_end,
-    });
+    throw new ApiError(
+      429,
+      "plan_limit_exceeded",
+      "Workspace has reached the active tool provider limit",
+      buildWorkspacePlanLimitErrorDetails({
+        workspace,
+        plan,
+        scope: "active_tool_providers",
+        used: metric.used,
+        limit: metric.limit,
+        periodStart: usage.period_start,
+        periodEnd: usage.period_end,
+      }),
+    );
   }
 }
 
@@ -7182,9 +7514,11 @@ async function createRun(request: Request, env: Env): Promise<Response> {
 
   const workspace = await getWorkspaceByTenantId(env, tenantId);
   if (workspace) {
+    const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
     await recordUsageLedgerEvent({
       env,
       workspace,
+      subscription,
       meterName: "runs_created",
       quantity: 1,
       sourceType: "run",
@@ -7544,10 +7878,17 @@ async function createToolProvider(request: Request, env: Env): Promise<Response>
   if (createdToolProvider.status === "active") {
     const workspace = await getWorkspaceByTenantId(env, tenantId);
     if (workspace) {
-      const usage = await getWorkspaceUsageSummary(env, workspace, await getPricingPlanById(env, workspace.plan_id));
+      const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
+      const usage = await getWorkspaceUsageSummary(
+        env,
+        workspace,
+        await getPricingPlanById(env, workspace.plan_id),
+        subscription,
+      );
       await recordUsageLedgerEvent({
         env,
         workspace,
+        subscription,
         meterName: "active_tool_providers",
         quantity: usage.metrics.active_tool_providers.used,
         sourceType: "tool_provider",
@@ -7665,10 +8006,17 @@ async function updateToolProvider(request: Request, env: Env, toolProviderId: st
   if (provider.status !== updatedProvider.status) {
     const workspace = await getWorkspaceByTenantId(env, tenantId);
     if (workspace) {
-      const usage = await getWorkspaceUsageSummary(env, workspace, await getPricingPlanById(env, workspace.plan_id));
+      const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
+      const usage = await getWorkspaceUsageSummary(
+        env,
+        workspace,
+        await getPricingPlanById(env, workspace.plan_id),
+        subscription,
+      );
       await recordUsageLedgerEvent({
         env,
         workspace,
+        subscription,
         meterName: "active_tool_providers",
         quantity: usage.metrics.active_tool_providers.used,
         sourceType: "tool_provider",
@@ -7735,10 +8083,17 @@ async function disableToolProvider(request: Request, env: Env, toolProviderId: s
   if (provider.status !== updatedProvider.status) {
     const workspace = await getWorkspaceByTenantId(env, tenantId);
     if (workspace) {
-      const usage = await getWorkspaceUsageSummary(env, workspace, await getPricingPlanById(env, workspace.plan_id));
+      const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
+      const usage = await getWorkspaceUsageSummary(
+        env,
+        workspace,
+        await getPricingPlanById(env, workspace.plan_id),
+        subscription,
+      );
       await recordUsageLedgerEvent({
         env,
         workspace,
+        subscription,
         meterName: "active_tool_providers",
         quantity: usage.metrics.active_tool_providers.used,
         sourceType: "tool_provider",
@@ -8213,9 +8568,11 @@ async function replayRun(request: Request, env: Env, sourceRunId: string): Promi
 
   const workspace = await getWorkspaceByTenantId(env, tenantId);
   if (workspace) {
+    const subscription = await getWorkspacePlanSubscription(env, workspace.workspace_id);
     await recordUsageLedgerEvent({
       env,
       workspace,
+      subscription,
       meterName: "replays_created",
       quantity: 1,
       sourceType: "run_replay",

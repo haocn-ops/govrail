@@ -34,6 +34,7 @@ test("Admin overview keeps attention action query naming consistent for surface 
   const source = await readSource(adminOverviewPath);
 
   assert.match(source, /searchParams: \{/);
+  assert.match(source, /pathname: targetSurface === "go_live" \? "\/go-live" : "\/verification",/);
   assert.match(source, /source: "admin-attention",/);
   assert.match(source, /surface: targetSurface,/);
   assert.match(source, /attention_workspace: workspace\.slug,/);
@@ -45,6 +46,20 @@ test("Admin overview keeps attention action query naming consistent for surface 
   assert.match(source, /recent_owner_label: options\?\.recentOwnerLabel \?\? null,/);
   assert.match(source, /recent_owner_display_name: options\?\.recentOwnerDisplayName \?\? null,/);
   assert.match(source, /recent_owner_email: options\?\.recentOwnerEmail \?\? null,/);
+  assert.match(source, /targetSurface === "go_live" \? "Open go-live drill" : "Open verification checklist"/);
+  assert.match(source, /pathname: "\/go-live\?surface=go_live"/);
+});
+
+test("Admin overview keeps direct admin-attention go-live queue entry and return cues explicit", async () => {
+  const source = await readSource(adminOverviewPath);
+
+  assert.match(source, /const targetSurface = workspace\.next_action_surface \?\? "verification";/);
+  assert.match(source, /pathname: targetSurface === "go_live" \? "\/go-live" : "\/verification",/);
+  assert.match(source, /surface: targetSurface,/);
+  assert.match(source, /targetSurface === "go_live" \? "Open go-live drill" : "Open verification checklist"/);
+  assert.match(source, /<p className="font-medium">Admin queue focus restored<\/p>/);
+  assert.match(source, /Continue the governance review from the filtered queue/);
+  assert.match(source, /<Link[\s\S]*?>\s*Clear follow-up return\s*<\/Link>/s);
 });
 
 test("Admin overview surfaces contract source and 404/503 fallback guidance in the platform snapshot", async () => {

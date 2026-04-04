@@ -115,9 +115,10 @@ function getContextCard(
     return {
       title: "Admin queue usage follow-up",
       body:
-        "You arrived here from an admin follow-up path. Review usage pressure as supporting evidence, then continue manually into verification, go-live, or settings before returning to the admin queue.",
+        "You arrived here from an admin follow-up path. Use this page to confirm usage pressure, then carry that same context into verification evidence before returning to the admin queue.",
       actions: [
-        { label: "Return to verification", path: "/verification?surface=verification" },
+        { label: "Open playground run", path: "/playground" },
+        { label: "Capture verification evidence", path: "/verification?surface=verification" },
         { label: "Review billing + settings", path: "/settings" },
       ],
       metaLines: metaLines.length > 0 ? metaLines : undefined,
@@ -127,8 +128,9 @@ function getContextCard(
     return {
       title: "Onboarding usage checkpoint",
       body:
-        "Now that the playground run is complete, confirm the invited admins and that the onboarding service account used in the demo exists. Capture the run_id/trace_id so verification notes can cite them before moving to settings or billing follow-up.",
+        "Now that the playground run is complete, confirm the resulting usage signal here, then record run_id/trace_id evidence in verification. Keep this sequence explicit so the first-demo trail stays auditable.",
       actions: [
+        { label: "Back to playground run", path: "/playground" },
         { label: "Capture verification evidence", path: "/verification?surface=verification" },
         { label: "Review billing + features", path: "/settings" },
       ],
@@ -374,6 +376,16 @@ export function WorkspaceUsageDashboard({
   const featureEntries = Object.entries(plan?.features ?? {});
   const enabledFeatures = featureEntries.filter(([, value]) => isEnabledFeature(value));
   const disabledFeatures = featureEntries.filter(([, value]) => !isEnabledFeature(value));
+  const overLimitMetricLabels = overLimitMetrics.map(([metric]) => formatMetricLabel(metric));
+  const usageWindowLabel = usage ? `${formatDate(usage.period_start)} to ${formatDate(usage.period_end)}` : "-";
+  const billingActionHref = billingSummary?.action?.href ?? "/settings?intent=manage-plan";
+  const verificationHref = buildVerificationChecklistHandoffHref({
+    pathname: "/verification?surface=verification",
+    ...handoffHrefArgs,
+  });
+  const artifactsHref = buildVerificationChecklistHandoffHref({ pathname: "/artifacts", ...handoffHrefArgs });
+  const settingsHref = buildVerificationChecklistHandoffHref({ pathname: "/settings", ...handoffHrefArgs });
+  const adminHref = buildVerificationChecklistHandoffHref({ pathname: "/admin", ...handoffHrefArgs });
 
   return (
     <div className="space-y-6">
@@ -395,21 +407,64 @@ export function WorkspaceUsageDashboard({
               href={buildVerificationChecklistHandoffHref({ pathname: "/playground", ...handoffHrefArgs })}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
-              Run a playground demo
+              Step 1: Run in playground
             </Link>
             <Link
               href={buildVerificationChecklistHandoffHref({ pathname: "/verification?surface=verification", ...handoffHrefArgs })}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
-              Capture evidence in verification
+              Step 3: Capture verification evidence
             </Link>
             <Link
               href={buildVerificationChecklistHandoffHref({ pathname: "/api-keys", ...handoffHrefArgs })}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
-              Review API key scopes
+              Optional: Review API key scopes
             </Link>
           </div>
+          <p className="text-xs text-muted">Step 2 happens on this page: confirm the run appears in usage metrics before documenting evidence.</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Evidence relay</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-muted">
+            Once usage confirms the first-run signal, carry the same workspace context into verification, artifacts,
+            and then back into settings or admin review as needed. This relay stays manual so the evidence trail is
+            explicit and reusable during Week 8 readiness review.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={verificationHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Capture verification evidence
+            </Link>
+            <Link
+              href={artifactsHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review artifacts
+            </Link>
+            <Link
+              href={settingsHref}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Review settings posture
+            </Link>
+            <Link
+              href={adminHref}
+              className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
+            >
+              Return to admin overview
+            </Link>
+          </div>
+          <p className="text-xs text-muted">
+            Navigation only: this handoff preserves workspace context, but it does not auto-attach evidence or resolve
+            billing or rollout issues for you.
+          </p>
         </CardContent>
       </Card>
       {contextCard ? (
@@ -449,6 +504,14 @@ export function WorkspaceUsageDashboard({
           <CardTitle>Plan limits</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          <div className="rounded-xl border border-border bg-background px-3 py-2">
+            <p className="text-xs uppercase tracking-wide text-muted">Current usage window</p>
+            <p className="mt-1 text-sm font-semibold text-foreground">{usageWindowLabel}</p>
+            <p className="mt-1 text-xs text-muted">
+              Carry this billing window into verification evidence when documenting usage pressure, upgrade follow-up,
+              or onboarding readiness.
+            </p>
+          </div>
           {planLimitEntries.length === 0 ? (
             <p className="text-muted text-xs">Plan limits are not available in this workspace.</p>
           ) : (
@@ -474,6 +537,27 @@ export function WorkspaceUsageDashboard({
               ))}
             </div>
           )}
+          <p className="text-xs text-muted">
+            {overLimitMetricLabels.length > 0
+              ? `Usage ledger shows ${overLimitMetricLabels.join(", ")} exceeding the plan limit. Capture the evidence, then resolve the gap through Settings or the admin lane.`
+              : "Usage ledger stays within these limits for now; keep monitoring before the next billing cycle."}
+          </p>
+          {overLimitMetricLabels.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={billingActionHref}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Resolve plan limits in settings
+              </Link>
+              <Link
+                href={verificationHref}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                Capture over-limit evidence
+              </Link>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
       <Card>
@@ -522,6 +606,7 @@ export function WorkspaceUsageDashboard({
                 <p className="text-xs text-muted">
                   Plan binding: {billingSummary.plan_display_name ?? "Unassigned"} ({billingSummary.plan_code ?? "-"})
                 </p>
+                <p className="text-xs text-muted">Current billing window: {usageWindowLabel}</p>
                 <p className="text-xs text-muted">
                   Next action: {billingSummary.action ? billingSummary.action.label : "Billing action not available"}
                 </p>

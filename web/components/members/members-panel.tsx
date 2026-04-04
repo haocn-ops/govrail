@@ -14,6 +14,42 @@ function formatJoinedAt(value: string | null): string {
   return new Date(value).toLocaleString();
 }
 
+function getRoleFollowUp(role: string): string {
+  if (role === "viewer" || role === "auditor") {
+    return "Best next lane: verification, usage, and artifacts review.";
+  }
+  if (role === "operator") {
+    return "Best next lane: playground run, usage confirmation, and verification evidence capture.";
+  }
+  if (role === "approver") {
+    return "Best next lane: Week 8 checklist review and go-live drill sign-off.";
+  }
+  if (role === "workspace_admin" || role === "workspace_owner") {
+    return "Best next lane: members, settings, credentials, and overall workspace readiness follow-up.";
+  }
+  return "Best next lane: continue with the workspace surface that matches this member's current responsibility.";
+}
+
+function memberStatusVariant(status: string): "strong" | "default" | "subtle" {
+  if (status === "active") {
+    return "strong";
+  }
+  if (status === "pending" || status === "invited") {
+    return "default";
+  }
+  return "subtle";
+}
+
+function memberStatusSummary(status: string): string {
+  if (status === "active") {
+    return "This membership is live and can continue through the assigned manual lane now.";
+  }
+  if (status === "pending" || status === "invited") {
+    return "This membership still needs manual follow-up such as invite redemption or workspace-context confirmation.";
+  }
+  return "This membership should be treated as historical or manually reviewed before any further workspace follow-up.";
+}
+
 export function MembersPanel({ workspaceSlug }: { workspaceSlug: string }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["workspace-members", workspaceSlug],
@@ -62,6 +98,14 @@ export function MembersPanel({ workspaceSlug }: { workspaceSlug: string }) {
             A viewer keeps verification evidence readable, an operator handles the first run / plan checks, and
             an approver covers the legal gate if you need approvals before going live. Adjust roles later once the
             workspace has real usage or billing evidence.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 text-xs text-muted">
+          <p className="font-medium text-foreground">Status semantics</p>
+          <p className="mt-1">
+            `active` means the person can continue through their assigned lane now. `pending` or `invited` means the
+            self-serve handoff is still incomplete. Any other state should be treated as historical or requiring manual
+            review before the workspace relies on that access again.
           </p>
         </div>
         {contract ? (
@@ -149,10 +193,12 @@ export function MembersPanel({ workspaceSlug }: { workspaceSlug: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="subtle">{member.role}</Badge>
-                <Badge variant={member.status === "active" ? "strong" : "default"}>{member.status}</Badge>
+                <Badge variant={memberStatusVariant(member.status)}>{member.status}</Badge>
               </div>
             </div>
             <p className="mt-2 text-xs text-muted">Joined: {formatJoinedAt(member.joined_at)}</p>
+            <p className="mt-1 text-xs text-muted">{memberStatusSummary(member.status)}</p>
+            <p className="mt-1 text-xs text-muted">{getRoleFollowUp(member.role)}</p>
           </div>
         ))}
       </CardContent>

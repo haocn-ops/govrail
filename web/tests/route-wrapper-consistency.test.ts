@@ -338,7 +338,7 @@ test("run detail routes reuse shared helper for path/query passthrough", async (
   }
 });
 
-test("invitation accept route keeps explicit auth fallback and shared post-route helper semantics", async () => {
+test("invitation accept route requires trusted auth headers and reuses shared post-route helper semantics", async () => {
   const source = await readRouteSource(
     path.resolve(testDir, "../app/api/control-plane/invitations/accept/route.ts"),
   );
@@ -346,28 +346,33 @@ test("invitation accept route keeps explicit auth fallback and shared post-route
   assert.match(source, /import \{ headers \} from "next\/headers";/);
   assert.match(
     source,
+    /import \{ controlPlaneErrorResponse \} from "@\/lib\/control-plane-proxy";/,
+  );
+  assert.match(
+    source,
+    /import \{ resolveTrustedInvitationAcceptAuth \} from "\.\/auth";/,
+  );
+  assert.match(
+    source,
     /import \{\s*proxyAuthenticatedPostRequest\s*\} from "\.\.\/\.\.\/post-route-helpers";/s,
   );
-  assert.match(source, /function getFallbackSubjectId\(\): string/);
-  assert.match(source, /function getFallbackSubjectRoles\(\): string/);
   assert.match(source, /const requestHeaders = await headers\(\);/);
+  assert.match(source, /const auth = resolveTrustedInvitationAcceptAuth\(requestHeaders\);/);
   assert.match(
     source,
-    /requestHeaders\.get\("x-authenticated-subject"\)\s*\?\?\s*requestHeaders\.get\("cf-access-authenticated-user-email"\)\s*\?\?\s*getFallbackSubjectId\(\)/s,
+    /if \(!auth\) \{\s*return controlPlaneErrorResponse\(\{\s*status:\s*401,\s*code:\s*"unauthorized",\s*message:\s*"Invitation acceptance requires an authenticated subject",\s*\}\);\s*\}/s,
   );
   assert.match(
     source,
-    /requestHeaders\.get\("x-authenticated-roles"\)\s*\?\?\s*requestHeaders\.get\("cf-access-authenticated-user-groups"\)\s*\?\?\s*getFallbackSubjectRoles\(\)/s,
-  );
-  assert.match(
-    source,
-    /return proxyAuthenticatedPostRequest\(\{\s*request,\s*path:\s*"\/api\/v1\/saas\/invitations:accept",\s*subjectId,\s*subjectRoles,\s*contentType:\s*"application\/json",\s*\}\)/s,
+    /return proxyAuthenticatedPostRequest\(\{\s*request,\s*path:\s*"\/api\/v1\/saas\/invitations:accept",\s*subjectId:\s*auth\.subjectId,\s*subjectRoles:\s*auth\.subjectRoles,\s*contentType:\s*"application\/json",\s*\}\)/s,
   );
   assert.doesNotMatch(source, /getControlPlaneBaseUrl\(\)/);
   assert.doesNotMatch(source, /controlPlaneBaseMissingResponse\(\)/);
   assert.doesNotMatch(source, /buildAuthenticatedPostHeaders\(\{/);
   assert.doesNotMatch(source, /const body = await request\.text\(\);/);
   assert.doesNotMatch(source, /function getBaseUrl\(\): string/);
+  assert.doesNotMatch(source, /function getFallbackSubjectId\(\): string/);
+  assert.doesNotMatch(source, /function getFallbackSubjectRoles\(\): string/);
   assert.doesNotMatch(source, /await fetch\(/);
 });
 
@@ -460,11 +465,17 @@ test("workspace delivery route keeps fallback GET contract and POST passthrough 
   assert.match(source, /import type \{ ControlPlaneWorkspaceDeliveryTrack \} from "@\/lib\/control-plane-types";/);
   assert.match(source, /import \{ proxyFallbackGet \} from "\.\.\/\.\.\/fallback-route-helpers";/);
   assert.match(source, /import \{ proxyControlPlane \} from "@\/lib\/control-plane-proxy";/);
-  assert.match(source, /function buildFallbackTrack\(workspaceId: string\): ControlPlaneWorkspaceDeliveryTrack/);
+  assert.match(
+    source,
+    /function buildFallbackTrack\(workspaceId: string,\s*upstreamStatus: number\): ControlPlaneWorkspaceDeliveryTrack/,
+  );
   assert.match(source, /return proxyFallbackGet\(\{/);
   assert.match(source, /path:\s*`\/api\/v1\/saas\/workspaces\/\$\{workspaceId\}\/delivery`/);
   assert.match(source, /includeTenant:\s*true/);
-  assert.match(source, /buildFallback:\s*\(\)\s*=>\s*\(\{\s*data:\s*buildFallbackTrack\(workspaceId\),/s);
+  assert.match(
+    source,
+    /buildFallback:\s*\(upstream\)\s*=>\s*\(\{\s*data:\s*buildFallbackTrack\(workspaceId,\s*upstream\.status\),/s,
+  );
   assert.match(
     source,
     /import \{ buildProxyControlPlanePostInit \} from "\.\.\/post-route-helpers";/,

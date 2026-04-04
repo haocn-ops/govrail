@@ -328,7 +328,7 @@ test("Settings panel keeps Stripe-focused billing action messaging and resolve-b
   );
   assert.match(
     source,
-    /This path lands you in settings to resolve past-due or warning statuses\. Finish the billing cleanup before returning to the Week 8 checkpoint or admin readiness focus\./,
+    /This path lands you in settings to resolve past-due or warning statuses\. Finish the billing cleanup and confirm the portal-return or local renewal status before returning to the Week 8 checkpoint or admin readiness focus\./,
   );
   assert.match(
     source,

@@ -79,3 +79,31 @@ test("buildWorkspaceBootstrapProxyInit omits slug/tenant when linking a differen
   assert.equal(headers.get("x-workspace-slug"), null);
   assert.equal(headers.get("x-tenant-id"), null);
 });
+
+test("buildWorkspaceBootstrapProxyInit does not forward legacy x-subject-id without trusted SaaS auth headers", async () => {
+  const body = JSON.stringify({ foo: "bar" });
+  const request = new Request("https://example.com", {
+    method: "POST",
+    body,
+    headers: {
+      "x-subject-id": "spoofed@example.com",
+    },
+  });
+
+  const init = await buildWorkspaceBootstrapProxyInit(request, {
+    workspaceId: "ws_123",
+    currentWorkspace: {
+      workspace_id: "ws_123",
+      slug: "acme",
+      tenant_id: "tenant_123",
+    },
+  });
+  const headers = new Headers(init.headers);
+
+  assert.equal(headers.get("x-authenticated-subject"), null);
+  assert.equal(headers.get("x-authenticated-roles"), null);
+  assert.equal(headers.get("x-workspace-id"), "ws_123");
+  assert.equal(headers.get("x-workspace-slug"), "acme");
+  assert.equal(headers.get("x-tenant-id"), "tenant_123");
+  assert.equal(init.body, body);
+});

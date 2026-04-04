@@ -40,7 +40,7 @@ export default function AdminPage({
       <PageHeader
         eyebrow="Admin"
         title="SaaS admin overview"
-        description="Platform-level snapshot for organizations, workspace growth, plan distribution, and enterprise feature rollout posture."
+        description="Platform-level snapshot for organizations, workspace growth, plan distribution, and enterprise feature rollout posture, with Week 8 readiness focus, attention queue navigation, and return-state governance surfaced."
       />
       <AdminOverviewPanel
         initialSurfaceFilter={normalizedSurface}

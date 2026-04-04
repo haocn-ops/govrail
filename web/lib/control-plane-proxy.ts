@@ -75,6 +75,9 @@ export function buildProxyControlPlaneHeaders(args: {
   includeTenant?: boolean;
 }): Headers {
   const upstreamHeaders = new Headers(args.headers);
+  upstreamHeaders.delete("x-subject-id");
+  upstreamHeaders.delete("x-subject-roles");
+  upstreamHeaders.delete("x-roles");
   if (!upstreamHeaders.get("accept")) {
     upstreamHeaders.set("accept", "application/json");
   }

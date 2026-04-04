@@ -197,6 +197,16 @@ async function main(): Promise<void> {
 
     await verifyWorkspaceApiKeyAuth();
     await verifyWorkspaceApiKeyScopeCoverage();
+    await verifySaasWorkspaceCreateIdempotencyIncludesPlan();
+    await verifyDisabledSaasWorkspaceIsHiddenAndBlocked();
+    await verifyInactiveOrganizationMembershipBlocksWorkspaceAccess();
+    await verifySaasInvitationRespectsSeatLimit();
+    await verifySaasBootstrapRespectsToolProviderPlanLimit();
+    await verifySaasUsagePeriodAndPlanLimitDetailsFollowSubscription();
+    await verifySaasBootstrapPersistsOnboardingState();
+    await verifySaasUserResolutionRequiresAuthIdentityMatch();
+    await verifyDisabledWorkspaceInvitationCannotBeAccepted();
+    await verifySaasUserResolutionDoesNotFallbackByEmail();
 
     const listedToolProviders = await api("/api/v1/tool-providers");
     assert.equal(listedToolProviders.status, 200);
@@ -1496,6 +1506,690 @@ async function api(
 
 async function computeSha256Hex(value: string): Promise<string> {
   return createHash("sha256").update(value).digest("hex");
+}
+
+async function seedSaasUser(args: {
+  userId?: string | undefined;
+  email?: string | undefined;
+  displayName?: string | undefined;
+  authProvider?: string | undefined;
+  authSubject?: string | undefined;
+  status?: "active" | "disabled" | undefined;
+} = {}): Promise<{
+  user_id: string;
+  email: string;
+  auth_subject: string;
+}> {
+  const now = nowIso();
+  const userId = args.userId ?? createId("usr");
+  const email = (args.email ?? `${userId}@example.com`).trim().toLowerCase();
+  const authSubject = args.authSubject ?? email;
+  await env.DB.prepare(
+    `INSERT INTO users (
+        user_id, email, email_normalized, display_name, auth_provider, auth_subject, status,
+        last_login_at, created_at, updated_at
+      ) VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?7)`,
+  )
+    .bind(
+      userId,
+      email,
+      args.displayName ?? "Smoke SaaS User",
+      args.authProvider ?? "header_subject",
+      authSubject,
+      args.status ?? "active",
+      now,
+    )
+    .run();
+
+  return {
+    user_id: userId,
+    email,
+    auth_subject: authSubject,
+  };
+}
+
+async function seedSaasOrganizationOwner(args: {
+  organizationId?: string | undefined;
+  organizationSlug?: string | undefined;
+  organizationDisplayName?: string | undefined;
+  organizationStatus?: "active" | "disabled" | undefined;
+  userEmail?: string | undefined;
+} = {}): Promise<{
+  organization_id: string;
+  user_id: string;
+  subject_id: string;
+  email: string;
+}> {
+  const now = nowIso();
+  const user = await seedSaasUser({
+    email: args.userEmail,
+    displayName: "Smoke SaaS Owner",
+  });
+  const organizationId = args.organizationId ?? createId("org");
+  await env.DB.prepare(
+    `INSERT INTO organizations (
+        organization_id, slug, display_name, status, created_by_user_id, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`,
+  )
+    .bind(
+      organizationId,
+      args.organizationSlug ?? organizationId.replace(/_/g, "-"),
+      args.organizationDisplayName ?? "Smoke SaaS Org",
+      args.organizationStatus ?? "active",
+      user.user_id,
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO organization_memberships (
+        membership_id, organization_id, user_id, role, status, joined_at, invited_by_user_id, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, 'organization_owner', 'active', ?4, ?3, ?4, ?4)`,
+  )
+    .bind(createId("orgm"), organizationId, user.user_id, now)
+    .run();
+
+  return {
+    organization_id: organizationId,
+    user_id: user.user_id,
+    subject_id: user.auth_subject,
+    email: user.email,
+  };
+}
+
+async function seedSaasWorkspaceContext(args: {
+  organizationId?: string | undefined;
+  organizationSlug?: string | undefined;
+  organizationDisplayName?: string | undefined;
+  organizationStatus?: "active" | "disabled" | undefined;
+  userEmail?: string | undefined;
+  workspaceId?: string | undefined;
+  tenantId?: string | undefined;
+  workspaceSlug?: string | undefined;
+  workspaceDisplayName?: string | undefined;
+  workspaceStatus?: "active" | "disabled" | undefined;
+  workspaceRole?:
+    | "workspace_owner"
+    | "workspace_admin"
+    | "operator"
+    | "approver"
+    | "auditor"
+    | "viewer"
+    | undefined;
+  planId?: string | undefined;
+} = {}): Promise<{
+  organization_id: string;
+  user_id: string;
+  subject_id: string;
+  workspace_id: string;
+  tenant_id: string;
+}> {
+  const now = nowIso();
+  const owner = await seedSaasOrganizationOwner({
+    organizationId: args.organizationId,
+    organizationSlug: args.organizationSlug,
+    organizationDisplayName: args.organizationDisplayName,
+    organizationStatus: args.organizationStatus,
+    userEmail: args.userEmail,
+  });
+  const workspaceId = args.workspaceId ?? createId("ws");
+  const tenantId = args.tenantId ?? createId("tenant");
+  await env.DB.prepare(
+    `INSERT INTO workspaces (
+        workspace_id, organization_id, tenant_id, slug, display_name, status, plan_id, data_region,
+        created_by_user_id, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'global', ?8, ?9, ?9)`,
+  )
+    .bind(
+      workspaceId,
+      owner.organization_id,
+      tenantId,
+      args.workspaceSlug ?? workspaceId.replace(/_/g, "-"),
+      args.workspaceDisplayName ?? "Smoke SaaS Workspace",
+      args.workspaceStatus ?? "active",
+      args.planId ?? "plan_free",
+      owner.user_id,
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace_memberships (
+        workspace_membership_id, workspace_id, user_id, role, status, joined_at, invited_by_user_id, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, 'active', ?5, ?3, ?5, ?5)`,
+  )
+    .bind(
+      createId("wsm"),
+      workspaceId,
+      owner.user_id,
+      args.workspaceRole ?? "workspace_owner",
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace_plan_subscriptions (
+        subscription_id, workspace_id, organization_id, plan_id, billing_provider, status,
+        current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, 'manual', 'active', ?5, NULL, 0, ?5, ?5)`,
+  )
+    .bind(createId("sub"), workspaceId, owner.organization_id, args.planId ?? "plan_free", now)
+    .run();
+
+  return {
+    organization_id: owner.organization_id,
+    user_id: owner.user_id,
+    subject_id: owner.subject_id,
+    workspace_id: workspaceId,
+    tenant_id: tenantId,
+  };
+}
+
+async function verifySaasWorkspaceCreateIdempotencyIncludesPlan(): Promise<void> {
+  const owner = await seedSaasOrganizationOwner();
+  const workspaceId = createId("ws");
+  const tenantId = createId("tenant");
+  const createPayload = {
+    workspace_id: workspaceId,
+    organization_id: owner.organization_id,
+    tenant_id: tenantId,
+    slug: workspaceId.replace(/_/g, "-"),
+    display_name: "Smoke Idempotent Workspace",
+    plan_id: "plan_free",
+  };
+
+  const created = await api(
+    "/api/v1/saas/workspaces",
+    {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-saas-create-workspace-1",
+        "x-authenticated-subject": owner.subject_id,
+      },
+      body: JSON.stringify(createPayload),
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(created.status, 201);
+  assert.equal(created.json.data.workspace.workspace_id, workspaceId);
+  assert.equal(created.json.data.plan.plan_id, "plan_free");
+
+  const replayed = await api(
+    "/api/v1/saas/workspaces",
+    {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-saas-create-workspace-1",
+        "x-authenticated-subject": owner.subject_id,
+      },
+      body: JSON.stringify(createPayload),
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(replayed.status, 200);
+  assert.equal(replayed.json.data.workspace.workspace_id, workspaceId);
+  assert.equal(replayed.json.data.plan.plan_id, "plan_free");
+}
+
+async function verifyDisabledSaasWorkspaceIsHiddenAndBlocked(): Promise<void> {
+  const sharedOrganizationId = createId("org");
+  const sharedEmail = `${createId("owner")}@example.com`;
+  const activeWorkspace = await seedSaasWorkspaceContext({
+    organizationId: sharedOrganizationId,
+    userEmail: sharedEmail,
+    workspaceStatus: "active",
+  });
+  const disabledWorkspaceId = createId("ws");
+  const now = nowIso();
+  await env.DB.prepare(
+    `INSERT INTO workspaces (
+        workspace_id, organization_id, tenant_id, slug, display_name, status, plan_id, data_region,
+        created_by_user_id, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, 'Disabled Smoke Workspace', 'disabled', 'plan_free', 'global', ?5, ?6, ?6)`,
+  )
+    .bind(
+      disabledWorkspaceId,
+      sharedOrganizationId,
+      createId("tenant"),
+      disabledWorkspaceId.replace(/_/g, "-"),
+      activeWorkspace.user_id,
+      now,
+    )
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace_memberships (
+        workspace_membership_id, workspace_id, user_id, role, status, joined_at, invited_by_user_id, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, 'workspace_owner', 'active', ?4, ?3, ?4, ?4)`,
+  )
+    .bind(createId("wsm"), disabledWorkspaceId, activeWorkspace.user_id, now)
+    .run();
+
+  const me = await api(
+    "/api/v1/saas/me",
+    {
+      headers: {
+        "x-authenticated-subject": activeWorkspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(me.status, 200);
+  const listedWorkspaceIds = (me.json.data.workspaces as Array<{ workspace_id: string }>).map(
+    (workspace) => workspace.workspace_id,
+  );
+  assert.ok(listedWorkspaceIds.includes(activeWorkspace.workspace_id));
+  assert.ok(!listedWorkspaceIds.includes(disabledWorkspaceId));
+
+  const disabledDetail = await api(
+    `/api/v1/saas/workspaces/${disabledWorkspaceId}`,
+    {
+      headers: {
+        "x-authenticated-subject": activeWorkspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(disabledDetail.status, 403);
+  assert.equal(disabledDetail.json.error.code, "tenant_access_denied");
+}
+
+async function verifyInactiveOrganizationMembershipBlocksWorkspaceAccess(): Promise<void> {
+  const workspace = await seedSaasWorkspaceContext();
+  const disabledAt = nowIso();
+  await env.DB.prepare(
+    `UPDATE organization_memberships
+        SET status = 'disabled',
+            updated_at = ?1
+      WHERE organization_id = ?2
+        AND user_id = ?3`,
+  )
+    .bind(disabledAt, workspace.organization_id, workspace.user_id)
+    .run();
+
+  const me = await api(
+    "/api/v1/saas/me",
+    {
+      headers: {
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(me.status, 200);
+  const listedWorkspaceIds = (me.json.data.workspaces as Array<{ workspace_id: string }>).map(
+    (item) => item.workspace_id,
+  );
+  assert.ok(!listedWorkspaceIds.includes(workspace.workspace_id));
+
+  const detail = await api(
+    `/api/v1/saas/workspaces/${workspace.workspace_id}`,
+    {
+      headers: {
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(detail.status, 403);
+  assert.equal(detail.json.error.code, "tenant_access_denied");
+}
+
+async function verifySaasSubjectEmailSpoofIsRejected(): Promise<void> {
+  const userId = createId("usr");
+  const email = `${createId("spoof")}@example.com`;
+  const timestamp = nowIso();
+  await env.DB.prepare(
+    `INSERT INTO users (
+        user_id, email, email_normalized, display_name, auth_provider, auth_subject, status,
+        last_login_at, created_at, updated_at
+      ) VALUES (?1, ?2, ?2, 'Spoof Target', 'passwordless', ?2, 'active', ?3, ?3, ?3)`,
+  )
+    .bind(userId, email, timestamp)
+    .run();
+
+  const me = await api(
+    "/api/v1/saas/me",
+    {
+      headers: {
+        "x-subject-id": email,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(me.status, 401);
+  assert.equal(me.json.error.code, "unauthorized");
+}
+
+async function verifySaasInvitationRespectsSeatLimit(): Promise<void> {
+  const workspace = await seedSaasWorkspaceContext();
+  const now = nowIso();
+  for (let index = 0; index < 2; index += 1) {
+    const inviteToken = `seat_limit_${index}_${createId("token")}`;
+    await env.DB.prepare(
+      `INSERT INTO workspace_invitations (
+          invitation_id, organization_id, workspace_id, email_normalized, role, token_hash, status,
+          invited_by_user_id, expires_at, accepted_by_user_id, accepted_at, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, 'viewer', ?5, 'pending', ?6, ?7, NULL, NULL, ?8, ?8)`,
+    )
+      .bind(
+        createId("inv"),
+        workspace.organization_id,
+        workspace.workspace_id,
+        `seat-limit-${index}@example.com`,
+        await computeSha256Hex(inviteToken),
+        workspace.user_id,
+        new Date(Date.now() + 60_000).toISOString(),
+        now,
+      )
+      .run();
+  }
+
+  const invite = await api(
+    `/api/v1/saas/workspaces/${workspace.workspace_id}/invitations`,
+    {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-saas-seat-limit-1",
+        "x-authenticated-subject": workspace.subject_id,
+      },
+      body: JSON.stringify({
+        email: "overflow-seat@example.com",
+        role: "viewer",
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(invite.status, 429);
+  assert.equal(invite.json.error.code, "invitation_limit_reached");
+  assert.equal(invite.json.error.details.scope, "member_seats");
+  assert.equal(invite.json.error.details.limit, 3);
+}
+
+async function verifySaasBootstrapRespectsToolProviderPlanLimit(): Promise<void> {
+  const workspace = await seedSaasWorkspaceContext();
+  const now = nowIso();
+  for (let index = 0; index < 2; index += 1) {
+    await env.DB.prepare(
+      `INSERT INTO tool_providers (
+          tool_provider_id, tenant_id, name, provider_type, endpoint_url, auth_ref,
+          visibility_policy_ref, execution_policy_ref, status, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, 'mcp_server', ?4, NULL, NULL, NULL, 'active', ?5, ?5)`,
+    )
+      .bind(
+        `tp_smoke_limit_${index}_${createId("tp")}`,
+        workspace.tenant_id,
+        `Smoke Limit Provider ${index + 1}`,
+        `https://limit-${index + 1}.example.test/mcp`,
+        now,
+      )
+      .run();
+  }
+
+  const bootstrap = await api(
+    `/api/v1/saas/workspaces/${workspace.workspace_id}/bootstrap`,
+    {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-saas-bootstrap-limit-1",
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(bootstrap.status, 429);
+  assert.equal(bootstrap.json.error.code, "plan_limit_exceeded");
+  assert.equal(bootstrap.json.error.details.scope, "active_tool_providers");
+  assert.equal(bootstrap.json.error.details.limit, 3);
+}
+
+async function verifySaasUsagePeriodAndPlanLimitDetailsFollowSubscription(): Promise<void> {
+  const workspace = await seedSaasWorkspaceContext();
+  const periodStart = "2026-04-15T00:00:00.000Z";
+  const periodEnd = "2026-05-15T00:00:00.000Z";
+  const createdAt = "2026-04-20T12:00:00.000Z";
+  await env.DB.prepare(
+    `UPDATE workspace_plan_subscriptions
+        SET current_period_start = ?1,
+            current_period_end = ?2,
+            updated_at = ?3
+      WHERE workspace_id = ?4`,
+  )
+    .bind(periodStart, periodEnd, createdAt, workspace.workspace_id)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO usage_ledger (
+        usage_event_id, workspace_id, organization_id, tenant_id, meter_name, quantity,
+        source_type, source_id, period_start, period_end, metadata_json, created_at
+      ) VALUES (?1, ?2, ?3, ?4, 'runs_created', 1000, 'smoke_seed', ?5, ?6, ?7, '{}', ?8)`,
+  )
+    .bind(
+      createId("usage"),
+      workspace.workspace_id,
+      workspace.organization_id,
+      workspace.tenant_id,
+      "seeded-run-limit",
+      periodStart,
+      periodEnd,
+      createdAt,
+    )
+    .run();
+
+  const blockedRun = await api(
+    "/api/v1/runs",
+    {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-saas-period-limit-1",
+      },
+      body: JSON.stringify({
+        input: {
+          kind: "user_instruction",
+          text: "trigger run limit in custom subscription period",
+        },
+      }),
+    },
+    { overrideTenantHeader: workspace.tenant_id },
+  );
+  assert.equal(blockedRun.status, 429);
+  assert.equal(blockedRun.json.error.code, "plan_limit_exceeded");
+  assert.equal(blockedRun.json.error.details.scope, "runs_created");
+  assert.equal(blockedRun.json.error.details.period_start, periodStart);
+  assert.equal(blockedRun.json.error.details.period_end, periodEnd);
+  assert.equal(blockedRun.json.error.details.plan_id, "plan_free");
+  assert.equal(blockedRun.json.error.details.plan_code, "free");
+  assert.equal(blockedRun.json.error.details.upgrade_href, "/settings?intent=upgrade");
+
+  const workspaceDetail = await api(
+    `/api/v1/saas/workspaces/${workspace.workspace_id}`,
+    {
+      headers: {
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(workspaceDetail.status, 200);
+  assert.equal(workspaceDetail.json.data.usage.period_start, periodStart);
+  assert.equal(workspaceDetail.json.data.usage.period_end, periodEnd);
+  assert.equal(workspaceDetail.json.data.usage.metrics.runs_created.used, 1000);
+}
+
+async function verifySaasBootstrapPersistsOnboardingState(): Promise<void> {
+  const workspace = await seedSaasWorkspaceContext();
+  const bootstrap = await api(
+    `/api/v1/saas/workspaces/${workspace.workspace_id}/bootstrap`,
+    {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-saas-bootstrap-persistence-1",
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(bootstrap.status, 201);
+
+  const persistedState = await env.DB.prepare(
+    `SELECT status, summary_json, last_bootstrapped_at
+       FROM workspace_onboarding_states
+      WHERE workspace_id = ?1`,
+  )
+    .bind(workspace.workspace_id)
+    .first<{ status: string; summary_json: string; last_bootstrapped_at: string | null }>();
+  assert.equal(persistedState?.status, "baseline_ready");
+  assert.equal(typeof persistedState?.last_bootstrapped_at, "string");
+  const persistedSummary = JSON.parse(persistedState?.summary_json ?? "{}") as {
+    providers_created?: number;
+    policies_created?: number;
+  };
+  assert.equal(persistedSummary.providers_created, 2);
+  assert.equal(persistedSummary.policies_created, 3);
+
+  const workspaceDetail = await api(
+    `/api/v1/saas/workspaces/${workspace.workspace_id}`,
+    {
+      headers: {
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(workspaceDetail.status, 200);
+  assert.equal(workspaceDetail.json.data.onboarding.summary.providers_created, 2);
+  assert.equal(workspaceDetail.json.data.onboarding.summary.policies_created, 3);
+  assert.equal(workspaceDetail.json.data.onboarding.checklist.baseline_ready, true);
+}
+
+async function verifySaasUserResolutionRequiresAuthIdentityMatch(): Promise<void> {
+  const user = await seedSaasUser({
+    email: `${createId("email")}@example.com`,
+    authSubject: `subject_${createId("id")}`,
+  });
+
+  const emailFallbackAttempt = await api(
+    "/api/v1/saas/me",
+    {
+      headers: {
+        "x-subject-id": user.email,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(emailFallbackAttempt.status, 401);
+  assert.equal(emailFallbackAttempt.json.error.code, "unauthorized");
+
+  const authIdentityAttempt = await api(
+    "/api/v1/saas/me",
+    {
+      headers: {
+        "x-authenticated-subject": user.auth_subject,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(authIdentityAttempt.status, 200);
+  assert.equal(authIdentityAttempt.json.data.user.user_id, user.user_id);
+}
+
+async function verifyDisabledWorkspaceInvitationCannotBeAccepted(): Promise<void> {
+  const workspace = await seedSaasWorkspaceContext({
+    workspaceStatus: "disabled",
+  });
+  const invitee = await seedSaasUser({
+    displayName: "Smoke Invitee",
+  });
+  const now = nowIso();
+  const inviteToken = `invite_${createId("token")}`;
+  const invitationId = createId("inv");
+  await env.DB.prepare(
+    `INSERT INTO workspace_invitations (
+        invitation_id, organization_id, workspace_id, email_normalized, role, token_hash, status,
+        invited_by_user_id, expires_at, accepted_by_user_id, accepted_at, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, 'operator', ?5, 'pending', ?6, ?7, NULL, NULL, ?8, ?8)`,
+  )
+    .bind(
+      invitationId,
+      workspace.organization_id,
+      workspace.workspace_id,
+      invitee.email,
+      await computeSha256Hex(inviteToken),
+      workspace.user_id,
+      new Date(Date.now() + 60_000).toISOString(),
+      now,
+    )
+    .run();
+
+  const accepted = await api(
+    "/api/v1/saas/invitations:accept",
+    {
+      method: "POST",
+      headers: {
+        "idempotency-key": "smoke-saas-invitation-disabled-1",
+        "x-authenticated-subject": invitee.auth_subject,
+      },
+      body: JSON.stringify({
+        invite_token: inviteToken,
+      }),
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(accepted.status, 409);
+  assert.equal(accepted.json.error.code, "invalid_state_transition");
+}
+
+async function verifySaasWorkspaceRequiresActiveOrganizationMembership(): Promise<void> {
+  const workspace = await seedSaasWorkspaceContext();
+  await env.DB.prepare(
+    `UPDATE organization_memberships
+        SET status = 'disabled',
+            updated_at = ?1
+      WHERE organization_id = ?2 AND user_id = ?3`,
+  )
+    .bind(nowIso(), workspace.organization_id, workspace.user_id)
+    .run();
+
+  const me = await api(
+    "/api/v1/saas/me",
+    {
+      headers: {
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(me.status, 200);
+  const workspaceIds = (me.json.data.workspaces as Array<{ workspace_id: string }>).map((item) => item.workspace_id);
+  assert.ok(!workspaceIds.includes(workspace.workspace_id));
+
+  const detail = await api(
+    `/api/v1/saas/workspaces/${workspace.workspace_id}`,
+    {
+      headers: {
+        "x-authenticated-subject": workspace.subject_id,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(detail.status, 403);
+  assert.equal(detail.json.error.code, "tenant_access_denied");
+}
+
+async function verifySaasUserResolutionDoesNotFallbackByEmail(): Promise<void> {
+  const user = await seedSaasUser({
+    email: "no-fallback@example.com",
+    authSubject: "subject_no_fallback",
+    displayName: "No Fallback User",
+  });
+
+  const me = await api(
+    "/api/v1/saas/me",
+    {
+      headers: {
+        "x-subject-id": user.email,
+      },
+    },
+    { skipTenantHeader: true },
+  );
+  assert.equal(me.status, 401);
+  assert.equal(me.json.error.code, "unauthorized");
 }
 
 async function seedWorkspaceServiceAccount(

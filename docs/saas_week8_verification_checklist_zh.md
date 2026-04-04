@@ -5,7 +5,12 @@
 ## 1. Onboarding 驗證
 
 - [ ] Workspace 建立：使用 `/api/control-plane/workspace` 或 console Onboarding 頁面建立新的 workspace，確認返回含 `organization_id`、`tenant_id`、`plan_id`。
+- [ ] Trusted session checkpoint：從 `/session` 開始驗證目前是 metadata-backed SaaS session，確認 active workspace、reachable workspaces 與 context source 正確後，再進入 onboarding / members / settings / verification / go-live lane；若顯示 fallback 或 local-only context，應先停在 session surface 修正，不要直接繼續寫入證據或調整設定。
 - [ ] 基線啟動：呼叫 `/api/control-plane/workspaces/[workspaceId]/bootstrap`，或透過 Onboarding wizard 補齊 provider/policy 快捷鍵，確認 `baseline_ready` checklist 反映在 workspace state。
+- [ ] 持久化摘要：bootstrap 完成後重新整理 Onboarding 頁，確認 provider / policy 的 `created` 與 `existing` counters 仍來自 workspace onboarding persisted summary，而不是只在單次成功 toast 中可見。
+- [ ] Invitation seat reservation：在 Members 頁建立多個 pending invitations，確認前端提示 pending invitation 也會占用 `member_seats` reservation，且當 seat limit 命中時，create/accept flow 都會給出需要釋放 seat 或升級 plan 的明確 guidance。
+- [ ] Invitation acceptance guard：使用 `/accept-invitation` 驗證 trusted SaaS session 才能兌換 invite token；若 workspace / organization 已停用、invite 已過期或 revoked，頁面應回到明確的 `invalid_state_transition` guidance，而不是 generic failure。
+- [ ] Launchpad continuity：從 `/` 的 workspace launch hub 或 onboarding lane 進入 `session -> members -> playground -> usage -> verification -> go-live` 時，確認當前導流仍是 navigation-only，且 `verification/go-live` 維持 explicit `surface` query；首頁 dashboard 現在也應保留 `source` / `week8_focus` / `attention_workspace` / `attention_organization` / `delivery_context` / recent metadata 的 shared handoff continuity，不再把這段入口漏成匿名跳轉。
 - [ ] API key/service account：在 workspace 設定頁新增 service account + API key，並確認 `usage`/`members` 數據與 onboarding checklist 同步更新。
 - [ ] Demo run：在 console 中開啟 Playground 或 Run Flow，觸發一個簡單 run，確認 `run`、`artifacts`、`audit` tables 有紀錄，且 `workspace` 的 `latest_demo_run` 更新。
 
@@ -14,13 +19,22 @@
 - [ ] Plan binding：確認工作區與 plan 的綁定，透過 `/api/control-plane/workspace`、`workspace/billing` 或 `settings` 頁觀察 `plan_id`、`billing_summary`、`subscription` 狀態。
 - [ ] 升級路徑：使用 `billing_summary.action.href`、`/settings?intent=upgrade` 或 mock checkout，驗證 `pricing_plans.features_json` 影響 `audit_export`、`sso`、`dedicated_environment` gating。
 - [ ] 開啟/關閉 billing portal：在有 Stripe 或 mock provider 的 workspace 上呼叫 `workspace/billing/portal-sessions`、`/billing/subscription/cancel`，確認 Web UI 上有提示與 `billing_providers` 描述一致。
+- [ ] Self-serve honesty：在 Settings 驗證 `manage-plan` / `resolve-billing` / `upgrade` lane 的文案都明確表明這是 self-serve billing follow-up、portal-return status 與 evidence handoff，不應聲稱 product 會替你聯繫 support、代為修復訂閱，或自動完成升級/回滾。
 - [ ] Usage 總覽：使用 `/usage` 或 Workspace Usage Dashboard，確認 `metrics` 中 runs、storage、tool providers 數據與實際操作相符。
+- [ ] Period-aware limits：當 usage 達到 plan limit 時，確認錯誤或 dashboard evidence 同步展示 `period_start`、`period_end`、`remaining`、`plan_id` / `plan_code` 與 `upgrade_href`，避免把 subscription 週期誤看成自然月。
+- [ ] Current usage window：在 `/usage` 確認頁面會顯式展示目前的 usage window，並在 over-limit 時保留回到 settings / upgrade lane 的 follow-up CTA，方便把 period boundary 帶入 verification evidence。
 
 ## 3. Run Flow 驗證
 
 - [ ] Run 建立：從 console Run 頁啟動以 `agent` 為 entry 的 run，確認 `run.status` 走 complete，且 `audit_events` 與 `artifacts` 產生。
 - [ ] Billing 觸發：讓 run 造成 usage pressure（例如增長 `runs_created`）並透過 Usage Dashboard 檢查警示/over-limit badge 是否出現。
 - [ ] Admin Console 連結：確認 `/admin` 頁的驗證卡片已列出 `onboarding`、`usage`、`settings`、`playground` 連結，並確保 link 可打開頁面。
+
+## 3.1 Session / Workspace Context 驗證
+
+- [ ] Trusted subject only：從 console 或 `/api/workspace-context` 驗證 metadata-backed session 只接受 `x-authenticated-subject` 或 `cf-access-authenticated-user-email`；`x-subject-id` 不應再被視為可信 SaaS 身份。
+- [ ] Fallback honesty：當沒有可信 subject 或 control plane metadata 不可用時，確認 UI 顯示 `env-fallback` / `preview-fallback` 的 warning，而不是假裝仍是 live SaaS metadata session。
+- [ ] Workspace visibility：停用 organization membership 或停用 workspace 後，確認該 workspace 不再出現在 session workspace list，也不能再經 detail surface 打開。
 
 ## 4. Evidence Capture
 
@@ -30,6 +44,31 @@
 
 完成以上項目即可視 Week 8 核心驗證需求達成，之後可以再延伸 mock go-live 與 impersonation 等進階場景。
 
+建議搭配以下命令做最小驗收：
+
+- `npm run smoke`
+- `cd web && npm run check`
+- `cd web && node --import tsx --test lib/__tests__/control-plane-service.test.ts`
+- `cd web && node --import tsx --test tests/page-level/accept-invitation-guardrails.page.test.ts tests/page-level/usage-period-evidence-contract.page.test.ts`
+- `cd web && node --import tsx --test tests/page-level/session-access-checkpoint.page.test.ts tests/page-level/launchpad-session-guidance.page.test.ts tests/page-level/settings-self-serve-lane.page.test.ts`
+- `cd web && node --import tsx --test app/api/control-plane/invitations/accept/__tests__/route.test.ts tests/route-wrapper-consistency.test.ts`
+- `npm run web:test:browser:smoke`
+
+目前 browser smoke suite 已真實覆蓋兩條最小鏈路：
+
+- `launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin`，並顯式保留 `surface=verification`、`surface=go_live`，以及 `/admin` 上的 `readiness_returned=1` return-state banner。
+- `admin -> verification -> admin` 與 `admin -> verification -> go-live -> admin` 的 admin-attention 分支中，前者會驗證 `Open verification checklist`、workspace surface 上的 `Return to admin queue`，以及 `/admin` 的 `Admin queue focus restored`；後者則在此基礎上再補 `Continue to go-live drill` 與 go-live surface 上的相同 queue-return continuity。
+- `admin recent delivery activity -> verification -> admin` 與 `admin recent delivery activity -> verification -> go-live -> admin` 分支，前者會顯式保留 `delivery_context=recent_activity`，並驗證 workspace surface 上的 recent-activity context copy 與返回 `/admin` 後的 queue-return continuity；後者則在此基礎上再補 `Continue to go-live drill` 與 go-live surface 上的相同 recent-context continuity。
+- `admin organization focus -> verification -> admin` 分支，會顯式保留 `attention_organization`，並驗證 Governance focus 的 Organization chip、`Focused organization` cue、queue-return banner，以及 `Clear all focus` 回到 broader admin 視角的 continuity。
+- `admin organization + workspace + return focus -> per-chip clear` 分支，會驗證 `Workspace`、`Follow-up return`、`Organization` 三個 chip 的 `Clear` 會逐層放寬治理視角，而不會一次把較高層 focus 一起丟掉。
+- `admin readiness baseline -> onboarding -> admin` 分支，會驗證 `week8_focus=baseline` 的 Governance focus、`Drill-down active: Baseline gaps`、`Open onboarding flow`、`Finish onboarding`、workspace surface 上的 `Return to admin readiness view`，以及返回 `/admin` 後的 `Returned from Week 8 readiness` / `Clear readiness focus`。
+- `admin readiness baseline -> clear readiness focus -> credentials toggle -> clear` 分支，會只在 `/admin` 內驗證 `Clear readiness focus` 與 `Credentials ready` 的 toggle 只增減 `week8_focus`，不會把 `attention_organization` / `attention_workspace` 這類較高層 governance focus 一起清掉。
+- `admin readiness billing_warning -> settings -> admin` 與 `admin readiness demo_run -> verification -> admin` 分支，會驗證 readiness summary primary action 能把 `week8_focus`、workspace/organization context 與 `Return to admin readiness view` 帶到 target surface，並在返回 `/admin` 後恢復 readiness banner。
+- `admin readiness go_live_ready -> go-live -> admin` 與 `admin readiness demo_run -> verification -> go-live -> admin` 分支，會驗證 readiness 線進入 `go-live` 後仍保留 `source=admin-readiness`、`week8_focus` 與 return banner continuity。
+- `admin readiness billing_warning -> settings -> verification -> admin` 與 `admin readiness billing_warning -> settings -> go-live -> admin` 分支，會驗證 settings 內的 `Capture verification evidence` / `Rehearse go-live readiness` CTA 仍保留 admin-readiness continuity。
+
+但它們仍只是最小真實導航與 continuity 驗證，不代表 verification/go-live/admin 的完整 browser e2e 已落地。下一小段轉到 `go_live_ready` / `demo_run` 的更多 workspace-level readiness action variants。
+
 ## 5. 持久化交付追蹤與證據手動回填
 
 - [ ] 開啟 `/verification` 或 `/go-live` 頁面右側的 delivery tracking panel，填寫此次驗證與 mock go-live 演練的 `status`、負責人、筆記與證據連結。
@@ -38,6 +77,7 @@
 - [ ] admin console 會聚合來自 delivery tracking 的 pending / in_progress 計數和最近更新 workspace，讓 platform_admin 針對還沒準備好、或剛更新但未驗證完的 workspace 採取行動。
 - [ ] 從 admin attention queue “Open verification” 或 “Open go-live” 進入 workspace 時，確認目標頁面 Banner 顯示 `source=admin-attention` 的來自 queue 的上下文提醒，提醒你正在跟進這個可跟進 workspace（這只是一條導航註記，仍要在 workspace surface 上手動完成驗證）。
 - [ ] 注意 handoff 卡片中的 “Return to admin queue” 動作會帶回 `/admin?queue_surface=...&attention_workspace=...&queue_returned=1`，讓 governance 視圖保留原本的 surface 與 workspace 聚焦；這仍然只是 navigation context，不是 impersonation、support 或自動 remediation。
+- [ ] 注意 readiness handoff 中的 “Return to admin readiness view” 也應保留 `week8_focus`、workspace / organization context 與 recent metadata；這仍是治理導流，不代表任何 verification 或 go-live follow-up 已被自動處理。
 - [ ] 在 admin overview 的 `Recent delivery activity` 卡片中，確認你可以用 `attention_workspace` / `surface`（可選 `attention_organization`）contract 直接跳回該 workspace 的 `/verification` 或 `/go-live` surface，這仍然是 navigation-only 的治理視圖。
 - [ ] admin overview 的 action queue 現在預設顯示幾筆緊急 workspace 並標示「Show more」來在相同 snapshot 內展開更多項目；這仍然是 navigation-only 的 governance 視圖，不會自動化任何 support 或 impersonation 行為。新增 focus-state control bar 會把 surface、organization、workspace 與 returned follow-up 狀態用 chip 呈現，每個 chip 都顯示 filter 標籤、當前值，並附有該層級的「Clear」連結（若提供），同時在任一 focus 有值時也會列出「Clear all focus」的 action，讓 platform_admin 可以逐層清除 focus 或直接回到 `/admin` 的 broader governance snapshot；所有操作都只影響導航線索，不進行實際 impersonation 或 automation。
 - [ ] admin console 現在還會展示 Week 8 readiness summary 卡片，平台層可以直接看到 onboarding baseline、credentials、demo run、billing warning 與 mock go-live-ready 這 5 個指標的總數，讓 governance 團隊瞭解整體 fleet 的 readiness gate 進度。選取任一指標會把 Week 8 readiness follow-up 列表過濾到貢獻該數字的工作區，並可直接跳到 onboarding、settings、verification 或 go-live surface 追蹤後續狀態；目標 surface 會檢查 `source=admin-readiness` / `week8_focus` / `attention_workspace`（可選 `attention_organization`），提示當前 governance focus 並提供「Return to admin readiness view」的治理鏈路，讓 `/admin` 可以持續保留該 focus；所有 drill-down 均為 navigation cues，沒有 impersonation 或 support automation。

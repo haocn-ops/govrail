@@ -147,6 +147,30 @@ test("Settings panel keeps readiness/attention/onboarding cards aligned with ver
   assert.match(source, /<Link\s+href=\{goLiveHref\}[\s\S]*?>\s*Continue with go-live drill prep\s*<\/Link>/s);
 });
 
+test("Settings panel keeps enterprise evidence continuity navigation-only with explicit verification surface and Week 8 wording", async () => {
+  const source = await readSource(settingsPanelPath);
+
+  assert.match(
+    source,
+    /const verificationHref = buildSettingsHref\(\{ pathname: "\/verification\?surface=verification", \.\.\.handoffHrefArgs \}\);/,
+  );
+  assert.match(source, /const governanceClosureCard = \{/);
+  assert.match(source, /title: "Billing and readiness closure lane"/);
+  assert.match(
+    source,
+    /governanceClosureCard = \{[\s\S]*?\{ label: "Capture verification evidence", href: verificationHref \}[\s\S]*?footnote:\s*"Navigation only: these links preserve governance context across settings, verification, go-live, and admin readiness without automation, support tooling, or impersonation\."[\s\S]*?\};/s,
+  );
+  assert.match(source, /const usagePressureCard = \{/);
+  assert.match(
+    source,
+    /Use this lane to compare plan limits with current usage before limits block a first demo, a provider expansion, or later Week 8 follow-up\./,
+  );
+  assert.match(
+    source,
+    /usagePressureCard = \{[\s\S]*?\{ label: "Capture verification evidence", href: verificationHref \}[\s\S]*?footnote:\s*"This lane is still navigation-only: compare usage against plan limits, decide whether billing action is needed, then keep the same workspace evidence path through verification and back to admin\."[\s\S]*?\};/s,
+  );
+});
+
 test("Settings panel keeps intent and billing follow-up cards coupled to source-specific handoff routes", async () => {
   const source = await readSource(settingsPanelPath);
 

@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   PlaySquare,
   Settings,
+  ShieldCheck,
   Sparkles,
   TerminalSquare,
   Users
@@ -37,6 +38,12 @@ export const navigationItems: NavigationItem[] = [
     href: "/onboarding",
     icon: Sparkles,
     description: "Create workspace, bootstrap baseline, and meet first-run guidance"
+  },
+  {
+    title: "Session",
+    href: "/session",
+    icon: ShieldCheck,
+    description: "Current SaaS identity, workspace context, and accessible workspaces"
   },
   {
     title: "Verification",

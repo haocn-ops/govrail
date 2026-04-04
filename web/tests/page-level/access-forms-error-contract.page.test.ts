@@ -22,8 +22,11 @@ test("Service account form keeps structured error copy and success reset contrac
 test("Invitation form keeps invitation limit copy and success reset contract", async () => {
   const source = await readFile(invitationFormPath, "utf8");
 
+  assert.match(source, /function describeInvitationCreateError/);
   assert.match(source, /ControlPlaneRequestError/);
-  assert.match(source, /Invitation limit reached\. Disable an existing invite or upgrade the plan\./);
+  assert.match(source, /Invitation seat limit reached\. Pending invitations reserve seats too, so disable an existing invite, remove inactive access, or upgrade the plan via \$\{upgradeHref\}\./);
+  assert.match(source, /Invitations are unavailable until the workspace and organization return to an active state\./);
+  assert.match(source, /setFormError\(describeInvitationCreateError\(error\)\);/);
   assert.match(source, /setRevealedToken\(result\.invite_token\);/);
   assert.match(source, /setEmail\(""\);/);
   assert.match(source, /setRole\("viewer"\);/);

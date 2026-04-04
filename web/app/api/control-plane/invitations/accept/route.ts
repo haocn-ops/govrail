@@ -1,40 +1,26 @@
 import { headers } from "next/headers";
+import { controlPlaneErrorResponse } from "@/lib/control-plane-proxy";
+import { resolveTrustedInvitationAcceptAuth } from "./auth";
 import { proxyAuthenticatedPostRequest } from "../../post-route-helpers";
 
 export const dynamic = "force-dynamic";
 
-function getFallbackSubjectId(): string {
-  return (
-    process.env.CONTROL_PLANE_SUBJECT_ID ??
-    process.env.NEXT_PUBLIC_CONTROL_PLANE_SUBJECT_ID ??
-    "codex@local"
-  );
-}
-
-function getFallbackSubjectRoles(): string {
-  return (
-    process.env.CONTROL_PLANE_SUBJECT_ROLES ??
-    process.env.NEXT_PUBLIC_CONTROL_PLANE_SUBJECT_ROLES ??
-    "platform_admin"
-  );
-}
-
 export async function POST(request: Request) {
   const requestHeaders = await headers();
-  const subjectId =
-    requestHeaders.get("x-authenticated-subject") ??
-    requestHeaders.get("cf-access-authenticated-user-email") ??
-    getFallbackSubjectId();
-  const subjectRoles =
-    requestHeaders.get("x-authenticated-roles") ??
-    requestHeaders.get("cf-access-authenticated-user-groups") ??
-    getFallbackSubjectRoles();
+  const auth = resolveTrustedInvitationAcceptAuth(requestHeaders);
+  if (!auth) {
+    return controlPlaneErrorResponse({
+      status: 401,
+      code: "unauthorized",
+      message: "Invitation acceptance requires an authenticated subject",
+    });
+  }
 
   return proxyAuthenticatedPostRequest({
     request,
     path: "/api/v1/saas/invitations:accept",
-    subjectId,
-    subjectRoles,
+    subjectId: auth.subjectId,
+    subjectRoles: auth.subjectRoles,
     contentType: "application/json",
   });
 }

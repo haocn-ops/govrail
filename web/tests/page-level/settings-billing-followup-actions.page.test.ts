@@ -40,7 +40,7 @@ test("settings intent cards keep follow-up links mapped to evidence surfaces", a
   );
   assert.match(
     source,
-    /"Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean\.",/,
+    /"Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane\.",/,
   );
 });
 
@@ -61,7 +61,7 @@ test("billing follow-up card keeps verification plus go-live targets paired", as
   );
   assert.match(
     source,
-    /footnote:\s*"These navigation cues keep checkout and audit evidence linked to the same workspace; they do not automate or impersonate any role\."/,
+    /footnote:\s*"These navigation cues keep checkout, portal, and audit evidence linked to the same workspace timeline; they do not open support workflows, automate remediation, or impersonate any role\."/,
   );
 });
 
@@ -70,7 +70,7 @@ test("billing follow-up body text keeps verification and go-live evidence signal
 
   assert.match(
     source,
-    /billingFollowUpCard = showBillingFollowUpCard\s*\?\s*\{\s*title:[\s\S]*?body:\s*normalizedSource === "onboarding"\s*\?\s*"Once the billing action \(upgrade, checkout, or portal return\) is ready, use this panel to capture notes and evidence before you navigate back to verification, usage, or the go-live drill\."\s*:\s*"Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lean\."\s*[\s\S]*?footnote:/s,
+    /billingFollowUpCard = showBillingFollowUpCard\s*\?\s*\{\s*title:[\s\S]*?body:\s*normalizedSource === "onboarding"\s*\?\s*"Once the billing action \(upgrade, checkout, or portal return\) is ready, use this panel to capture notes and evidence before you navigate back to verification, usage, or the go-live drill\."\s*:\s*"Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane\."\s*[\s\S]*?footnote:/s,
   );
 });
 

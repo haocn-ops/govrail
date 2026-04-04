@@ -377,6 +377,12 @@ export type PlanLimitState = {
   scope: string;
   used: number | null;
   limit: number | null;
+  remaining: number | null;
+  planId: string | null;
+  planCode: string | null;
+  upgradeHref: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   message: string;
 } | null;
 
@@ -393,6 +399,12 @@ function parsePlanLimitError(payload: ToolProviderApiErrorPayload): PlanLimitSta
     scope: toStringValue(details.scope) ?? "workspace_limit",
     used: toNumberValue(details.used),
     limit: toNumberValue(details.limit),
+    remaining: toNumberValue(details.remaining),
+    planId: toStringValue(details.plan_id),
+    planCode: toStringValue(details.plan_code),
+    upgradeHref: toStringValue(details.upgrade_href),
+    periodStart: toStringValue(details.period_start),
+    periodEnd: toStringValue(details.period_end),
     message: payload.error.message ?? "Workspace reached the current plan limit.",
   };
 }

@@ -29,6 +29,7 @@
     "web:test:contract": "npm --prefix web run test:contract",
     "web:test:page": "npm --prefix web run test:page",
     "web:test:e2e": "npm --prefix web run test:e2e",
+    "web:test:browser:smoke": "npm --prefix web run test:browser:smoke",
     "types": "wrangler types"
   },
   "devDependencies": {

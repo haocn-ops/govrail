@@ -27,6 +27,19 @@ export type AdminReturnQueryArgs = {
   recentOwnerEmail?: string | null;
 };
 
+export type VerificationChecklistHandoffArgs = {
+  pathname: string;
+  source?: string | null;
+  week8Focus?: string | null;
+  attentionWorkspace?: string | null;
+  attentionOrganization?: string | null;
+  deliveryContext?: string | null;
+  recentTrackKey?: string | null;
+  recentUpdateKind?: string | null;
+  evidenceCount?: number | null;
+  recentOwnerLabel?: string | null;
+};
+
 export function applyHandoffQuery(searchParams: URLSearchParams, args: HandoffQueryArgs): void {
   if (args.source) {
     searchParams.set("source", args.source);
@@ -125,4 +138,58 @@ export function buildAdminReturnHref(pathname: string, args: AdminReturnQueryArg
   applyAdminReturnQuery(searchParams, args);
   const query = searchParams.toString();
   return query ? `${basePath}?${query}` : basePath;
+}
+
+export function resolveAdminQueueSurface(value?: string | null): "verification" | "go_live" | null {
+  if (value === "verification") {
+    return "verification";
+  }
+  if (value === "go_live" || value === "go-live") {
+    return "go_live";
+  }
+  return null;
+}
+
+export function buildVerificationChecklistHandoffHref(args: VerificationChecklistHandoffArgs): string {
+  const {
+    pathname,
+    source,
+    week8Focus,
+    attentionWorkspace,
+    attentionOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount,
+    recentOwnerLabel,
+  } = args;
+
+  if (source !== "admin-readiness" && source !== "admin-attention" && source !== "onboarding") {
+    return pathname;
+  }
+
+  const normalizedRecentUpdateKind =
+    recentUpdateKind === "verification" ||
+    recentUpdateKind === "go_live" ||
+    recentUpdateKind === "verification_completed" ||
+    recentUpdateKind === "go_live_completed" ||
+    recentUpdateKind === "evidence_only"
+      ? recentUpdateKind
+      : null;
+
+  return buildHandoffHref(
+    pathname,
+    {
+      source,
+      week8Focus,
+      attentionWorkspace,
+      attentionOrganization,
+      deliveryContext: deliveryContext === "recent_activity" ? deliveryContext : null,
+      recentTrackKey: resolveAdminQueueSurface(recentTrackKey),
+      recentUpdateKind: normalizedRecentUpdateKind,
+      evidenceCount,
+      recentOwnerLabel,
+    },
+    { preserveExistingQuery: true },
+  );
 }
