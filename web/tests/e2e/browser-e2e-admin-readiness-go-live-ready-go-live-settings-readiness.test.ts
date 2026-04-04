@@ -23,7 +23,10 @@ test("browser readiness go-live-ready go-live->settings smoke keeps continuity e
   assert.match(browserSmokeSpec, /surface=go_live/);
   assert.match(browserSmokeSpec, /source=admin-readiness/);
   assert.match(browserSmokeSpec, /week8_focus=go_live_ready/);
+  assert.match(browserSmokeSpec, /attention_workspace=preview/);
+  assert.match(browserSmokeSpec, /attention_organization=org_preview/);
   assert.match(browserSmokeSpec, /Workspace configuration/);
   assert.match(browserSmokeSpec, /Return to admin readiness view/);
+  assert.match(browserSmokeSpec, /readiness_returned=1/);
   assert.match(browserSmokeSpec, /Returned from Week 8 readiness/);
 });
