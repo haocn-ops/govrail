@@ -347,11 +347,9 @@ export function WorkspaceUsageDashboard({
       evidence: evidenceCount ?? normalizeEvidenceCount(evidenceCount),
       ownerLabel: recentOwnerLabel,
     }),
-    onboardingLines: [
-      latestDemoRunHint?.status_label,
-      latestDemoRunHint?.suggested_action,
-      deliveryGuidance?.summary,
-    ],
+    onboardingLines: [latestDemoRunHint?.status_label, latestDemoRunHint?.suggested_action, deliveryGuidance?.summary].filter(
+      (line): line is string => typeof line === "string" && line.trim().length > 0,
+    ),
   });
   const firstRunCallout = getFirstRunCallout({ onboardingState });
   const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {

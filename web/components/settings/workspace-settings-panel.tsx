@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type {
   ControlPlaneAdminDeliveryUpdateKind,
+  ControlPlaneContractIssue,
   ControlPlaneWorkspaceDedicatedEnvironmentSaveRequest,
   ControlPlaneWorkspaceSsoSaveRequest,
 } from "@/lib/control-plane-types";
@@ -181,13 +182,25 @@ function contractSourceBadgeVariant(source?: ContractMetaSource | null): "strong
   if (source === "live") {
     return "strong";
   }
-  if (source === "fallback_error") {
+  if (source === "fallback_control_plane_unavailable" || source === "fallback_error") {
     return "default";
   }
   return "subtle";
 }
 
-function contractSourceLabel(source?: ContractMetaSource | null): string {
+type ContractMetaIssue = ControlPlaneContractIssue | null;
+
+function fallbackStatusLabel(issue?: ContractMetaIssue): string | null {
+  if (issue?.status === 404) {
+    return "route unavailable";
+  }
+  if (issue?.status === 503) {
+    return "control plane unavailable";
+  }
+  return null;
+}
+
+function contractSourceLabel(source?: ContractMetaSource | null, issue?: ContractMetaIssue): string {
   if (source === "live") {
     return "Live contract";
   }
@@ -198,22 +211,34 @@ function contractSourceLabel(source?: ContractMetaSource | null): string {
     return "Fallback: control plane unavailable";
   }
   if (source === "fallback_error") {
+    const fallbackLabel = fallbackStatusLabel(issue);
+    if (fallbackLabel) {
+      return `Fallback: ${fallbackLabel}`;
+    }
     return "Fallback: request error";
   }
   return "Contract source unknown";
 }
 
-function contractSourceDescription(source?: ContractMetaSource | null): string {
+function contractSourceDescription(source?: ContractMetaSource | null, issue?: ContractMetaIssue): string {
   if (source === "live") {
     return "Signals are loaded from live control-plane contract responses.";
   }
   if (source === "fallback_feature_gate") {
-    return "Feature is currently plan-gated. UI shows fallback guidance until entitlement changes.";
+    return issue?.status === 409
+      ? "Feature is currently plan-gated. UI shows fallback guidance until entitlement changes."
+      : "Feature is gated, so the UI shows fallback guidance until entitlement changes.";
   }
   if (source === "fallback_control_plane_unavailable") {
     return "Control plane is unavailable; readiness is currently fallback-derived.";
   }
   if (source === "fallback_error") {
+    if (issue?.status === 404) {
+      return "Readiness load returned 404, so fallback values are shown until the live route is available.";
+    }
+    if (issue?.status === 503) {
+      return "Readiness load returned 503, so fallback values are shown until the control plane recovers.";
+    }
     return "Readiness load failed; showing fallback values for continuity.";
   }
   return "Contract source information is unavailable.";
@@ -874,6 +899,16 @@ export function WorkspaceSettingsPanel({
     (!auditExportEnabled ? "Audit export is not available on the current plan." : null);
   const auditContractIssueCode =
     auditExport.contractIssueCode ?? (!auditExportEnabled ? "workspace_feature_unavailable" : null);
+  const auditContractIssue: ControlPlaneContractIssue | null =
+    auditContractIssueCode && auditContractIssueMessage
+      ? {
+          code: auditContractIssueCode,
+          message: auditContractIssueMessage,
+          status: auditContractSource === "fallback_feature_gate" ? 409 : null,
+          retryable: false,
+          details: {},
+        }
+      : null;
   const ssoEnabledByPlan = plan?.features?.sso === true;
   const ssoFeatureEnabled = ssoReadiness?.feature_enabled ?? ssoEnabledByPlan;
   const ssoUpgradeHref =
@@ -1827,11 +1862,11 @@ export function WorkspaceSettingsPanel({
           <div className="rounded-2xl border border-border bg-background p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={contractSourceBadgeVariant(ssoContractSource)}>
-                {contractSourceLabel(ssoContractSource)}
+                {contractSourceLabel(ssoContractSource, ssoContractIssue)}
               </Badge>
               {ssoContractIssue?.code ? <Badge variant="subtle">code: {ssoContractIssue.code}</Badge> : null}
             </div>
-            <p className="mt-2 text-xs text-muted">{contractSourceDescription(ssoContractSource)}</p>
+            <p className="mt-2 text-xs text-muted">{contractSourceDescription(ssoContractSource, ssoContractIssue)}</p>
             {ssoContractIssue?.message ? (
               <p className="mt-1 text-xs text-muted">Issue: {ssoContractIssue.message}</p>
             ) : null}
@@ -2105,13 +2140,15 @@ export function WorkspaceSettingsPanel({
           <div className="rounded-2xl border border-border bg-background p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={contractSourceBadgeVariant(dedicatedContractSource)}>
-                {contractSourceLabel(dedicatedContractSource)}
+                {contractSourceLabel(dedicatedContractSource, dedicatedContractIssue)}
               </Badge>
               {dedicatedContractIssue?.code ? (
                 <Badge variant="subtle">code: {dedicatedContractIssue.code}</Badge>
               ) : null}
             </div>
-            <p className="mt-2 text-xs text-muted">{contractSourceDescription(dedicatedContractSource)}</p>
+            <p className="mt-2 text-xs text-muted">
+              {contractSourceDescription(dedicatedContractSource, dedicatedContractIssue)}
+            </p>
             {dedicatedContractIssue?.message ? (
               <p className="mt-1 text-xs text-muted">Issue: {dedicatedContractIssue.message}</p>
             ) : null}
@@ -2633,15 +2670,17 @@ export function WorkspaceSettingsPanel({
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant={contractSourceBadgeVariant(auditContractSource)}>
-                {contractSourceLabel(auditContractSource)}
+                {contractSourceLabel(auditContractSource, auditContractIssue)}
               </Badge>
               {auditContractIssueCode ? (
                 <Badge variant="subtle">code: {auditContractIssueCode}</Badge>
               ) : null}
             </div>
-            <p className="mt-2 text-xs text-muted">{contractSourceDescription(auditContractSource)}</p>
-            {auditContractIssueMessage ? (
-              <p className="mt-1 text-xs text-muted">Issue: {auditContractIssueMessage}</p>
+            <p className="mt-2 text-xs text-muted">
+              {contractSourceDescription(auditContractSource, auditContractIssue)}
+            </p>
+            {auditContractIssue?.message ? (
+              <p className="mt-1 text-xs text-muted">Issue: {auditContractIssue.message}</p>
             ) : null}
             <p className="mt-2 text-xs text-muted">
               Date filters are applied as UTC day boundaries in this slice.

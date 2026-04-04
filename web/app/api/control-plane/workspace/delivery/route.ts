@@ -16,7 +16,7 @@ function buildDefaultSection(timestamp: string): ControlPlaneWorkspaceDeliveryTr
   };
 }
 
-function buildFallbackTrack(workspaceId: string): ControlPlaneWorkspaceDeliveryTrack {
+function buildFallbackTrack(workspaceId: string, upstreamStatus: number): ControlPlaneWorkspaceDeliveryTrack {
   const now = new Date().toISOString();
   return {
     workspace_id: workspaceId,
@@ -28,7 +28,7 @@ function buildFallbackTrack(workspaceId: string): ControlPlaneWorkspaceDeliveryT
       issue: {
         code: "workspace_delivery_preview_fallback",
         message: "Delivery track is showing preview fallback data until the live control-plane response is available.",
-        status: null,
+        status: upstreamStatus,
         retryable: true,
         details: {
           path: `/api/v1/saas/workspaces/${workspaceId}/delivery`,
@@ -45,7 +45,7 @@ export async function GET() {
     path: `/api/v1/saas/workspaces/${workspaceId}/delivery`,
     includeTenant: true,
     buildFallback: (upstream) => ({
-      data: buildFallbackTrack(workspaceId),
+      data: buildFallbackTrack(workspaceId, upstream.status),
       meta: {
         request_id: upstream.status === 503 ? "delivery-preview-unavailable" : "delivery-preview-error",
         trace_id: upstream.status === 503 ? "delivery-preview-unavailable-trace" : "delivery-preview-error-trace",

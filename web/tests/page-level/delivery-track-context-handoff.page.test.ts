@@ -102,18 +102,31 @@ test("Workspace delivery track panel keeps recent metadata normalization and con
   assert.match(source, /const recentSummary =\s*deliveryContext === "recent_activity"\s*\?\s*describeRecentUpdateKind\(recentUpdateKind, recentTrackKey\)\s*:\s*null;/s);
 });
 
-test("Workspace delivery track panel surfaces contract source badge and preview fallback guidance", async () => {
+test("Workspace delivery track panel surfaces contract source badge and 404/503 fallback guidance", async () => {
   const source = await readSource(deliveryPanelPath);
 
   assert.match(source, /ControlPlaneContractMeta/);
   assert.match(source, /const deliveryContractMeta = data\?\.contract_meta \?\? null;/);
   assert.match(source, /const deliveryContractSource = deliveryContractMeta\?\.source \?\? \(data \? "live" : null\);/);
-  assert.match(source, /function contractSourceLabel\(source\?: ControlPlaneContractMeta\["source"\] \| null\): string \{/);
-  assert.match(source, /return "Fallback: preview data";/);
   assert.match(
     source,
-    /return "Delivery track is using preview fallback data and should not be treated as live evidence\.";/
+    /function contractSourceLabel\(\s*source\?: ControlPlaneContractMeta\["source"\] \| null,\s*issue\?: DeliveryContractIssue \| null,\s*\): string \{/s,
   );
+  assert.match(
+    source,
+    /const fallbackStatusLabel = deliveryFallbackStatusLabel\(issue\);/,
+  );
+  assert.match(
+    source,
+    /if \(fallbackStatusLabel\) \{\s*return `Fallback: \$\{fallbackStatusLabel\}`;\s*\}/s,
+  );
+  assert.ok(source.includes('Fallback: preview data'));
+  assert.ok(source.includes('Delivery track is using preview fallback data because the control plane is unavailable.'));
+  assert.ok(source.includes('Delivery track is using preview fallback data because the live delivery route returned 404.'));
+  assert.ok(source.includes('Delivery track is using preview fallback data because the live delivery route returned 503.'));
+  assert.ok(source.includes('Delivery track is using preview fallback data and should not be treated as live evidence.'));
+  assert.match(source, /contractSourceLabel\(deliveryContractSource, deliveryContractMeta\?\.issue \?\? null\)/);
+  assert.match(source, /contractSourceDescription\(deliveryContractSource, deliveryContractMeta\?\.issue \?\? null\)/);
   assert.match(source, /<Badge variant=\{contractSourceBadgeVariant\(deliveryContractSource\)\}>/);
   assert.match(source, /Contract note: \{deliveryContractMeta\.issue\.message\}/);
 });

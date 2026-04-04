@@ -66,6 +66,46 @@ test("Settings panel keeps controlled live-write submit success semantics for SS
   assert.match(source, /queryKey: \["workspace-dedicated-environment-readiness", workspaceSlug\]/);
 });
 
+test("Settings panel keeps contract source issue mapping distinct for 409 feature gate and 404/503 fallback states", async () => {
+  const source = await readSource(settingsPanelPath);
+
+  assert.match(
+    source,
+    /function contractSourceLabel\(\s*source\?: ContractMetaSource \| null,\s*issue\?: ContractMetaIssue\s*\): string \{/s,
+  );
+  assert.match(
+    source,
+    /function contractSourceDescription\(\s*source\?: ContractMetaSource \| null,\s*issue\?: ContractMetaIssue\s*\): string \{/s,
+  );
+  assert.match(source, /return "Fallback: feature gate";/);
+  assert.match(source, /return "Fallback: control plane unavailable";/);
+  assert.match(
+    source,
+    /return issue\?\.status === 409\s*\?\s*"Feature is currently plan-gated\. UI shows fallback guidance until entitlement changes\."\s*:\s*"Feature is gated, so the UI shows fallback guidance until entitlement changes\.";/s,
+  );
+  assert.match(
+    source,
+    /return "Control plane is unavailable; readiness is currently fallback-derived\.";/,
+  );
+  assert.match(
+    source,
+    /return "Readiness load returned 404, so fallback values are shown until the live route is available\.";/,
+  );
+  assert.match(
+    source,
+    /return "Readiness load returned 503, so fallback values are shown until the control plane recovers\.";/,
+  );
+  assert.match(source, /return "Readiness load failed; showing fallback values for continuity\."/);
+  assert.match(source, /const auditContractIssue: ControlPlaneContractIssue \| null =/);
+  assert.match(source, /status: auditContractSource === "fallback_feature_gate" \? 409 : null,/);
+  assert.match(source, /contractSourceLabel\(ssoContractSource, ssoContractIssue\)/);
+  assert.match(source, /contractSourceDescription\(ssoContractSource, ssoContractIssue\)/);
+  assert.match(source, /contractSourceLabel\(dedicatedContractSource, dedicatedContractIssue\)/);
+  assert.match(source, /contractSourceDescription\(dedicatedContractSource, dedicatedContractIssue\)/);
+  assert.match(source, /contractSourceLabel\(auditContractSource, auditContractIssue\)/);
+  assert.match(source, /contractSourceDescription\(auditContractSource, auditContractIssue\)/);
+});
+
 test("Settings panel keeps SSO controlled live-write submit path, payload, and refresh contract", async () => {
   const source = await readSource(settingsPanelPath);
 

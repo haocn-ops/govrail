@@ -972,6 +972,97 @@ test(
 );
 
 test(
+  "smoke(non-browser, source-assisted+execution): onboarding recovery prework keeps launchpad -> playground -> verification/go-live click order and explicit surface semantics",
+  async () => {
+    const launchpadSource = await readFile(workspaceLaunchpadPath, "utf8");
+    const playgroundSource = await readFile(playgroundPanelPath, "utf8");
+    const usageSource = await readFile(usageDashboardPath, "utf8");
+
+    assert.match(launchpadSource, /const latestDemoRunHint = onboarding\?\.latest_demo_run_hint \?\? null;/);
+    assert.match(launchpadSource, /const deliveryGuidance = onboarding\?\.delivery_guidance \?\? null;/);
+    assert.match(launchpadSource, /<CardTitle>Onboarding recovery lane<\/CardTitle>/);
+    assert.match(launchpadSource, /surface: "playground"/);
+    assert.match(launchpadSource, /surface: "verification"/);
+    assert.match(launchpadSource, /surface: "go-live"/);
+    assert.match(launchpadSource, /Inspect Playground status/);
+    assert.match(launchpadSource, /Open verification evidence lane/);
+
+    assert.match(playgroundSource, /if \(args\.latestDemoRunHint\?\.needs_attention\) \{/);
+    assert.match(playgroundSource, /actionLabel: args\.latestDemoRunHint\.is_terminal \? "Retry Playground run" : "Inspect Playground status"/);
+    assert.match(playgroundSource, /actionSurface: "playground"/);
+    assert.match(playgroundSource, /actionLabel: "Open Verification"/);
+    assert.match(playgroundSource, /actionSurface: "verification"/);
+    assert.match(playgroundSource, /actionLabel: "Open go-live drill"/);
+    assert.match(playgroundSource, /actionSurface: "go-live"/);
+    assert.match(playgroundSource, /return "\/verification\?surface=verification";/);
+    assert.match(playgroundSource, /return "\/go-live\?surface=go_live";/);
+
+    assert.match(usageSource, /title: "Governed first demo signal"/);
+    assert.match(usageSource, /Run a playground demo/);
+    assert.match(usageSource, /Capture evidence in verification/);
+    assert.match(usageSource, /Review API key scopes/);
+    assert.match(usageSource, /const latestDemoRunHint = args\.onboardingState\?\.latest_demo_run_hint \?\? null;/);
+    assert.match(usageSource, /const deliveryGuidance = args\.onboardingState\?\.delivery_guidance \?\? null;/);
+
+    const continuityArgs = {
+      source: "onboarding",
+      week8Focus: "demo_run",
+      attentionWorkspace: "launchpad-prework",
+      attentionOrganization: "org-launchpad-prework",
+      deliveryContext: "recent_activity",
+      recentTrackKey: "verification",
+      recentUpdateKind: "evidence_only",
+      evidenceCount: 2,
+      recentOwnerLabel: "Launchpad Owner",
+    } as const;
+
+    const launchpadPlaygroundHref = buildVerificationChecklistHandoffHref({
+      pathname: "/playground",
+      ...continuityArgs,
+    });
+    const playgroundVerificationHref = buildVerificationChecklistHandoffHref({
+      pathname: "/verification?surface=verification",
+      ...continuityArgs,
+    });
+    const playgroundGoLiveHref = buildVerificationChecklistHandoffHref({
+      pathname: "/go-live?surface=go_live",
+      ...continuityArgs,
+    });
+
+    const continuitySequence = [
+      launchpadPlaygroundHref,
+      playgroundVerificationHref,
+      playgroundGoLiveHref,
+    ].map((href) => new URL(`https://example.test${href}`));
+
+    assert.equal(continuitySequence[0].pathname, "/playground");
+    assert.equal(continuitySequence[1].pathname, "/verification");
+    assert.equal(continuitySequence[2].pathname, "/go-live");
+    assert.equal(continuitySequence[0].searchParams.get("surface"), null);
+    assert.equal(continuitySequence[1].searchParams.get("surface"), "verification");
+    assert.equal(continuitySequence[2].searchParams.get("surface"), "go_live");
+
+    const expectedKeys = [
+      ["source", continuityArgs.source],
+      ["week8_focus", continuityArgs.week8Focus],
+      ["attention_workspace", continuityArgs.attentionWorkspace],
+      ["attention_organization", continuityArgs.attentionOrganization],
+      ["delivery_context", continuityArgs.deliveryContext],
+      ["recent_track_key", continuityArgs.recentTrackKey],
+      ["recent_update_kind", continuityArgs.recentUpdateKind],
+      ["evidence_count", String(continuityArgs.evidenceCount)],
+      ["recent_owner_label", continuityArgs.recentOwnerLabel],
+    ] as const;
+
+    for (const parsed of continuitySequence) {
+      for (const [key, value] of expectedKeys) {
+        assert.equal(parsed.searchParams.get(key), value);
+      }
+    }
+  },
+);
+
+test(
   "smoke(non-browser, source-assisted+execution): accept-invitation onboarding path builder preserves continuity keys and verification explicit-surface semantics",
   async () => {
     const acceptInvitationSource = await readFile(acceptInvitationPagePath, "utf8");

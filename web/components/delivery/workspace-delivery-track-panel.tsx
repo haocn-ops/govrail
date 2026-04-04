@@ -176,13 +176,28 @@ function contractSourceBadgeVariant(
   if (source === "live") {
     return "strong";
   }
-  if (source === "fallback_error") {
+  if (source === "fallback_control_plane_unavailable" || source === "fallback_error") {
     return "default";
   }
   return "subtle";
 }
 
-function contractSourceLabel(source?: ControlPlaneContractMeta["source"] | null): string {
+type DeliveryContractIssue = ControlPlaneContractMeta["issue"];
+
+function deliveryFallbackStatusLabel(issue?: DeliveryContractIssue | null): string | null {
+  if (issue?.status === 404) {
+    return "route unavailable";
+  }
+  if (issue?.status === 503) {
+    return "control plane unavailable";
+  }
+  return null;
+}
+
+function contractSourceLabel(
+  source?: ControlPlaneContractMeta["source"] | null,
+  issue?: DeliveryContractIssue | null,
+): string {
   if (source === "live") {
     return "Live contract";
   }
@@ -193,22 +208,37 @@ function contractSourceLabel(source?: ControlPlaneContractMeta["source"] | null)
     return "Fallback: control plane unavailable";
   }
   if (source === "fallback_error") {
+    const fallbackStatusLabel = deliveryFallbackStatusLabel(issue);
+    if (fallbackStatusLabel) {
+      return `Fallback: ${fallbackStatusLabel}`;
+    }
     return "Fallback: preview data";
   }
   return "Contract source unknown";
 }
 
-function contractSourceDescription(source?: ControlPlaneContractMeta["source"] | null): string {
+function contractSourceDescription(
+  source?: ControlPlaneContractMeta["source"] | null,
+  issue?: DeliveryContractIssue | null,
+): string {
   if (source === "live") {
     return "Delivery track data is loaded from live control-plane responses.";
   }
   if (source === "fallback_feature_gate") {
-    return "Delivery track is using fallback guidance because the feature is not available on this plan.";
+    return issue?.status === 409
+      ? "Delivery track is using fallback guidance because the feature is not available on this plan."
+      : "Delivery track is using fallback guidance until the workspace plan enables this feature.";
   }
   if (source === "fallback_control_plane_unavailable") {
     return "Delivery track is using preview fallback data because the control plane is unavailable.";
   }
   if (source === "fallback_error") {
+    if (issue?.status === 404) {
+      return "Delivery track is using preview fallback data because the live delivery route returned 404.";
+    }
+    if (issue?.status === 503) {
+      return "Delivery track is using preview fallback data because the live delivery route returned 503.";
+    }
     return "Delivery track is using preview fallback data and should not be treated as live evidence.";
   }
   return "Delivery track contract source is unavailable.";
@@ -671,9 +701,11 @@ export function WorkspaceDeliveryTrackPanel({
         <p className="text-xs text-muted">{description}</p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Badge variant={contractSourceBadgeVariant(deliveryContractSource)}>
-            {contractSourceLabel(deliveryContractSource)}
+            {contractSourceLabel(deliveryContractSource, deliveryContractMeta?.issue ?? null)}
           </Badge>
-          <p className="text-xs text-muted">{contractSourceDescription(deliveryContractSource)}</p>
+          <p className="text-xs text-muted">
+            {contractSourceDescription(deliveryContractSource, deliveryContractMeta?.issue ?? null)}
+          </p>
         </div>
         {deliveryContractMeta?.issue ? (
           <p className="text-xs text-muted">Contract note: {deliveryContractMeta.issue.message}</p>

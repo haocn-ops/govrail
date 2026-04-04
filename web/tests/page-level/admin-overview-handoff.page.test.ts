@@ -47,17 +47,33 @@ test("Admin overview keeps attention action query naming consistent for surface 
   assert.match(source, /recent_owner_email: options\?\.recentOwnerEmail \?\? null,/);
 });
 
-test("Admin overview surfaces contract source and preview fallback guidance in the platform snapshot", async () => {
+test("Admin overview surfaces contract source and 404/503 fallback guidance in the platform snapshot", async () => {
   const source = await readSource(adminOverviewPath);
 
   assert.match(source, /const adminContractMeta = data\?\.contract_meta \?\? null;/);
   assert.match(source, /const adminContractSource = adminContractMeta\?\.source \?\? \(data \? "live" : null\);/);
-  assert.match(source, /function adminContractLabel\(source\?: ControlPlaneContractMeta\["source"\] \| null\): string \{/);
+  assert.match(
+    source,
+    /function adminContractLabel\(\s*source\?: ControlPlaneContractMeta\["source"\] \| null,\s*issue\?: AdminContractIssue \| null,\s*\): string \{/s,
+  );
   assert.match(source, /return "Live admin contract";/);
+  assert.match(source, /return "Fallback: feature gate";/);
+  assert.match(source, /const fallbackStatusLabel = adminFallbackStatusLabel\(issue\);/);
+  assert.match(source, /if \(fallbackStatusLabel\) \{\s*return `Fallback: \$\{fallbackStatusLabel\}`;\s*\}/s);
   assert.match(source, /return "Fallback: preview data";/);
   assert.match(
     source,
-    /return "Admin snapshot is using preview fallback data and should not be treated as live workspace readiness\.";/
+    /return issue\?\.status === 409\s*\?\s*"Admin snapshot is plan-gated, so the live summary stays hidden until the workspace entitlement changes\."\s*:\s*"Admin snapshot is currently feature-gated and cannot show the full live summary\.";/s,
   );
+  assert.match(
+    source,
+    /return issue\?\.status === 503\s*\?\s*"Admin snapshot is using preview fallback data because the control plane returned 503\."\s*:\s*"Admin snapshot is using preview fallback data because the control plane is unavailable\.";/s,
+  );
+  assert.ok(source.includes('Admin snapshot is using preview fallback data because the control plane is unavailable.'));
+  assert.ok(source.includes('Admin snapshot is using preview fallback data because the live overview route returned 404.'));
+  assert.ok(source.includes('Admin snapshot is using preview fallback data because the live overview route returned 503.'));
+  assert.ok(source.includes('Admin snapshot is using preview fallback data and should not be treated as live workspace readiness.'));
+  assert.match(source, /adminContractLabel\(adminContractSource, adminContractMeta\?\.issue \?\? null\)/);
+  assert.match(source, /adminContractDescription\(adminContractSource, adminContractMeta\?\.issue \?\? null\)/);
   assert.match(source, /Contract note: \{adminContractMeta\.issue\.message\}/);
 });

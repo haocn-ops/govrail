@@ -82,8 +82,8 @@ test("Settings panel keeps SSO saved sections coupled with runtime badges, sourc
     /enterpriseStatusLabel\(\{\s*enabled: ssoFeatureEnabled,\s*status: ssoReadiness\?\.status \?\? null,\s*configured: ssoConfigured,\s*configurationState: ssoConfigurationState,\s*isError: isSsoError,\s*\}\)/s,
   );
   assert.match(source, /<Badge variant=\{contractSourceBadgeVariant\(ssoContractSource\)\}>/);
-  assert.match(source, /contractSourceLabel\(ssoContractSource\)/);
-  assert.match(source, /contractSourceDescription\(ssoContractSource\)/);
+  assert.match(source, /contractSourceLabel\(ssoContractSource, ssoContractIssue\)/);
+  assert.match(source, /contractSourceDescription\(ssoContractSource, ssoContractIssue\)/);
   assert.match(source, /\{ssoConfigured \? \(/);
   assert.match(source, /<p className="text-muted">Saved configuration<\/p>/);
   assert.match(source, /SSO is marked configured in readiness data\./);
@@ -110,8 +110,8 @@ test("Settings panel keeps dedicated saved sections coupled with runtime badges,
     /enterpriseStatusLabel\(\{\s*enabled: dedicatedEnvironmentFeatureEnabled,\s*status: dedicatedEnvironmentReadiness\?\.status \?\? null,\s*configured: dedicatedConfigured,\s*configurationState: dedicatedConfigurationState,\s*isError: isDedicatedEnvironmentError,\s*\}\)/s,
   );
   assert.match(source, /<Badge variant=\{contractSourceBadgeVariant\(dedicatedContractSource\)\}>/);
-  assert.match(source, /contractSourceLabel\(dedicatedContractSource\)/);
-  assert.match(source, /contractSourceDescription\(dedicatedContractSource\)/);
+  assert.match(source, /contractSourceLabel\(dedicatedContractSource, dedicatedContractIssue\)/);
+  assert.match(source, /contractSourceDescription\(dedicatedContractSource, dedicatedContractIssue\)/);
   assert.match(source, /\{dedicatedConfigured \? \(/);
   assert.match(source, /<p className="text-muted">Saved provisioning request<\/p>/);
   assert.match(source, /Runtime state: configuration/);
@@ -184,8 +184,9 @@ test("Settings panel keeps audit export source-badge and cross-page evidence han
     /Export workspace audit events for compliance review and attach output into verification\/go-live evidence\./,
   );
   assert.match(source, /<Badge variant=\{contractSourceBadgeVariant\(auditContractSource\)\}>/);
-  assert.match(source, /contractSourceLabel\(auditContractSource\)/);
-  assert.match(source, /contractSourceDescription\(auditContractSource\)/);
+  assert.match(source, /const auditContractIssue: ControlPlaneContractIssue \| null =/);
+  assert.match(source, /contractSourceLabel\(auditContractSource, auditContractIssue\)/);
+  assert.match(source, /contractSourceDescription\(auditContractSource, auditContractIssue\)/);
   assert.match(source, /<Link\s+href=\{verificationHref\}[\s\S]*?>\s*Attach in verification\s*<\/Link>/s);
   assert.match(source, /<Link\s+href=\{goLiveHref\}[\s\S]*?>\s*Carry to go-live drill\s*<\/Link>/s);
 });

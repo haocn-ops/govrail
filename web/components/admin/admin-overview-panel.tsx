@@ -137,7 +137,22 @@ function adminContractBadgeVariant(
   return "subtle";
 }
 
-function adminContractLabel(source?: ControlPlaneContractMeta["source"] | null): string {
+type AdminContractIssue = ControlPlaneContractMeta["issue"];
+
+function adminFallbackStatusLabel(issue?: AdminContractIssue | null): string | null {
+  if (issue?.status === 404) {
+    return "route unavailable";
+  }
+  if (issue?.status === 503) {
+    return "control plane unavailable";
+  }
+  return null;
+}
+
+function adminContractLabel(
+  source?: ControlPlaneContractMeta["source"] | null,
+  issue?: AdminContractIssue | null,
+): string {
   if (source === "live") {
     return "Live admin contract";
   }
@@ -145,25 +160,44 @@ function adminContractLabel(source?: ControlPlaneContractMeta["source"] | null):
     return "Fallback: feature gate";
   }
   if (source === "fallback_control_plane_unavailable") {
-    return "Fallback: control plane unavailable";
+    return adminFallbackStatusLabel(issue) === "control plane unavailable"
+      ? "Fallback: control plane unavailable"
+      : "Fallback: preview data";
   }
   if (source === "fallback_error") {
+    const fallbackStatusLabel = adminFallbackStatusLabel(issue);
+    if (fallbackStatusLabel) {
+      return `Fallback: ${fallbackStatusLabel}`;
+    }
     return "Fallback: preview data";
   }
   return "Contract source unknown";
 }
 
-function adminContractDescription(source?: ControlPlaneContractMeta["source"] | null): string {
+function adminContractDescription(
+  source?: ControlPlaneContractMeta["source"] | null,
+  issue?: AdminContractIssue | null,
+): string {
   if (source === "live") {
     return "Platform snapshot is loaded from live admin control-plane data.";
   }
   if (source === "fallback_feature_gate") {
-    return "Admin snapshot is currently feature-gated and cannot show the full live summary.";
+    return issue?.status === 409
+      ? "Admin snapshot is plan-gated, so the live summary stays hidden until the workspace entitlement changes."
+      : "Admin snapshot is currently feature-gated and cannot show the full live summary.";
   }
   if (source === "fallback_control_plane_unavailable") {
-    return "Admin snapshot is using preview fallback data because the control plane is unavailable.";
+    return issue?.status === 503
+      ? "Admin snapshot is using preview fallback data because the control plane returned 503."
+      : "Admin snapshot is using preview fallback data because the control plane is unavailable.";
   }
   if (source === "fallback_error") {
+    if (issue?.status === 404) {
+      return "Admin snapshot is using preview fallback data because the live overview route returned 404.";
+    }
+    if (issue?.status === 503) {
+      return "Admin snapshot is using preview fallback data because the live overview route returned 503.";
+    }
     return "Admin snapshot is using preview fallback data and should not be treated as live workspace readiness.";
   }
   return "Admin snapshot contract source is unavailable.";
@@ -937,9 +971,11 @@ export function AdminOverviewPanel({
             <div className="space-y-2 rounded-2xl border border-border bg-background px-3 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={adminContractBadgeVariant(adminContractSource)}>
-                  {adminContractLabel(adminContractSource)}
+                  {adminContractLabel(adminContractSource, adminContractMeta?.issue ?? null)}
                 </Badge>
-                <p className="text-xs text-muted">{adminContractDescription(adminContractSource)}</p>
+                <p className="text-xs text-muted">
+                  {adminContractDescription(adminContractSource, adminContractMeta?.issue ?? null)}
+                </p>
               </div>
               {adminContractMeta?.issue ? (
                 <p className="text-xs text-muted">Contract note: {adminContractMeta.issue.message}</p>
