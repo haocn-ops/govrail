@@ -66,8 +66,9 @@
 - `admin readiness billing_warning -> settings -> admin` 與 `admin readiness demo_run -> verification -> admin` 分支，會驗證 readiness summary primary action 能把 `week8_focus`、workspace/organization context 與 `Return to admin readiness view` 帶到 target surface，並在返回 `/admin` 後恢復 readiness banner。
 - `admin readiness go_live_ready -> go-live -> admin` 與 `admin readiness demo_run -> verification -> go-live -> admin` 分支，會驗證 readiness 線進入 `go-live` 後仍保留 `source=admin-readiness`、`week8_focus` 與 return banner continuity。
 - `admin readiness billing_warning -> settings -> verification -> admin` 與 `admin readiness billing_warning -> settings -> go-live -> admin` 分支，會驗證 settings 內的 `Capture verification evidence` / `Rehearse go-live readiness` CTA 仍保留 admin-readiness continuity。
+- `admin readiness go_live_ready -> go-live -> verification -> admin` 與 `admin readiness go_live_ready -> go-live -> settings -> admin` 分支，會驗證 go-live 內的 `Reopen verification evidence` / `Review billing + settings` CTA 仍保留 `source=admin-readiness`、`week8_focus=go_live_ready` 與 readiness return continuity。
 
-但它們仍只是最小真實導航與 continuity 驗證，不代表 verification/go-live/admin 的完整 browser e2e 已落地。下一小段轉到 `go_live_ready` / `demo_run` 的更多 workspace-level readiness action variants。
+但它們仍只是最小真實導航與 continuity 驗證，不代表 verification/go-live/admin 的完整 browser e2e 已落地。目前這一層 browser smoke 已補到 17 條，重點是把可分享的治理導流 continuity 固定下來，而不是宣稱整條 Week 8 readiness browser journey 已完整覆蓋。
 
 ## 5. 持久化交付追蹤與證據手動回填
 
