@@ -15,3 +15,10 @@ test("Service accounts panel keeps disable error helper and copy", async () => {
   assert.match(source, /Service account disable failed/);
   assert.match(source, /text-red-600/);
 });
+
+test("Service accounts panel highlights go-live drill and evidence path", async () => {
+  const source = await readFile(panelPath, "utf8");
+
+  assert.match(source, /go-live drill so the evidence path stays intact/);
+  assert.match(source, /Capture Week 8 evidence/);
+});

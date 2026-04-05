@@ -106,10 +106,18 @@ export async function Topbar() {
         <Badge variant="subtle">workspaces: {workspaceCount}</Badge>
         <Badge variant="subtle">tenant: {workspaceContext.workspace.tenant_id}</Badge>
       </div>
+      {(sourceDetail.is_fallback || sourceDetail.local_only) && (
+        <p className="mt-1 text-[10px] text-muted">
+          Live metadata is unavailable, so treat this as preview data until the workspace context route on
+          <code className="font-mono">/session</code> confirms a metadata-backed identity and tenant before you follow any guidance.
+        </p>
+      )}
       <p className="mt-2 text-[11px] text-muted">
         Confirm this identity, tenant, and workspace before heading to onboarding, billing, verification, or the
-        go-live drill so nothing accidentally runs under the wrong context. The next-lane shortcut is guidance only and
-        does not change roles or impersonate another operator.
+        go-live drill so nothing accidentally runs under the wrong context. If the badge above shows a fallback or
+        local-only source, treat that context as preview data until you reconfirm metadata-backed identity on
+        <code className="font-mono">/session</code>. The next-lane shortcut is guidance only and does not change
+        roles or impersonate another operator.
       </p>
     </header>
   );

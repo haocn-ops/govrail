@@ -6,11 +6,23 @@ import { fileURLToPath } from "node:url";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const metadataRoutes = [
-  ["workspace sso", path.resolve(testDir, "../app/api/control-plane/workspace/sso/route.ts")],
-  [
-    "workspace dedicated environment",
-    path.resolve(testDir, "../app/api/control-plane/workspace/dedicated-environment/route.ts"),
-  ],
+  {
+    name: "workspace sso",
+    routePath: path.resolve(testDir, "../app/api/control-plane/workspace/sso/route.ts"),
+    suffix: "/sso",
+    metadataMessage:
+      "Workspace SSO updates require metadata-backed SaaS context. Preview and env fallback modes are disabled for this endpoint.",
+  },
+  {
+    name: "workspace dedicated environment",
+    routePath: path.resolve(
+      testDir,
+      "../app/api/control-plane/workspace/dedicated-environment/route.ts",
+    ),
+    suffix: "/dedicated-environment",
+    metadataMessage:
+      "Dedicated environment updates require metadata-backed SaaS context. Preview and env fallback modes are disabled for this endpoint.",
+  },
 ] as const;
 
 const helperizedDetailMutationRoutes = [
@@ -67,16 +79,24 @@ async function readRouteSource(routePath: string): Promise<string> {
   return readFile(routePath, "utf8");
 }
 
-function assertMetadataGuard(source: string, upstreamPattern: RegExp): void {
+function assertEnterpriseGetHelper(source: string, options: { suffix: string }): void {
   assert.match(
     source,
-    /import \{[^\}]*requireMetadataWorkspaceContext[^\}]*\} from "@\/lib\/control-plane-proxy";/,
+    /import \{ proxyWorkspaceEnterpriseGet, proxyWorkspaceEnterprisePost \} from "\.\.\/route-helpers";/,
   );
-  assert.match(source, /const metadataGuard = requireMetadataWorkspaceContext\(\{/);
-  assert.match(source, /workspaceContext,/);
-  assert.match(source, /if \(metadataGuard\) \{\s*return metadataGuard;\s*\}/s);
-  assert.match(source, upstreamPattern);
-  assert.match(source, /proxyControlPlane\(/);
+  assert.match(source, new RegExp(`return proxyWorkspaceEnterpriseGet\\("${options.suffix}"\\);`));
+}
+
+function assertEnterprisePostHelper(
+  source: string,
+  options: { suffix: string; metadataMessage: string },
+): void {
+  assert.match(
+    source,
+    /import \{ proxyWorkspaceEnterpriseGet, proxyWorkspaceEnterprisePost \} from "\.\.\/route-helpers";/,
+  );
+  assert.match(source, new RegExp(`return proxyWorkspaceEnterprisePost\\({[\\s\\S]*suffix: "${options.suffix}"`));
+  assert.match(source, new RegExp(options.metadataMessage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }
 
 function assertProxyWrapperWithoutDirectFetch(source: string): void {
@@ -150,24 +170,16 @@ function assertHelperizedWorkspaceScopedPostRoute(
 
 function assertMetadataGuardedHelperizedPostRoute(
   source: string,
-  options: {
-    pathPattern: RegExp;
-    helperImportPattern: RegExp;
-  },
+  options: { suffix: string; metadataMessage: string },
 ): void {
-  assert.match(source, /import \{[^\}]*proxyControlPlane[^\}]*requireMetadataWorkspaceContext[^\}]*\} from "@\/lib\/control-plane-proxy";/);
-  assert.match(source, options.helperImportPattern);
-  assert.match(source, /const workspaceContext = await resolveWorkspaceContextForServer\(\);/);
-  assert.match(source, /const metadataGuard = requireMetadataWorkspaceContext\(\{/);
-  assert.match(source, /if \(metadataGuard\) \{\s*return metadataGuard;\s*\}/s);
-  assert.match(source, options.pathPattern);
   assert.match(
     source,
-    /init:\s*await buildProxyControlPlanePostInit\(\{\s*request,\s*accept:\s*request\.headers\.get\("accept"\)\s*\?\?\s*null,\s*contentType:\s*request\.headers\.get\("content-type"\)\s*\?\?\s*null,\s*emptyBodyAsUndefined:\s*true,\s*\}\)/s,
+    /import \{ proxyWorkspaceEnterpriseGet, proxyWorkspaceEnterprisePost \} from "\.\.\/route-helpers";/,
   );
-  assert.doesNotMatch(source, /const body = await request\.text\(\);/);
-  assert.doesNotMatch(source, /method:\s*"POST"/);
-  assert.doesNotMatch(source, /const helperInit = await buildProxyControlPlanePostInit\(/);
+  assert.match(source, /export async function POST\(request: Request\)/);
+  assert.match(source, /return proxyWorkspaceEnterprisePost\({/);
+  assert.match(source, new RegExp(`suffix: "${options.suffix}"`));
+  assert.match(source, new RegExp(options.metadataMessage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }
 
 function assertHelperizedRunDetailRoute(
@@ -209,6 +221,18 @@ test("metadata-only GET routes reuse shared metadata helper", async () => {
   for (const [name, routePath] of metadataGetRoutes) {
     const source = await readRouteSource(routePath);
     assertMetadataGetHelper(source, { isMe: name === "me" });
+  }
+});
+
+test("workspace enterprise routes reuse shared enterprise helpers", async () => {
+  for (const route of metadataRoutes) {
+    const source = await readRouteSource(route.routePath);
+
+    assertEnterpriseGetHelper(source, { suffix: route.suffix });
+    assertEnterprisePostHelper(source, {
+      suffix: route.suffix,
+      metadataMessage: route.metadataMessage,
+    });
   }
 });
 
@@ -376,34 +400,24 @@ test("invitation accept route requires trusted auth headers and reuses shared po
   assert.doesNotMatch(source, /await fetch\(/);
 });
 
-test("metadata-guarded enterprise POST routes reuse shared post-init helper", async () => {
+test("metadata-guarded enterprise POST routes reuse shared enterprise helpers", async () => {
   const ssoSource = await readRouteSource(
     path.resolve(testDir, "../app/api/control-plane/workspace/sso/route.ts"),
   );
   assertMetadataGuardedHelperizedPostRoute(ssoSource, {
-    helperImportPattern:
-      /import \{ buildProxyControlPlanePostInit \} from "\.\.\/post-route-helpers";/,
-    pathPattern:
-      /proxyControlPlane\(`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/sso`,\s*\{/s,
+    suffix: "/sso",
+    metadataMessage:
+      "Workspace SSO updates require metadata-backed SaaS context. Preview and env fallback modes are disabled for this endpoint.",
   });
-  assert.match(
-    ssoSource,
-    /buildProxyControlPlanePostInit\(\{\s*request,\s*accept:\s*request\.headers\.get\("accept"\)\s*\?\?\s*null,\s*contentType:\s*request\.headers\.get\("content-type"\)\s*\?\?\s*null,\s*emptyBodyAsUndefined:\s*true,\s*\}\)/s,
-  );
 
   const dedicatedSource = await readRouteSource(
     path.resolve(testDir, "../app/api/control-plane/workspace/dedicated-environment/route.ts"),
   );
   assertMetadataGuardedHelperizedPostRoute(dedicatedSource, {
-    helperImportPattern:
-      /import \{ buildProxyControlPlanePostInit \} from "\.\.\/post-route-helpers";/,
-    pathPattern:
-      /proxyControlPlane\(\s*`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/dedicated-environment`,\s*\{/s,
+    suffix: "/dedicated-environment",
+    metadataMessage:
+      "Dedicated environment updates require metadata-backed SaaS context. Preview and env fallback modes are disabled for this endpoint.",
   });
-  assert.match(
-    dedicatedSource,
-    /buildProxyControlPlanePostInit\(\{\s*request,\s*accept:\s*request\.headers\.get\("accept"\)\s*\?\?\s*null,\s*contentType:\s*request\.headers\.get\("content-type"\)\s*\?\?\s*null,\s*emptyBodyAsUndefined:\s*true,\s*\}\)/s,
-  );
 });
 
 test("billing POST helper reuses shared POST init builder", async () => {

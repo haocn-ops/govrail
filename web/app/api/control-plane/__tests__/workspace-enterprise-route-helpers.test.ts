@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildWorkspaceEnterprisePostInit } from "../workspace/route-helpers";
+import {
+  buildWorkspaceEnterprisePath,
+  buildWorkspaceEnterprisePostInit,
+} from "../workspace/route-helpers";
 
 test("buildWorkspaceEnterprisePostInit preserves accept/content-type passthrough and POST idempotency metadata", async () => {
   const body = JSON.stringify({ feature: "sso" });
@@ -36,4 +39,12 @@ test("buildWorkspaceEnterprisePostInit omits accept/content-type defaults and ke
   assert.equal(headers.get("content-type"), null);
   assert.match(headers.get("idempotency-key") ?? "", /^web-/);
   assert.equal(init.body, undefined);
+});
+
+test("buildWorkspaceEnterprisePath composes workspace suffixes correctly", () => {
+  assert.equal(buildWorkspaceEnterprisePath("workspace-123", "/sso"), "/api/v1/saas/workspaces/workspace-123/sso");
+  assert.equal(
+    buildWorkspaceEnterprisePath("workspace-123", "/dedicated-environment"),
+    "/api/v1/saas/workspaces/workspace-123/dedicated-environment",
+  );
 });

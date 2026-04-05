@@ -400,6 +400,9 @@ export function ServiceAccountsPanel({
             Pair the key with a workspace service account, then use `/playground` to submit the first `runs:write` request. Capture the `run_id` and reference it in `/usage` or `/verification` so the Week 8 checklist can see the trace.
           </p>
           <p className="mt-1 text-xs text-muted">
+            When usage metrics look healthy, capture verification evidence and rehearse the go-live drill so the evidence path stays intact before you return to the admin lane.
+          </p>
+          <p className="mt-1 text-xs text-muted">
             When you need replay, cancel, approval, A2A send/cancel, or MCP calls, incrementally add the matching scopes (`runs:manage`, `approvals:write`, `a2a:write`, `mcp:call`) for the same key or rotate to a new one. Keep the scope list narrow—each permission should align with a real workflow.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">

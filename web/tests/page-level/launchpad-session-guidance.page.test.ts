@@ -134,10 +134,17 @@ test("session surfaces and topbar keep role-aware navigation-only context guidan
   assert.match(topbarSource, /Session access/);
   assert.match(topbarSource, /review context details on \/session/);
   assert.match(topbarSource, /local-only context/);
+  assert.match(topbarSource, /Live metadata is unavailable, so treat this as preview data until the workspace context route/);
   assert.match(topbarSource, /The next-lane shortcut is guidance only and/);
-  assert.match(topbarSource, /does not change roles or impersonate another operator\./);
+  assert.match(topbarSource, /does not change\s+roles or impersonate another operator\./);
 
   assert.match(workspaceSwitcherSource, /function workspaceCountLabel\(count: number\): string \{/);
   assert.match(workspaceSwitcherSource, /reachable workspace/);
+  assert.match(workspaceSwitcherSource, /This control only updates the console's manual workspace context/);
+  assert.match(workspaceSwitcherSource, /topbar badges:/);
+  assert.match(
+    workspaceSwitcherSource,
+    /metadata-backed session data isn't available yet, so revisit\s*<code className="font-mono">\/session<\/code>\s*before trusting the next lane\./,
+  );
   assert.match(workspaceSwitcherSource, /This switcher only changes the manual workspace context for the console\./);
 });

@@ -24,6 +24,10 @@ test("Topbar keeps fallback-aware context badge and warning semantics", async ()
   );
   assert.match(source, /sourceDetail\.local_only \? <Badge variant="default">local-only context<\/Badge> : null/);
   assert.match(source, /const nextLane = nextLaneFromRole\(workspaceContext\.workspace\.subject_roles\);/);
+  assert.match(
+    source,
+    /Live metadata is unavailable, so treat this as preview data until the workspace context route on\s+<code className="font-mono">\/session<\/code>\s+confirms a metadata-backed identity and tenant before you follow any guidance\./,
+  );
 });
 
 test("workspace context route shares warning header when fallback warns", async () => {

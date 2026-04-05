@@ -20,47 +20,37 @@ async function readSource(filePath: string): Promise<string> {
   return readFile(filePath, "utf8");
 }
 
-function assertMetadataGuardedPostContract(source: string, upstreamPathPattern: RegExp): void {
-  assert.match(source, /export async function POST\(request: Request\)/);
-  assert.match(source, /requireMetadataWorkspaceContext\(\{/);
-  assert.match(source, /workspaceContext,/);
-  assert.match(source, /if \(metadataGuard\) \{\s*return metadataGuard;\s*\}/s);
-  assert.match(source, upstreamPathPattern);
-  assert.match(
-    source,
-    /import \{ buildProxyControlPlanePostInit \} from "\.\.\/post-route-helpers";/,
-  );
-  assert.match(
-    source,
-    /init:\s*await buildProxyControlPlanePostInit\(\{\s*request,\s*accept:\s*request\.headers\.get\("accept"\)\s*\?\?\s*null,\s*contentType:\s*request\.headers\.get\("content-type"\)\s*\?\?\s*null,\s*emptyBodyAsUndefined:\s*true,\s*\}\)/s,
-  );
-  assert.doesNotMatch(source, /const helperInit = await buildProxyControlPlanePostInit\(/);
-  assert.doesNotMatch(source, /method:\s*"POST"/);
-}
-
-test("workspace SSO route keeps GET and controlled POST live-write wrapper semantics", async () => {
+test("workspace SSO route keeps shared helper GET and controlled POST live-write semantics", async () => {
   const source = await readSource(ssoRoutePath);
-  assert.match(source, /export async function GET\(/);
   assert.match(
     source,
-    /proxyControlPlane\(`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/sso`/,
+    /import \{ proxyWorkspaceEnterpriseGet, proxyWorkspaceEnterprisePost \} from "\.\.\/route-helpers";/,
   );
-  assertMetadataGuardedPostContract(
+  assert.match(source, /return proxyWorkspaceEnterpriseGet\("\/sso"\);/);
+  assert.match(
     source,
-    /proxyControlPlane\(`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/sso`/,
+    /return proxyWorkspaceEnterprisePost\({[\s\S]*suffix: "\/sso"/,
+  );
+  assert.match(
+    source,
+    /metadataMessage:\s*"Workspace SSO updates require metadata-backed SaaS context\. Preview and env fallback modes are disabled for this endpoint\."/,
   );
 });
 
-test("workspace dedicated environment route keeps GET and controlled POST live-write wrapper semantics", async () => {
+test("workspace dedicated environment route keeps shared helper GET and controlled POST semantics", async () => {
   const source = await readSource(dedicatedRoutePath);
-  assert.match(source, /export async function GET\(/);
   assert.match(
     source,
-    /proxyControlPlane\(\s*`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/dedicated-environment`/,
+    /import \{ proxyWorkspaceEnterpriseGet, proxyWorkspaceEnterprisePost \} from "\.\.\/route-helpers";/,
   );
-  assertMetadataGuardedPostContract(
+  assert.match(source, /return proxyWorkspaceEnterpriseGet\("\/dedicated-environment"\);/);
+  assert.match(
     source,
-    /proxyControlPlane\(\s*`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/dedicated-environment`/,
+    /return proxyWorkspaceEnterprisePost\({[\s\S]*suffix: "\/dedicated-environment"/,
+  );
+  assert.match(
+    source,
+    /metadataMessage:\s*"Dedicated environment updates require metadata-backed SaaS context\. Preview and env fallback modes are disabled for this endpoint\."/,
   );
 });
 

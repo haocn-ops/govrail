@@ -92,19 +92,24 @@ export function WorkspaceSwitcher({
       </select>
       {isSaving ? <span className="text-[10px] text-muted">syncing...</span> : null}
     </label>
-    <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
-      <span>{workspaceCountLabel(workspaces.length)}</span>
-      <span>·</span>
-      <span>current: {currentWorkspaceSlug}</span>
-    </div>
-    <p className="text-[10px] text-muted">
-      Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
-      verification, or go-live with the correct context.
-    </p>
-    <p className="text-[10px] text-muted">
-      This switcher only changes the manual workspace context for the console. It does not impersonate another member,
-      edit roles, or trigger support-side automation.
-    </p>
+      <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
+        <span>{workspaceCountLabel(workspaces.length)}</span>
+        <span>·</span>
+        <span>current: {currentWorkspaceSlug}</span>
+      </div>
+      <p className="text-[10px] text-muted">
+        Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
+        verification, or go-live with the correct context.
+      </p>
+      <p className="text-[10px] text-muted">
+        This control only updates the console's manual workspace context. Keep an eye on the topbar badges: if they
+        show fallback or local-only context, it means metadata-backed session data isn't available yet, so revisit
+        <code className="font-mono">/session</code> before trusting the next lane.
+      </p>
+      <p className="text-[10px] text-muted">
+        This switcher only changes the manual workspace context for the console. It does not impersonate another member,
+        edit roles, or trigger support-side automation.
+      </p>
       {errorMessage ? (
         <p className="text-[10px] text-amber-700" role="status">
           {errorMessage}

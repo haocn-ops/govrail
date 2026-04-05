@@ -417,7 +417,10 @@ export function ApiKeysPanel({
         <Card className="rounded-2xl border border-border bg-background p-4">
           <p className="font-medium text-foreground">First-run governance path</p>
           <p className="mt-1 text-xs text-muted">
-            Pair the key with a workspace service account, then use `/playground` to submit the first `runs:write` request. Capture the `run_id` and reference it in `/usage` or `/verification` so the Week 8 checklist can see the trace.
+            Pair the key with a workspace service account, then use `/playground` to submit the first `runs:write` request. Capture the `run_id` and reference it in `/usage` or `/verification` so the Week 8 checklist sees the trace.
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Once the demo evidence looks clean, rehearse the go-live drill or confirm verification evidence before bouncing back to admin readiness; this keeps the entire chain auditable.
           </p>
           <p className="mt-1 text-xs text-muted">
             When you need replay, cancel, approval, A2A send/cancel, or MCP calls, incrementally add the matching scopes (`runs:manage`, `approvals:write`, `a2a:write`, `mcp:call`) for the same key or rotate to a new one. Keep the scope list narrow—each permission should align with a real workflow.
