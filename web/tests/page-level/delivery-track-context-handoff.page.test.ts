@@ -14,9 +14,15 @@ async function readSource(filePath: string): Promise<string> {
 test("Workspace delivery track panel keeps cross-page handoff query continuity for verification/go-live/usage/settings links", async () => {
   const source = await readSource(deliveryPanelPath);
 
-  assert.match(source, /import \{ buildAdminReturnHref, buildHandoffHref \} from "@\/lib\/handoff-query";/);
+  assert.match(
+    source,
+    /import \{[\s\S]*buildConsoleHandoffHref,[\s\S]*buildConsoleAdminReturnHref,[\s\S]*type ConsoleHandoffState,[\s\S]*\} from "@\/lib\/console-handoff";/,
+  );
+  assert.match(source, /import \{ AuditExportReceiptCallout \} from "@\/components\/audit-export-receipt-callout";/);
+  assert.match(source, /import \{ resolveAuditExportReceiptSummary \} from "@\/lib\/audit-export-receipt";/);
   assert.match(source, /function buildContextHref\(/);
-  assert.match(source, /return buildHandoffHref\(pathname, \{/);
+  assert.match(source, /return buildConsoleHandoffHref\(pathname, handoff\);/);
+  assert.match(source, /runId,/);
   assert.match(source, /source,/);
   assert.match(source, /surface,/);
   assert.match(source, /week8Focus,/);
@@ -26,11 +32,29 @@ test("Workspace delivery track panel keeps cross-page handoff query continuity f
   assert.match(source, /recentTrackKey,/);
   assert.match(source, /recentUpdateKind,/);
   assert.match(source, /evidenceCount,/);
+  assert.match(source, /recentOwnerLabel,/);
+  assert.match(source, /recentOwnerDisplayName,/);
+  assert.match(source, /recentOwnerEmail,/);
+  assert.match(source, /auditReceiptFilename,/);
+  assert.match(source, /auditReceiptExportedAt,/);
+  assert.match(source, /auditReceiptSha256,/);
 
-  assert.match(source, /const verificationHref = buildContextHref\(\s*"\/verification",\s*source,\s*"verification"/s);
-  assert.match(source, /const goLiveHref = buildContextHref\(\s*"\/go-live",\s*source,\s*"go_live"/s);
-  assert.match(source, /const usageHref = buildContextHref\(\s*"\/usage",\s*source,\s*sectionKey/s);
-  assert.match(source, /const settingsHref = buildContextHref\(\s*"\/settings",\s*source,\s*sectionKey/s);
+  assert.match(
+    source,
+    /const verificationHref = buildContextHref\(\s*"\/verification",\s*{\s*source,\s*surface:\s*"verification",[\s\S]*?\}\s*\);/s,
+  );
+  assert.match(
+    source,
+    /const goLiveHref = buildContextHref\(\s*"\/go-live",\s*{\s*source,\s*surface:\s*"go_live",[\s\S]*?\}\s*\);/s,
+  );
+  assert.match(
+    source,
+    /const usageHref = buildContextHref\(\s*"\/usage",\s*{\s*source,\s*surface:\s*sectionKey,[\s\S]*?\}\s*\);/s,
+  );
+  assert.match(
+    source,
+    /const settingsHref = buildContextHref\(\s*"\/settings",\s*{\s*source,\s*surface:\s*sectionKey,[\s\S]*?\}\s*\);/s,
+  );
 });
 
 test("Workspace delivery track panel keeps onboarding context-card action mapping stable across verification and go-live surfaces", async () => {
@@ -48,12 +72,26 @@ test("Workspace delivery track panel keeps onboarding context-card action mappin
 test("Workspace delivery track panel keeps admin-readiness/admin-attention return mapping and queue semantics stable", async () => {
   const source = await readSource(deliveryPanelPath);
 
+  assert.match(source, /function buildDeliveryHandoffState\(args: \{/);
+  assert.match(source, /runId\?: string \| null;/);
+  assert.match(source, /runId: args\.runId \?\? null,/);
+  assert.match(source, /deliveryContext: args\.deliveryContext \?\? null,/);
+  assert.match(source, /recentTrackKey: args\.recentTrackKey \?\? null,/);
+  assert.match(source, /recentUpdateKind: args\.recentUpdateKind \?\? null,/);
+  assert.match(source, /recentOwnerLabel: args\.recentOwnerLabel \?\? null,/);
+  assert.match(source, /recentOwnerDisplayName: args\.recentOwnerDisplayName \?\? null,/);
+  assert.match(source, /recentOwnerEmail: args\.recentOwnerEmail \?\? null,/);
+  assert.match(source, /auditReceiptFilename: args\.auditReceiptFilename \?\? null,/);
+  assert.match(source, /auditReceiptExportedAt: args\.auditReceiptExportedAt \?\? null,/);
+  assert.match(source, /auditReceiptSha256: args\.auditReceiptSha256 \?\? null,/);
   assert.match(source, /function buildAdminReturnUrl\(/);
-  assert.match(source, /return buildAdminReturnHref\("\/admin", \{/);
+  assert.match(source, /return buildConsoleAdminReturnHref\(\{/);
+  assert.match(source, /pathname: "\/admin",/);
+  assert.match(source, /handoff: buildDeliveryHandoffState\(\{/);
+  assert.match(source, /runId,/);
+  assert.match(source, /attentionWorkspace: attentionWorkspace \?\? workspaceSlug,/);
+  assert.match(source, /recentTrackKey,/);
   assert.match(source, /queueSurface: surface,/);
-  assert.match(source, /week8Focus,/);
-  assert.match(source, /attentionWorkspace: workspaceSlug,/);
-  assert.match(source, /attentionOrganization,/);
 
   assert.match(source, /if \(source === "admin-readiness"\) \{/);
   assert.match(source, /title: "Admin readiness evidence handoff"/);
@@ -79,11 +117,17 @@ test("Workspace delivery track panel keeps admin-readiness/admin-attention retur
     source,
     /deliveryContext === "recent_activity"\s*\?\s*"You arrived here from the admin recent delivery activity snapshot\./s,
   );
+  assert.match(
+    source,
+    /Attach the audit export receipt\/evidence note \(filename, filters, SHA-256\) to this \$\{surfaceLabel\} entry so verification, go-live, and delivery tracking stay tied to the same file and later delivery notes can reference that shared evidence thread\./,
+  );
 });
 
 test("Workspace delivery track panel keeps recent metadata normalization and context-card/status guidance semantics aligned", async () => {
   const source = await readSource(deliveryPanelPath);
 
+  assert.match(source, /type DeliveryContext = "recent_activity" \| "week8";/);
+  assert.match(source, /return value === "recent_activity" \|\| value === "week8" \? value : null;/);
   assert.match(source, /function normalizeRecentTrackKey\(value\?: string \| null\): "verification" \| "go_live" \| null/);
   assert.match(source, /if \(value === "verification" \|\| value === "go_live"\) \{/);
   assert.match(source, /function normalizeRecentUpdateKind\(value\?: string \| null\): ControlPlaneAdminDeliveryUpdateKind \| null/);
@@ -92,6 +136,11 @@ test("Workspace delivery track panel keeps recent metadata normalization and con
   assert.match(source, /value === "evidence_only"/);
 
   assert.match(source, /const metadataLines = deliveryContext === "recent_activity" \? buildMetadataLines\(metadata\) : \[\];/);
+  assert.match(source, /const handoffContextArgs: Omit<BuildContextHrefArgs, "surface"> = \{/);
+  assert.match(source, /runId,/);
+  assert.match(source, /const auditExportReceipt = resolveAuditExportReceiptSummary\(/);
+  assert.match(source, /<AuditExportReceiptCallout[\s\S]*title="Audit export continuity"/);
+  assert.match(source, /Recent admin handoff owner:/);
   assert.match(source, /if \(kind === "evidence_only"\) \{\s*return `Evidence links were added on the \$\{trackLabel\(trackKey\)\} track\.`;\s*\}/s);
   assert.match(source, /if \(typeof metadata\.evidenceCount === "number"\) \{/);
   assert.match(

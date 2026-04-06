@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
+import { ConsoleAdminFollowUp } from "@/components/admin/console-admin-follow-up";
 import { WorkspaceContextSurfaceNotice } from "@/components/console/workspace-context-surface-notice";
 import { WorkspaceDeliveryTrackPanel } from "@/components/delivery/workspace-delivery-track-panel";
 import { MockGoLiveDrillPanel } from "@/components/go-live/mock-go-live-drill-panel";
@@ -10,13 +10,23 @@ import {
   buildConsoleAdminReturnHref,
   buildConsoleAdminReturnState,
   buildConsoleHandoffHref,
+  buildConsoleRunAwareHandoffHref,
   buildRecentDeliveryDescription,
   buildRecentDeliveryMetadata,
   parseConsoleHandoffState,
 } from "@/lib/console-handoff";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
+
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
 
 export default async function GoLivePage({
   searchParams,
@@ -25,10 +35,14 @@ export default async function GoLivePage({
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
   const handoff = parseConsoleHandoffState(searchParams);
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
   const goLiveMetadata = buildRecentDeliveryMetadata(handoff);
   const recentTrackKey = goLiveMetadata.recentTrackKey;
   const recentUpdateKind = goLiveMetadata.recentUpdateKind;
   const recentEvidenceCount = goLiveMetadata.recentEvidenceCount;
+  const recentOwnerLabel = handoff.recentOwnerLabel;
   const recentOwnerDisplayName = handoff.recentOwnerDisplayName;
   const recentOwnerEmail = handoff.recentOwnerEmail;
   const adminReturnState = buildConsoleAdminReturnState({
@@ -41,17 +55,23 @@ export default async function GoLivePage({
     "Track go-live drill status, experiments, and evidence references for this workspace.",
     goLiveMetadata,
   );
-  const verificationHref = buildConsoleHandoffHref("/verification?surface=verification", handoff);
-  const usageHref = buildConsoleHandoffHref("/usage", handoff);
-  const settingsHref = buildConsoleHandoffHref("/settings", handoff);
-  const playgroundHref = buildConsoleHandoffHref("/playground", handoff);
-  const artifactsHref = buildConsoleHandoffHref("/artifacts", handoff);
+  const verificationHref = buildConsoleRunAwareHandoffHref("/verification?surface=verification", handoff, activeRunId);
+  const usageHref = buildConsoleRunAwareHandoffHref("/usage", handoff, activeRunId);
+  const settingsHref = buildConsoleRunAwareHandoffHref("/settings", handoff, activeRunId);
+  const playgroundHref = buildConsoleRunAwareHandoffHref("/playground", handoff, activeRunId);
+  const artifactsHref = buildConsoleRunAwareHandoffHref("/artifacts", handoff, activeRunId);
   const adminReturnHref = buildConsoleAdminReturnHref({
     pathname: "/admin",
-    handoff,
+    handoff: runAwareHandoff,
     workspaceSlug: workspaceContext.workspace.slug,
     queueSurface: adminReturnState.adminQueueSurface,
   });
+  const followUpSource =
+    adminReturnState.showAttentionHandoff
+      ? "admin-attention"
+      : adminReturnState.showReadinessHandoff
+        ? "admin-readiness"
+        : null;
   const adminHref = adminReturnState.showAdminReturn ? adminReturnHref : "/admin";
   const adminLinkLabel = adminReturnState.showAdminReturn ? adminReturnState.adminReturnLabel : "Admin overview";
 
@@ -61,39 +81,28 @@ export default async function GoLivePage({
         workspaceSlug={workspaceContext.workspace.slug}
         sourceDetail={workspaceContext.source_detail}
         surfaceLabel="Go-live drill"
-        sessionHref={buildConsoleHandoffHref("/session", handoff)}
+        sessionHref={buildConsoleRunAwareHandoffHref("/session", handoff, activeRunId)}
       />
-      {adminReturnState.showAttentionHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-attention"
-          surface="go_live"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoff.attentionWorkspace}
-          attentionOrganization={handoff.attentionOrganization}
-          deliveryContext={handoff.deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={recentEvidenceCount}
-          ownerDisplayName={recentOwnerDisplayName}
-          ownerEmail={recentOwnerEmail}
-        />
-      ) : null}
-      {adminReturnState.showReadinessHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-readiness"
-          surface="go_live"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoff.attentionWorkspace}
-          week8Focus={handoff.week8Focus}
-          attentionOrganization={handoff.attentionOrganization}
-          deliveryContext={handoff.deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={recentEvidenceCount}
-          ownerDisplayName={recentOwnerDisplayName}
-          ownerEmail={recentOwnerEmail}
-        />
-      ) : null}
+      <ConsoleAdminFollowUp
+        handoff={handoff}
+        payload={
+          followUpSource
+            ? {
+                source: followUpSource,
+                week8Focus: handoff.week8Focus,
+                attentionOrganization: handoff.attentionOrganization,
+                deliveryContext: handoff.deliveryContext,
+                recentTrackKey,
+                recentUpdateKind,
+                evidenceCount: recentEvidenceCount,
+                ownerDisplayName: recentOwnerDisplayName,
+                ownerEmail: recentOwnerEmail,
+              }
+            : null
+        }
+        surface="go_live"
+        workspaceSlug={workspaceContext.workspace.slug}
+      />
       <PageHeader
         eyebrow="Go-live"
         title="Mock go-live drill"
@@ -168,11 +177,18 @@ export default async function GoLivePage({
             before ending the loop in <Link href={adminHref}>{adminLinkLabel}</Link>. These links only steer the
             navigation; they do not impersonate the admin or automate any step.
           </p>
+          <p className="text-xs text-muted">
+            After downloading the latest audit export receipt/evidence note (filename, filters, SHA-256) through the
+            <Link href={settingsHref}> Settings upgrade intent</Link>, copy that note into Verification's evidence lane
+            (<Link href={verificationHref}>explicit verification surface</Link>) and into the go-live drill entries so the
+            governance trail remains manually stitched across these navigation-only surfaces.
+          </p>
         </CardContent>
       </Card>
       <MockGoLiveDrillPanel
         workspaceSlug={workspaceContext.workspace.slug}
         source={handoff.source}
+        runId={activeRunId}
         week8Focus={handoff.week8Focus}
         attentionWorkspace={handoff.attentionWorkspace}
         attentionOrganization={handoff.attentionOrganization}
@@ -180,7 +196,14 @@ export default async function GoLivePage({
         recentTrackKey={recentTrackKey}
         recentUpdateKind={recentUpdateKind}
         evidenceCount={recentEvidenceCount}
-        recentOwnerLabel={recentOwnerDisplayName ?? recentOwnerEmail}
+        recentOwnerLabel={recentOwnerLabel}
+        recentOwnerDisplayName={recentOwnerDisplayName}
+        recentOwnerEmail={recentOwnerEmail}
+        auditReceiptFilename={handoff.auditReceiptFilename}
+        auditReceiptExportedAt={handoff.auditReceiptExportedAt}
+        auditReceiptFromDate={handoff.auditReceiptFromDate}
+        auditReceiptToDate={handoff.auditReceiptToDate}
+        auditReceiptSha256={handoff.auditReceiptSha256}
       />
       <WorkspaceDeliveryTrackPanel
         workspaceSlug={workspaceContext.workspace.slug}
@@ -189,6 +212,7 @@ export default async function GoLivePage({
         description={goLiveDeliveryDescription}
         source={handoff.source}
         surface="go_live"
+        runId={activeRunId}
         week8Focus={handoff.week8Focus}
         attentionWorkspace={handoff.attentionWorkspace}
         attentionOrganization={handoff.attentionOrganization}
@@ -196,6 +220,14 @@ export default async function GoLivePage({
         recentTrackKey={recentTrackKey}
         recentUpdateKind={recentUpdateKind}
         evidenceCount={recentEvidenceCount}
+        recentOwnerLabel={recentOwnerLabel}
+        recentOwnerDisplayName={recentOwnerDisplayName}
+        recentOwnerEmail={recentOwnerEmail}
+        auditReceiptFilename={handoff.auditReceiptFilename}
+        auditReceiptExportedAt={handoff.auditReceiptExportedAt}
+        auditReceiptFromDate={handoff.auditReceiptFromDate}
+        auditReceiptToDate={handoff.auditReceiptToDate}
+        auditReceiptSha256={handoff.auditReceiptSha256}
       />
     </div>
   );

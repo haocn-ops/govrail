@@ -16,24 +16,28 @@ test("accept-invitation page keeps onboarding continuity query keys and preserve
 
   assert.match(source, /function buildOnboardingPath\(pathname: string\): string \{/);
   assert.match(source, /if \(!acceptedWorkspace\) \{\s*return pathname;\s*\}/s);
-  assert.match(source, /const \[basePath, rawQuery\] = pathname\.split\("\?", 2\);/);
-  assert.match(source, /const params = new URLSearchParams\(rawQuery \?\? ""\);/);
   assert.match(
     source,
-    /const continuityKeys = \[\s*"week8_focus",\s*"attention_organization",\s*"delivery_context",\s*"recent_track_key",\s*"recent_update_kind",\s*"evidence_count",\s*"recent_owner_label",\s*"recent_owner_display_name",\s*"recent_owner_email",\s*\];/s,
+    /import \{\s*buildWorkspaceNavigationHref,\s*performWorkspaceSwitch,\s*\} from "@\/lib\/client-workspace-navigation";/s,
   );
-  assert.match(source, /for \(const key of continuityKeys\) \{\s*const value = searchParams\.get\(key\);/s);
-  assert.match(source, /if \(value && !params\.has\(key\)\) \{\s*params\.set\(key, value\);\s*\}/s);
-  assert.match(source, /params\.set\("source", "onboarding"\);/);
-  assert.match(source, /params\.set\("attention_workspace", acceptedWorkspace\.workspace_slug\);/);
-  assert.match(source, /params\.set\("delivery_context", "recent_activity"\);/);
-  assert.match(source, /params\.set\("recent_owner_label", acceptedWorkspace\.display_name\);/);
-  assert.match(source, /const value = searchParams\.get\(key\);/);
-  assert.match(source, /if \(value && !params\.has\(key\)\) \{\s*params\.set\(key, value\);\s*\}/s);
+  assert.match(
+    source,
+    /const continuityKeys = \[\s*"run_id",\s*"week8_focus",\s*"attention_organization",\s*"delivery_context",\s*"recent_track_key",\s*"recent_update_kind",\s*"evidence_count",\s*"recent_owner_label",\s*"recent_owner_display_name",\s*"recent_owner_email",\s*\];/s,
+  );
+  assert.match(
+    source,
+    /const continuitySearchParams = Object\.fromEntries\(\s*continuityKeys\.map\(\(key\) => \[key, searchParams\.get\(key\)\]\),\s*\) satisfies Record<string, string \| null>;/s,
+  );
+  assert.match(source, /return buildWorkspaceNavigationHref\(/);
+  assert.match(source, /source: "onboarding",/);
+  assert.match(source, /attention_workspace: acceptedWorkspace\.workspace_slug,/);
+  assert.match(source, /delivery_context: "recent_activity",/);
+  assert.match(source, /recent_owner_label: acceptedWorkspace\.display_name,/);
+  assert.match(source, /recent_owner_display_name: acceptedWorkspace\.display_name,/);
+  assert.match(source, /recent_owner_email: acceptedWorkspace\.owner_email,/);
+  assert.match(source, /\{ preferExistingQuery: true \}/);
   assert.match(source, /"recent_owner_display_name"/);
   assert.match(source, /"recent_owner_email"/);
-  assert.match(source, /const query = params\.toString\(\);/);
-  assert.match(source, /return query \? `\$\{basePath\}\?\$\{query\}` : basePath;/);
 });
 
 test("accept-invitation suggested actions keep explicit verification/go-live surface paths", async () => {
@@ -46,6 +50,10 @@ test("accept-invitation suggested actions keep explicit verification/go-live sur
   assert.match(source, /\{ label: "Open Week 8 checklist", path: "\/verification\?surface=verification" \}/);
   assert.match(source, /\{ label: "Review go-live drill", path: "\/go-live\?surface=go_live" \}/);
   assert.match(source, /onClick=\{\(\) => void openWorkspaceSurface\(buildOnboardingPath\(action\.path\)\)\}/);
+  assert.match(source, /const outcome = await performWorkspaceSwitch\(\{/);
+  assert.match(source, /workspace_slug: acceptedWorkspace\.workspace_slug,/);
+  assert.match(source, /if \(outcome\.status === "failed"\) \{/);
+  assert.match(source, /router\.push\(pathname\);/);
   assert.match(source, /Open Week 8 checklist/);
   assert.match(source, /Review go-live drill/);
 });

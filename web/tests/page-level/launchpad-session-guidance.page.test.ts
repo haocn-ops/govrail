@@ -17,6 +17,13 @@ async function readSource(filePath: string): Promise<string> {
   return readFile(filePath, "utf8");
 }
 
+function assertMatchesAny(source: string, patterns: RegExp[], message: string): void {
+  assert.ok(
+    patterns.some((pattern) => pattern.test(source)),
+    `${message}: expected one of ${patterns.map((pattern) => pattern.toString()).join(" | ")}`,
+  );
+}
+
 test("launchpad and dashboard keep session-aware launch hub guidance", async () => {
   const [dashboardSource, launchpadSource] = await Promise.all([
     readSource(dashboardPagePath),
@@ -27,37 +34,59 @@ test("launchpad and dashboard keep session-aware launch hub guidance", async () 
     dashboardSource,
     /description="Use this as the operator-facing launch state machine: confirm session\/workspace context, inspect readiness and plan posture, then continue through the right manual lane for this workspace\."/,
   );
-  assert.match(dashboardSource, /const source = getParam\(searchParams\?\.source\);/);
-  assert.match(dashboardSource, /const handoffWorkspace = getParam\(searchParams\?\.attention_workspace\);/);
-  assert.match(dashboardSource, /const handoffOrganization = getParam\(searchParams\?\.attention_organization\);/);
-  assert.match(dashboardSource, /const week8Focus = getParam\(searchParams\?\.week8_focus\);/);
-  assert.match(dashboardSource, /const deliveryContext = getParam\(searchParams\?\.delivery_context\);/);
-  assert.match(dashboardSource, /const recentTrackKey = getParam\(searchParams\?\.recent_track_key\);/);
-  assert.match(dashboardSource, /const recentUpdateKind = getParam\(searchParams\?\.recent_update_kind\);/);
-  assert.match(dashboardSource, /const evidenceCountParam = getParam\(searchParams\?\.evidence_count\);/);
+  assert.match(
+    dashboardSource,
+    /import \{[\s\S]*buildConsoleAdminLinkState,[\s\S]*buildConsoleRunAwareHandoffHref,[\s\S]*parseConsoleHandoffState,[\s\S]*\} from "@\/lib\/console-handoff";/s,
+  );
+  assert.match(dashboardSource, /const handoff = parseConsoleHandoffState\(searchParams\);/);
+  assert.match(
+    dashboardSource,
+    /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/,
+  );
+  assert.match(dashboardSource, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
+  assert.match(
+    dashboardSource,
+    /const \{\s*source,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\} = runAwareHandoff;/s,
+  );
   assert.match(dashboardSource, /workspaceRole=\{workspaceContext\.workspace\.subject_roles \?\? null\}/);
   assert.match(dashboardSource, /contextSourceLabel=\{workspaceContext\.source_detail\.label\}/);
   assert.match(dashboardSource, /source=\{source\}/);
   assert.match(dashboardSource, /week8Focus=\{week8Focus\}/);
-  assert.match(dashboardSource, /attentionWorkspace=\{handoffWorkspace\}/);
-  assert.match(dashboardSource, /attentionOrganization=\{handoffOrganization\}/);
+  assert.match(dashboardSource, /attentionWorkspace=\{attentionWorkspace\}/);
+  assert.match(dashboardSource, /attentionOrganization=\{attentionOrganization\}/);
   assert.match(dashboardSource, /deliveryContext=\{deliveryContext\}/);
   assert.match(dashboardSource, /recentTrackKey=\{recentTrackKey\}/);
   assert.match(dashboardSource, /recentUpdateKind=\{recentUpdateKind\}/);
   assert.match(dashboardSource, /evidenceCount=\{evidenceCount\}/);
-  assert.match(dashboardSource, /recentOwnerLabel=\{ownerLabel\}/);
+  assert.match(dashboardSource, /recentOwnerLabel=\{recentOwnerLabel\}/);
+  assert.match(dashboardSource, /recentOwnerDisplayName=\{recentOwnerDisplayName\}/);
+  assert.match(dashboardSource, /recentOwnerEmail=\{recentOwnerEmail\}/);
+  assert.match(dashboardSource, /const adminLinkState = buildConsoleAdminLinkState\(\{/);
+  assert.match(dashboardSource, /handoff: runAwareHandoff,/);
+  assert.match(dashboardSource, /runId: activeRunId,/);
+  assert.match(dashboardSource, /buildConsoleRunAwareHandoffHref\(link\.path, runAwareHandoff, activeRunId\)/);
+  assert.match(dashboardSource, /href=\{adminLinkState\.adminHref\}/);
+  assert.match(dashboardSource, /\{adminLinkState\.adminLinkLabel\}/);
 
-  assert.match(launchpadSource, /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/);
-  assert.match(launchpadSource, /import \{ buildAdminReturnHref, resolveAdminQueueSurface \} from "@\/lib\/handoff-query";/);
+  assert.match(
+    launchpadSource,
+    /import \{[\s\S]*buildVerificationChecklistHandoffHref[\s\S]*\} from "@\/lib\/handoff-query";/s,
+  );
+  assert.match(
+    launchpadSource,
+    /import \{[\s\S]*buildAdminReturnHref[\s\S]*resolveAdminQueueSurface[\s\S]*\} from "@\/lib\/handoff-query";/s,
+  );
   assert.match(launchpadSource, /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0], "pathname"> = \{/);
   assert.match(launchpadSource, /source: normalizedSource,/);
   assert.match(launchpadSource, /const showAdminAttention = normalizedSource === "admin-attention";/);
   assert.match(launchpadSource, /const showAdminReadiness = normalizedSource === "admin-readiness";/);
   assert.match(launchpadSource, /const adminReturnLabel = showAdminAttention \? "Return to admin queue" : "Return to admin readiness view";/);
   assert.match(launchpadSource, /const adminReturnHref =/);
-  assert.match(launchpadSource, /buildAdminReturnHref\("\/admin", \{/);
+  assert.match(launchpadSource, /buildAdminReturnHref\("\/admin", \{[\s\S]*runId: activeRunId,/);
   assert.match(launchpadSource, /function buildLaunchpadHref\(pathname: string\): string \{/);
-  assert.match(launchpadSource, /return buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs \}\);/);
+  assert.match(launchpadSource, /const latestDemoRun = onboarding\?\.latest_demo_run \?\? null;/);
+  assert.match(launchpadSource, /const activeRunId = latestDemoRun\?\.run_id \?\? null;/);
+  assert.match(launchpadSource, /return buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/);
   assert.match(launchpadSource, /<CardTitle>\{showAdminAttention \? "Admin attention follow-up" : "Admin readiness follow-up"\}<\/CardTitle>/);
   assert.match(launchpadSource, /This remains navigation-only context\./);
   assert.match(launchpadSource, /Return to admin queue/);
@@ -78,12 +107,15 @@ test("launchpad and dashboard keep session-aware launch hub guidance", async () 
   assert.match(launchpadSource, /href=\{buildLaunchpadHref\("\/settings\?intent=manage-plan"\)\}/);
   assert.match(launchpadSource, /href=\{buildLaunchpadHref\("\/verification\?surface=verification"\)\}/);
   assert.match(launchpadSource, /href=\{buildLaunchpadHref\(toSurfacePath\(entry\.surface\)\)\}/);
-  assert.match(launchpadSource, /import \{ buildAdminReturnHref, resolveAdminQueueSurface \} from "@\/lib\/handoff-query";/);
+  assert.match(
+    launchpadSource,
+    /import \{[\s\S]*buildAdminReturnHref[\s\S]*resolveAdminQueueSurface[\s\S]*\} from "@\/lib\/handoff-query";/s,
+  );
   assert.match(launchpadSource, /const showAdminAttention = normalizedSource === "admin-attention";/);
   assert.match(launchpadSource, /const showAdminReadiness = normalizedSource === "admin-readiness";/);
   assert.match(
     launchpadSource,
-    /const adminReturnHref =[\s\S]*buildAdminReturnHref\("\/admin", \{[\s\S]*source: normalizedSource,[\s\S]*queueSurface: showAdminAttention \? resolveAdminQueueSurface\(recentTrackKey\) : null,[\s\S]*week8Focus,[\s\S]*attentionWorkspace: attentionWorkspace \?\? workspaceSlug,[\s\S]*attentionOrganization,[\s\S]*deliveryContext,[\s\S]*recentUpdateKind: normalizeRecentUpdateKind\(recentUpdateKind\),[\s\S]*evidenceCount,[\s\S]*recentOwnerLabel,[\s\S]*\}\)/,
+    /const adminReturnHref =[\s\S]*buildAdminReturnHref\("\/admin", \{[\s\S]*source: normalizedSource,[\s\S]*runId: activeRunId,[\s\S]*queueSurface: showAdminAttention \? resolveAdminQueueSurface\(recentTrackKey\) : null,[\s\S]*week8Focus,[\s\S]*attentionWorkspace: attentionWorkspace \?\? workspaceSlug,[\s\S]*attentionOrganization,[\s\S]*deliveryContext,[\s\S]*recentUpdateKind: normalizeRecentUpdateKind\(recentUpdateKind\),[\s\S]*evidenceCount,[\s\S]*recentOwnerLabel,[\s\S]*recentOwnerDisplayName,[\s\S]*recentOwnerEmail,[\s\S]*\}\)/,
   );
   assert.match(launchpadSource, /Admin attention follow-up/);
   assert.match(launchpadSource, /Admin readiness follow-up/);
@@ -92,6 +124,19 @@ test("launchpad and dashboard keep session-aware launch hub guidance", async () 
   assert.match(
     launchpadSource,
     /This remains navigation-only context\. It does not impersonate a member, trigger support automation, or[\s\S]*auto-resolve readiness issues for you\./,
+  );
+});
+
+test("launchpad recommendations document missing active credentials vs historical ones", async () => {
+  const launchpadSource = await readSource(launchpadPath);
+
+  assert.match(
+    launchpadSource,
+    /Only historical or disabled service accounts remain\. Create a new active machine identity for the first governed API path\./,
+  );
+  assert.match(
+    launchpadSource,
+    /Only revoked or historical API keys remain\. Issue a new active key for the first governed run\./,
   );
 });
 
@@ -139,7 +184,13 @@ test("session surfaces and topbar keep role-aware navigation-only context guidan
   assert.match(topbarSource, /does not change\s+roles or impersonate another operator\./);
 
   assert.match(workspaceSwitcherSource, /function workspaceCountLabel\(count: number\): string \{/);
+  assert.match(workspaceSwitcherSource, /import \{ performWorkspaceSwitch \} from "@\/lib\/client-workspace-navigation";/);
   assert.match(workspaceSwitcherSource, /reachable workspace/);
+  assert.match(workspaceSwitcherSource, /const \[warningMessage, setWarningMessage\] = useState<string \| null>\(null\);/);
+  assert.match(workspaceSwitcherSource, /const outcome = await performWorkspaceSwitch\(\{/);
+  assert.match(workspaceSwitcherSource, /resetMode: "clear",/);
+  assert.match(workspaceSwitcherSource, /if \(outcome\.status === "switched"\) \{/);
+  assert.match(workspaceSwitcherSource, /setWarningMessage\(outcome\.warning\);/);
   assert.match(workspaceSwitcherSource, /This control only updates the console's manual workspace context/);
   assert.match(workspaceSwitcherSource, /topbar badges:/);
   assert.match(

@@ -14,6 +14,10 @@ async function readSource(filePath: string): Promise<string> {
 test("Settings panel keeps SSO saved-section fields aligned with submit payload and draft hydration", async () => {
   const source = await readSource(settingsPanelPath);
 
+  assert.match(
+    source,
+    /import \{\s*buildDedicatedHydrationConfigKey,\s*buildSsoHydrationConfigKey,\s*\} from "@\/components\/settings\/enterprise-hydration";/s,
+  );
   assert.match(source, /Saved configuration/);
   assert.match(source, /Configured domains/);
   assert.match(source, /Metadata URL/);
@@ -23,9 +27,14 @@ test("Settings panel keeps SSO saved-section fields aligned with submit payload 
   assert.match(source, /metadata_url: ssoDraft\.metadataUrl\.trim\(\)/);
   assert.match(source, /client_id: ssoDraft\.protocol === "oidc" && entityId \? entityId : null/);
   assert.match(source, /audience: ssoDraft\.protocol === "saml" && entityId \? entityId : null/);
+  assert.match(
+    source,
+    /const ssoConfiguredIdentity = readString\(\s*ssoReadiness\?\.provider_type === "saml" \? ssoReadiness\?\.audience : ssoReadiness\?\.client_id,\s*\);/s,
+  );
   assert.match(source, /metadataUrl: ssoReadiness\?\.metadata_url \?\? current\.metadataUrl/);
   assert.match(source, /entityId: ssoConfiguredIdentity \?\? current\.entityId/);
   assert.match(source, /domains: ssoConfiguredDomainsDraftValue/);
+  assert.match(source, /const configKey = buildSsoHydrationConfigKey\(\{/);
 });
 
 test("Settings panel keeps dedicated saved-request fields aligned with submit payload and draft hydration", async () => {
@@ -53,6 +62,7 @@ test("Settings panel keeps dedicated saved-request fields aligned with submit pa
   assert.match(source, /requestedCapacity: dedicatedRequestedCapacity \?\? current\.requestedCapacity/);
   assert.match(source, /requestedSla: dedicatedRequestedSla \?\? current\.requestedSla/);
   assert.match(source, /networkNotes: dedicatedEnvironmentReadiness\?\.network_boundary \?\? current\.networkNotes/);
+  assert.match(source, /const configKey = buildDedicatedHydrationConfigKey\(\{/);
 });
 
 test("Settings panel keeps plan-gated next-steps narrative for enterprise SSO and dedicated sections", async () => {
@@ -123,7 +133,7 @@ test("Settings panel keeps dedicated saved sections coupled with runtime badges,
 test("Settings panel keeps readiness/attention/onboarding cards aligned with verification and go-live handoff links", async () => {
   const source = await readSource(settingsPanelPath);
 
-  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{/);
+  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{[\s\S]*runId,/);
   assert.match(
     source,
     /const verificationHref = buildSettingsHref\(\{ pathname: "\/verification\?surface=verification", \.\.\.handoffHrefArgs \}\);/,
@@ -131,6 +141,7 @@ test("Settings panel keeps readiness/attention/onboarding cards aligned with ver
   assert.match(source, /const goLiveHref = buildSettingsHref\(\{ pathname: "\/go-live\?surface=go_live", \.\.\.handoffHrefArgs \}\);/);
   assert.match(source, /queueSurface: normalizedRecentTrackKey,/);
   assert.match(source, /attentionWorkspace: attentionWorkspace \?\? workspaceSlug,/);
+  assert.match(source, /runId,/);
 
   assert.match(source, /const readinessCard =\s*normalizedSource === "admin-readiness"/s);
   assert.match(source, /title: "Admin readiness follow-up"/);
@@ -213,4 +224,29 @@ test("Settings panel keeps audit export source-badge and cross-page evidence han
   assert.match(source, /contractSourceDescription\(auditContractSource, auditContractIssue\)/);
   assert.match(source, /<Link\s+href=\{verificationHref\}[\s\S]*?>\s*Attach in verification\s*<\/Link>/s);
   assert.match(source, /<Link\s+href=\{goLiveHref\}[\s\S]*?>\s*Carry to go-live drill\s*<\/Link>/s);
+  assert.match(source, /type AuditExportReceipt = AuditExportReceiptSummary & \{/);
+  assert.match(source, /const \[auditExportReceipt, setAuditExportReceipt\] = useState<AuditExportReceipt \| null>\(null\);/);
+  assert.match(source, /function buildAuditExportReceiptContinuityArgs\(/);
+  assert.match(source, /auditReceiptFilename: receipt\?\.filename \?\? null,/);
+  assert.match(source, /auditReceiptExportedAt: receipt\?\.exportedAt \?\? null,/);
+  assert.match(source, /auditReceiptSha256: receipt\?\.sha256 \?\? null,/);
+  assert.match(source, /\.\.\.buildAuditExportReceiptContinuityArgs\(auditExportReceipt\),/);
+  assert.match(source, /auditReceiptFilename: args\.auditReceiptFilename,/);
+  assert.match(source, /auditReceiptExportedAt: args\.auditReceiptExportedAt,/);
+  assert.match(source, /auditReceiptFromDate: args\.auditReceiptFromDate,/);
+  assert.match(source, /auditReceiptToDate: args\.auditReceiptToDate,/);
+  assert.match(source, /auditReceiptSha256: args\.auditReceiptSha256,/);
+  assert.match(source, /const sha256 = await computeBlobSha256\(download\.blob\);/);
+  assert.match(
+    source,
+    /setAuditExportReceipt\(\{\s*filename: download\.filename,\s*format: download\.format,\s*exportedAt: new Date\(\)\.toISOString\(\),\s*fromDate: auditFromDate\.trim\(\) \|\| null,\s*toDate: auditToDate\.trim\(\) \|\| null,\s*contentType: download\.content_type,\s*sizeBytes: download\.blob\.size,\s*sha256,\s*\}\);/s,
+  );
+  assert.match(source, /Latest export receipt/);
+  assert.match(source, /Keep this receipt with the downloaded file/);
+  assert.match(source, /same export details\./);
+  assert.match(source, /SHA-256/);
+  assert.match(source, /function formatAuditExportEvidenceNote\(receipt: AuditExportReceipt\): string \{/);
+  assert.match(source, /Audit export \$\{receipt\.filename\}/);
+  assert.match(source, /Evidence note/);
+  assert.match(source, /Carry this exact note into verification, go-live, or the delivery track/);
 });

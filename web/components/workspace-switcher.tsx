@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import { performWorkspaceSwitch } from "@/lib/client-workspace-navigation";
+
 type WorkspaceOption = {
   workspace_id: string;
   slug: string;
@@ -26,6 +28,7 @@ export function WorkspaceSwitcher({
   const [selected, setSelected] = useState(currentWorkspaceSlug);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setSelected(currentWorkspaceSlug);
@@ -33,32 +36,23 @@ export function WorkspaceSwitcher({
   }, [currentWorkspaceSlug]);
 
   async function switchWorkspace(nextSlug: string, previousSlug: string) {
-    try {
-      const response = await fetch("/api/workspace-context", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          workspace_slug: nextSlug,
-        }),
-      });
+    const outcome = await performWorkspaceSwitch({
+      selection: {
+        workspace_slug: nextSlug,
+      },
+      queryClient,
+      resetMode: "clear",
+    });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: { message?: string } }
-          | null;
-        throw new Error(payload?.error?.message ?? "Failed to switch workspace");
-      }
-
-      queryClient.clear();
+    if (outcome.status === "switched") {
+      setWarningMessage(outcome.warning);
       router.refresh();
-    } catch (error) {
+    } else {
       setSelected(previousSlug);
-      setErrorMessage(error instanceof Error ? error.message : "Failed to switch workspace");
-    } finally {
-      setIsSaving(false);
+      setWarningMessage(null);
+      setErrorMessage(outcome.error?.message ?? "Failed to switch workspace");
     }
+    setIsSaving(false);
   }
 
   return (
@@ -77,6 +71,7 @@ export function WorkspaceSwitcher({
             const previousSlug = selected;
             setSelected(nextSlug);
             setErrorMessage(null);
+            setWarningMessage(null);
             setIsSaving(true);
             startTransition(() => {
               void switchWorkspace(nextSlug, previousSlug);
@@ -113,6 +108,11 @@ export function WorkspaceSwitcher({
       {errorMessage ? (
         <p className="text-[10px] text-amber-700" role="status">
           {errorMessage}
+        </p>
+      ) : null}
+      {warningMessage ? (
+        <p className="text-[10px] text-amber-700" role="status">
+          {warningMessage}
         </p>
       ) : null}
     </div>

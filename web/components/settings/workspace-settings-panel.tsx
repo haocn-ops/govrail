@@ -10,10 +10,18 @@ import type {
   ControlPlaneWorkspaceDedicatedEnvironmentSaveRequest,
   ControlPlaneWorkspaceSsoSaveRequest,
 } from "@/lib/control-plane-types";
+import type {
+  AuditExportReceiptContinuityArgs,
+  AuditExportReceiptSummary,
+} from "@/lib/audit-export-receipt";
 import { buildAdminReturnHref, buildHandoffHref } from "@/lib/handoff-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildDedicatedHydrationConfigKey,
+  buildSsoHydrationConfigKey,
+} from "@/components/settings/enterprise-hydration";
 import {
   completeBillingCheckoutSession,
   cancelBillingSubscription,
@@ -55,6 +63,22 @@ function formatMetricValue(key: string, value: number): string {
   return String(value);
 }
 
+function formatFileSize(bytes?: number | null): string {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) {
+    return "-";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 function formatMetricLabel(key: string): string {
   switch (key) {
     case "runs_created":
@@ -73,6 +97,13 @@ function formatDate(value?: string | null): string {
     return "-";
   }
   return new Date(value).toLocaleDateString();
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  return new Date(value).toLocaleString();
 }
 
 function formatUsageFraction(metric: { used: number; limit: number | null }): number {
@@ -183,6 +214,15 @@ function toIsoDateBoundary(value: string, mode: "start" | "end"): string | null 
     return null;
   }
   return date.toISOString();
+}
+
+async function computeBlobSha256(blob: Blob): Promise<string | null> {
+  if (!globalThis.crypto?.subtle) {
+    return null;
+  }
+
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 type ContractMetaSource =
@@ -434,6 +474,21 @@ type AuditExportState = {
   contractIssueCode: string | null;
 };
 
+type AuditExportReceipt = AuditExportReceiptSummary & {
+  format: "json" | "jsonl";
+  contentType: string | null;
+  sizeBytes: number;
+};
+
+function formatAuditExportEvidenceNote(receipt: AuditExportReceipt): string {
+  const filters =
+    receipt.fromDate || receipt.toDate
+      ? `${receipt.fromDate ?? "start"} -> ${receipt.toDate ?? "end"}`
+      : "full workspace history";
+  const hash = receipt.sha256 ?? "hash unavailable";
+  return `Audit export ${receipt.filename} (${receipt.format.toUpperCase()}, ${filters}, SHA-256: ${hash}).`;
+}
+
 function defaultAuditExportState(): AuditExportState {
   return {
     exporting: false,
@@ -647,7 +702,7 @@ function formatEnterpriseWriteError(
 }
 
 type SettingsSource = "admin-attention" | "admin-readiness" | "onboarding";
-type DeliveryContext = "recent_activity";
+type DeliveryContext = "recent_activity" | "week8";
 
 function normalizeSettingsSource(source?: string | null): SettingsSource | null {
   if (source === "admin-attention" || source === "admin-readiness" || source === "onboarding") {
@@ -657,7 +712,7 @@ function normalizeSettingsSource(source?: string | null): SettingsSource | null 
 }
 
 function normalizeDeliveryContext(value?: string | null): DeliveryContext | null {
-  return value === "recent_activity" ? "recent_activity" : null;
+  return value === "recent_activity" || value === "week8" ? value : null;
 }
 
 function normalizeRecentTrackKey(value?: string | null): "verification" | "go_live" | null {
@@ -683,6 +738,7 @@ function normalizeRecentUpdateKind(value?: string | null): ControlPlaneAdminDeli
 type SettingsHrefArgs = {
   pathname: string;
   source?: SettingsSource | null;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -691,14 +747,34 @@ type SettingsHrefArgs = {
   recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
   intent?: "manage-plan" | "resolve-billing" | "upgrade";
 };
+
+function buildAuditExportReceiptContinuityArgs(
+  receipt?: AuditExportReceipt | null,
+): AuditExportReceiptContinuityArgs {
+  return {
+    auditReceiptFilename: receipt?.filename ?? null,
+    auditReceiptExportedAt: receipt?.exportedAt ?? null,
+    auditReceiptFromDate: receipt?.fromDate ?? null,
+    auditReceiptToDate: receipt?.toDate ?? null,
+    auditReceiptSha256: receipt?.sha256 ?? null,
+  };
+}
 
 function buildSettingsHref(args: SettingsHrefArgs): string {
   const href = buildHandoffHref(
     args.pathname,
     {
       source: args.source,
+      runId: args.runId,
       week8Focus: args.week8Focus,
       attentionWorkspace: args.attentionWorkspace,
       attentionOrganization: args.attentionOrganization,
@@ -707,6 +783,13 @@ function buildSettingsHref(args: SettingsHrefArgs): string {
       recentUpdateKind: args.recentUpdateKind,
       evidenceCount: args.evidenceCount,
       recentOwnerLabel: args.recentOwnerLabel,
+      recentOwnerDisplayName: args.recentOwnerDisplayName,
+      recentOwnerEmail: args.recentOwnerEmail,
+      auditReceiptFilename: args.auditReceiptFilename,
+      auditReceiptExportedAt: args.auditReceiptExportedAt,
+      auditReceiptFromDate: args.auditReceiptFromDate,
+      auditReceiptToDate: args.auditReceiptToDate,
+      auditReceiptSha256: args.auditReceiptSha256,
     },
     { preserveExistingQuery: true },
   );
@@ -756,6 +839,7 @@ export function WorkspaceSettingsPanel({
   workspaceSlug,
   highlightIntent = null,
   initialCheckoutSessionId = null,
+  runId,
   source,
   week8Focus,
   attentionWorkspace,
@@ -765,10 +849,13 @@ export function WorkspaceSettingsPanel({
   recentUpdateKind,
   evidenceCount,
   recentOwnerLabel,
+  recentOwnerDisplayName,
+  recentOwnerEmail,
 }: {
   workspaceSlug: string;
   highlightIntent?: "upgrade" | "manage-plan" | "resolve-billing" | null;
   initialCheckoutSessionId?: string | null;
+  runId?: string | null;
   source?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
@@ -778,6 +865,8 @@ export function WorkspaceSettingsPanel({
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 }) {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
@@ -806,6 +895,7 @@ export function WorkspaceSettingsPanel({
     defaultSubscriptionActionState,
   );
   const [auditExport, setAuditExport] = useState<AuditExportState>(defaultAuditExportState);
+  const [auditExportReceipt, setAuditExportReceipt] = useState<AuditExportReceipt | null>(null);
   const [auditExportFormat, setAuditExportFormat] = useState<"json" | "jsonl">("jsonl");
   const [auditFromDate, setAuditFromDate] = useState("");
   const [auditToDate, setAuditToDate] = useState("");
@@ -874,6 +964,7 @@ export function WorkspaceSettingsPanel({
     typeof evidenceCount === "number" && Number.isFinite(evidenceCount) ? evidenceCount : null;
   const handoffHrefArgs = {
     source: normalizedSource,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -882,13 +973,25 @@ export function WorkspaceSettingsPanel({
     recentUpdateKind: normalizedRecentUpdateKind,
     evidenceCount: normalizedEvidenceCount,
     recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    ...buildAuditExportReceiptContinuityArgs(auditExportReceipt),
   } satisfies Omit<SettingsHrefArgs, "pathname" | "intent">;
   const adminReturnHref = buildAdminReturnHref("/admin", {
     source: normalizedSource,
+    runId,
     queueSurface: normalizedRecentTrackKey,
     week8Focus,
     attentionWorkspace: attentionWorkspace ?? workspaceSlug,
     attentionOrganization,
+    deliveryContext: normalizedDeliveryContext,
+    recentTrackKey: normalizedRecentTrackKey,
+    recentUpdateKind: normalizedRecentUpdateKind,
+    evidenceCount: normalizedEvidenceCount,
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    ...buildAuditExportReceiptContinuityArgs(auditExportReceipt),
   });
   const usageHref = buildSettingsHref({ pathname: "/usage", ...handoffHrefArgs });
   const verificationHref = buildSettingsHref({ pathname: "/verification?surface=verification", ...handoffHrefArgs });
@@ -961,8 +1064,9 @@ export function WorkspaceSettingsPanel({
     ssoReadiness?.email_domain ?? null,
   ]);
   const ssoConfiguredDomainsDraftValue = ssoConfiguredDomains.join(", ");
-  const ssoConfiguredIdentity =
-    ssoReadiness?.provider_type === "saml" ? (ssoReadiness?.audience ?? null) : (ssoReadiness?.client_id ?? null);
+  const ssoConfiguredIdentity = readString(
+    ssoReadiness?.provider_type === "saml" ? ssoReadiness?.audience : ssoReadiness?.client_id,
+  );
   const ssoNextSteps = ssoReadiness?.next_steps ?? [
     "Upgrade to a plan with SSO support.",
     "Choose OIDC or SAML as the connection protocol.",
@@ -1220,11 +1324,12 @@ export function WorkspaceSettingsPanel({
   }, [checkout.session?.session_id, initialCheckoutSessionId]);
 
   useEffect(() => {
-    const configKey = ssoReadiness?.configured_at ?? (ssoConfigured ? "configured" : null);
+    const configKey = buildSsoHydrationConfigKey({
+      readiness: ssoReadiness,
+      configuredIdentity: ssoConfiguredIdentity,
+      configuredDomains: ssoConfiguredDomains,
+    });
     if (!configKey || hydratedSsoConfigKey === configKey) {
-      return;
-    }
-    if (!ssoReadiness?.provider_type && !ssoReadiness?.metadata_url && !ssoConfiguredIdentity && ssoConfiguredDomains.length === 0) {
       return;
     }
 
@@ -1247,17 +1352,14 @@ export function WorkspaceSettingsPanel({
   ]);
 
   useEffect(() => {
-    const configKey = dedicatedEnvironmentReadiness?.configured_at ?? (dedicatedConfigured ? "configured" : null);
+    const configKey = buildDedicatedHydrationConfigKey({
+      readiness: dedicatedEnvironmentReadiness,
+      configuredRegion: dedicatedConfiguredRegion,
+      requesterEmail: dedicatedRequesterEmail,
+      requestedCapacity: dedicatedRequestedCapacity,
+      requestedSla: dedicatedRequestedSla,
+    });
     if (!configKey || hydratedDedicatedConfigKey === configKey) {
-      return;
-    }
-    if (
-      !dedicatedConfiguredRegion &&
-      !dedicatedRequesterEmail &&
-      !dedicatedRequestedCapacity &&
-      !dedicatedRequestedSla &&
-      !dedicatedEnvironmentReadiness?.network_boundary
-    ) {
       return;
     }
 
@@ -1376,9 +1478,7 @@ export function WorkspaceSettingsPanel({
     try {
       const payload = await completeBillingCheckoutSession(checkout.session.session_id);
       const session = extractCheckoutSession(payload);
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace-settings", workspaceSlug],
-      });
+      await invalidateBillingAndEnterpriseQueries();
       setCheckout((current) => ({
         ...current,
         completing: false,
@@ -1419,9 +1519,7 @@ export function WorkspaceSettingsPanel({
 
     try {
       await cancelBillingSubscription();
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace-settings", workspaceSlug],
-      });
+      await invalidateBillingAndEnterpriseQueries();
       setSubscriptionAction({
         openingPortal: false,
         cancelling: false,
@@ -1462,9 +1560,7 @@ export function WorkspaceSettingsPanel({
 
     try {
       await resumeBillingSubscription();
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace-settings", workspaceSlug],
-      });
+      await invalidateBillingAndEnterpriseQueries();
       setSubscriptionAction({
         openingPortal: false,
         cancelling: false,
@@ -1520,6 +1616,20 @@ export function WorkspaceSettingsPanel({
         notice: null,
       });
     }
+  }
+
+  async function invalidateBillingAndEnterpriseQueries(): Promise<void> {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["workspace-settings", workspaceSlug],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["workspace-sso-readiness", workspaceSlug],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["workspace-dedicated-environment-readiness", workspaceSlug],
+      }),
+    ]);
   }
 
   async function submitSsoConfiguration(): Promise<void> {
@@ -1701,6 +1811,7 @@ export function WorkspaceSettingsPanel({
     const contractSource = result.contract_meta.source;
     if (result.ok) {
       const download = result;
+      const sha256 = await computeBlobSha256(download.blob);
       const objectUrl = URL.createObjectURL(download.blob);
       const anchor = document.createElement("a");
       anchor.href = objectUrl;
@@ -1716,6 +1827,16 @@ export function WorkspaceSettingsPanel({
         contractSource,
         contractIssueMessage: null,
         contractIssueCode: null,
+      });
+      setAuditExportReceipt({
+        filename: download.filename,
+        format: download.format,
+        exportedAt: new Date().toISOString(),
+        fromDate: auditFromDate.trim() || null,
+        toDate: auditToDate.trim() || null,
+        contentType: download.content_type,
+        sizeBytes: download.blob.size,
+        sha256,
       });
       return;
     }
@@ -2876,11 +2997,14 @@ export function WorkspaceSettingsPanel({
             </div>
           ) : null}
           <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-muted">Audit export</p>
+            <p className="text-muted">Audit export continuity</p>
             <p className="mt-1 text-xs text-muted">
               {auditExportEnabled
                 ? "Export workspace audit events for compliance review and attach output into verification/go-live evidence."
                 : "Audit export is not enabled on this workspace plan. Upgrade to unlock export downloads."}
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              Navigation-only manual relay: these links preserve the workspace context but do not automatically attach the receipt or close rollout steps for you.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant={contractSourceBadgeVariant(auditContractSource)}>
@@ -2984,6 +3108,70 @@ export function WorkspaceSettingsPanel({
               <p className="mt-2 text-xs text-muted">
                 Export disabled reason: current plan does not include audit export.
               </p>
+            ) : null}
+            {auditExportReceipt ? (
+              <div className="mt-3 rounded-2xl border border-border bg-card p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-medium text-foreground">Latest export receipt</p>
+                  <Badge variant="subtle">{auditExportReceipt.format.toUpperCase()}</Badge>
+                </div>
+                <p className="mt-2 text-xs text-muted">
+                  Keep this receipt with the downloaded file so verification, go-live, and admin follow-up all cite the
+                  same export details.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <p className="text-xs text-muted">Filename</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{auditExportReceipt.filename}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Exported at</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {formatDateTime(auditExportReceipt.exportedAt)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Filters</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {auditExportReceipt.fromDate || auditExportReceipt.toDate
+                        ? `${auditExportReceipt.fromDate ?? "start"} -> ${auditExportReceipt.toDate ?? "end"}`
+                        : "Full workspace history"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Content type</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {auditExportReceipt.contentType ?? "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">File size</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {formatFileSize(auditExportReceipt.sizeBytes)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">SHA-256</p>
+                    <p className="mt-1 break-all text-sm font-medium text-foreground">
+                      {auditExportReceipt.sha256 ?? "Unavailable in this browser"}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-muted">
+                  Date filters above reflect the manual input on this page; export execution still uses UTC day
+                  boundaries for the generated file.
+                </p>
+                <div className="mt-3 rounded-xl border border-border bg-background p-3">
+                  <p className="text-xs text-muted">Evidence note</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {formatAuditExportEvidenceNote(auditExportReceipt)}
+                  </p>
+                  <p className="mt-2 text-xs text-muted">
+                    Carry this exact note into verification, go-live, or the delivery track so the export file, filter
+                    window, and hash stay aligned.
+                  </p>
+                </div>
+              </div>
             ) : null}
           </div>
           {checkout.session ? (

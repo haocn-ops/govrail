@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
+import { AuditExportReceiptCallout } from "@/components/audit-export-receipt-callout";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { resolveAuditExportReceiptSummary } from "@/lib/audit-export-receipt";
 import { buildAdminReturnHref, buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
 import { fetchCurrentWorkspace } from "@/services/control-plane";
 
@@ -128,6 +130,11 @@ function buildAdminEvidenceHref(args: {
   recentOwnerLabel?: string | null;
   recentOwnerDisplayName?: string | null;
   recentOwnerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
 }): string {
   return buildAdminReturnHref("/admin", {
     source: args.source,
@@ -142,6 +149,11 @@ function buildAdminEvidenceHref(args: {
     recentOwnerLabel: args.recentOwnerLabel,
     recentOwnerDisplayName: args.recentOwnerDisplayName,
     recentOwnerEmail: args.recentOwnerEmail,
+    auditReceiptFilename: args.auditReceiptFilename,
+    auditReceiptExportedAt: args.auditReceiptExportedAt,
+    auditReceiptFromDate: args.auditReceiptFromDate,
+    auditReceiptToDate: args.auditReceiptToDate,
+    auditReceiptSha256: args.auditReceiptSha256,
   });
 }
 
@@ -159,6 +171,11 @@ export function Week8VerificationChecklist({
   recentOwnerLabel,
   recentOwnerDisplayName,
   recentOwnerEmail,
+  auditReceiptFilename,
+  auditReceiptExportedAt,
+  auditReceiptFromDate,
+  auditReceiptToDate,
+  auditReceiptSha256,
 }: {
   workspaceSlug: string;
   source?: string | null;
@@ -173,6 +190,11 @@ export function Week8VerificationChecklist({
   recentOwnerLabel?: string | null;
   recentOwnerDisplayName?: string | null;
   recentOwnerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
 }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["week8-verification", workspaceSlug],
@@ -205,7 +227,19 @@ export function Week8VerificationChecklist({
     recentOwnerLabel,
     recentOwnerDisplayName,
     recentOwnerEmail,
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
   };
+  const auditExportReceipt = resolveAuditExportReceiptSummary({
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
+  });
   const buildChecklistHref = (pathname: string): string =>
     buildVerificationChecklistHandoffHref({ pathname, ...handoffHrefArgs });
   const buildRunAwareChecklistHref = (pathname: string): string =>
@@ -386,6 +420,11 @@ export function Week8VerificationChecklist({
         recentOwnerLabel,
         recentOwnerDisplayName,
         recentOwnerEmail,
+        auditReceiptFilename,
+        auditReceiptExportedAt,
+        auditReceiptFromDate,
+        auditReceiptToDate,
+        auditReceiptSha256,
       }),
       state: "in_progress",
     },
@@ -436,6 +475,14 @@ export function Week8VerificationChecklist({
           </p>
         </CardContent>
       </Card>
+
+      {auditExportReceipt ? (
+        <AuditExportReceiptCallout
+          receipt={auditExportReceipt}
+          title="Audit export continuity"
+          description="Settings already captured the latest receipt for this workspace. Keep the same filename, export time, filter window, and hash attached to verification evidence."
+        />
+      ) : null}
 
       {latestDemoRun ? (
         <Card>

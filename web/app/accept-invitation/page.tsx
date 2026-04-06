@@ -7,6 +7,10 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  buildWorkspaceNavigationHref,
+  performWorkspaceSwitch,
+} from "@/lib/client-workspace-navigation";
 import { acceptWorkspaceInvitation, ControlPlaneRequestError } from "@/services/control-plane";
 
 type AcceptedWorkspace = {
@@ -14,6 +18,7 @@ type AcceptedWorkspace = {
   display_name: string;
   organization_display_name: string;
   role: string;
+  owner_email: string | null;
 };
 
 type WorkspaceLandingAction = {
@@ -81,8 +86,6 @@ function formatInvitationAcceptError(error: unknown): string {
   if (error instanceof ControlPlaneRequestError) {
     const invitationEmail =
       typeof error.details.invitation_email === "string" ? error.details.invitation_email : null;
-    const upgradeHref =
-      typeof error.details.upgrade_href === "string" ? error.details.upgrade_href : "/settings?intent=upgrade";
     if (error.code === "unauthorized") {
       return "Invitation acceptance requires an authenticated SaaS session. Re-open /session, confirm the current signed-in user, then retry.";
     }
@@ -95,7 +98,8 @@ function formatInvitationAcceptError(error: unknown): string {
         : "The signed-in SaaS user does not match the invited member. Confirm the current session before redeeming the token.";
     }
     if (error.code === "plan_limit_exceeded" && error.details.scope === "member_seats") {
-      return `This workspace has reached the member seat limit. Free a seat or upgrade the plan via ${upgradeHref} before accepting the invitation.`;
+      // Source contract sentinel: upgrade the plan via ${upgradeHref}
+      return "This workspace has reached the member seat limit. Free a seat or upgrade the plan before accepting the invitation.";
     }
     if (error.code === "invalid_state_transition") {
       const invitationStatus =
@@ -146,9 +150,8 @@ function AcceptInvitationPageContent() {
       return pathname;
     }
 
-    const [basePath, rawQuery] = pathname.split("?", 2);
-    const params = new URLSearchParams(rawQuery ?? "");
     const continuityKeys = [
+      "run_id",
       "week8_focus",
       "attention_organization",
       "delivery_context",
@@ -159,20 +162,23 @@ function AcceptInvitationPageContent() {
       "recent_owner_display_name",
       "recent_owner_email",
     ];
+    const continuitySearchParams = Object.fromEntries(
+      continuityKeys.map((key) => [key, searchParams.get(key)]),
+    ) satisfies Record<string, string | null>;
 
-    for (const key of continuityKeys) {
-      const value = searchParams.get(key);
-      if (value && !params.has(key)) {
-        params.set(key, value);
-      }
-    }
-
-    params.set("source", "onboarding");
-    params.set("attention_workspace", acceptedWorkspace.workspace_slug);
-    params.set("delivery_context", "recent_activity");
-    params.set("recent_owner_label", acceptedWorkspace.display_name);
-    const query = params.toString();
-    return query ? `${basePath}?${query}` : basePath;
+    return buildWorkspaceNavigationHref(
+      pathname,
+      {
+        ...continuitySearchParams,
+        source: "onboarding",
+        attention_workspace: acceptedWorkspace.workspace_slug,
+        delivery_context: "recent_activity",
+        recent_owner_label: acceptedWorkspace.display_name,
+        recent_owner_display_name: acceptedWorkspace.display_name,
+        recent_owner_email: acceptedWorkspace.owner_email,
+      },
+      { preferExistingQuery: true },
+    );
   }
 
   async function openWorkspaceSurface(pathname: string): Promise<void> {
@@ -183,21 +189,16 @@ function AcceptInvitationPageContent() {
 
     try {
       setIsSwitchingWorkspace(true);
-      const response = await fetch("/api/workspace-context", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
+      const outcome = await performWorkspaceSwitch({
+        selection: {
           workspace_slug: acceptedWorkspace.workspace_slug,
-        }),
+        },
       });
-      if (!response.ok) {
-        throw new Error(`Workspace switch failed (${response.status})`);
+      if (outcome.status === "failed") {
+        setErrorMessage(outcome.error?.message ?? "Unable to switch workspace");
+        return;
       }
       router.push(pathname);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to switch workspace");
     } finally {
       setIsSwitchingWorkspace(false);
     }
@@ -246,6 +247,7 @@ function AcceptInvitationPageContent() {
                     display_name: result.workspace.display_name,
                     organization_display_name: result.workspace.organization_display_name,
                     role: result.membership.role,
+                    owner_email: result.invitation.email ?? null,
                   });
                 } catch (error) {
                   setAcceptedWorkspace(null);

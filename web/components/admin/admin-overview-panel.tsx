@@ -14,6 +14,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildWorkspaceNavigationHref,
+  performWorkspaceSwitch,
+} from "@/lib/client-workspace-navigation";
 import type {
   ControlPlaneAdminAttentionWorkspace,
   ControlPlaneAdminDeliveryWorkspace,
@@ -670,34 +674,19 @@ export function AdminOverviewPanel({
   }) => {
     setActionError(null);
     setSwitchingWorkspace(options.workspaceSlug);
-    try {
-      const response = await fetch("/api/workspace-context", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          workspace_slug: options.workspaceSlug,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(`Workspace switch failed (${response.status})`);
-      }
+    const outcome = await performWorkspaceSwitch({
+      selection: {
+        workspace_slug: options.workspaceSlug,
+      },
+    });
+    if (outcome.status === "switched") {
       startRoutingTransition(() => {
-        const searchParams = new URLSearchParams();
-        Object.entries(options.searchParams ?? {}).forEach(([key, value]) => {
-          if (value) {
-            searchParams.set(key, value);
-          }
-        });
-        const query = searchParams.toString();
-        router.push(query ? `${options.pathname}?${query}` : options.pathname);
+        router.push(buildWorkspaceNavigationHref(options.pathname, options.searchParams));
       });
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to switch workspace");
-    } finally {
-      setSwitchingWorkspace(null);
+    } else {
+      setActionError(outcome.error?.message ?? "Unable to switch workspace");
     }
+    setSwitchingWorkspace(null);
   };
 
   const handleAction = async (

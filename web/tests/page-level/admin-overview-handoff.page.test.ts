@@ -34,6 +34,10 @@ test("Admin overview keeps readiness follow-up handoff links on shared query hel
 test("Admin overview keeps attention action query naming consistent for surface and recent delivery metadata", async () => {
   const source = await readSource(adminOverviewPath);
 
+  assert.match(
+    source,
+    /import \{\s*buildWorkspaceNavigationHref,\s*performWorkspaceSwitch,\s*\} from "@\/lib\/client-workspace-navigation";/s,
+  );
   assert.match(source, /searchParams:\s*\{[\s\S]*source: "admin-attention"/);
   assert.match(source, /surface: targetSurface,/);
   assert.match(source, /run_id: workspace\.latest_demo_run_id \?\? null,/);
@@ -47,6 +51,9 @@ test("Admin overview keeps attention action query naming consistent for surface 
   assert.match(source, /recent_owner_label:/);
   assert.match(source, /recent_owner_display_name:/);
   assert.match(source, /recent_owner_email:/);
+  assert.match(source, /const outcome = await performWorkspaceSwitch\(\{/);
+  assert.match(source, /workspace_slug: options\.workspaceSlug,/);
+  assert.match(source, /router\.push\(buildWorkspaceNavigationHref\(options\.pathname, options\.searchParams\)\);/);
   assert.match(source, /targetSurface === "go_live" \? "Open go-live drill" : "Open verification checklist"/);
   assert.match(source, /pathname: "\/go-live\?surface=go_live"/);
 });

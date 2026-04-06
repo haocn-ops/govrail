@@ -9,16 +9,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   buildConsoleAdminReturnHref,
   buildConsoleAdminReturnState,
-  buildConsoleHandoffHref,
+  buildConsoleRunAwareHandoffHref,
   buildConsoleVerificationChecklistHandoffArgs,
   buildRecentDeliveryDescription,
   buildRecentDeliveryMetadata,
   parseConsoleHandoffState,
 } from "@/lib/console-handoff";
 import { buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
+
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
 
 export default async function VerificationPage({
   searchParams,
@@ -27,6 +36,9 @@ export default async function VerificationPage({
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
   const handoff = parseConsoleHandoffState(searchParams);
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
   const recentDeliveryMetadata = buildRecentDeliveryMetadata(handoff);
   const verificationDeliveryBase =
     "Persist the current verification status, owner, notes, and evidence references for this workspace.";
@@ -40,10 +52,10 @@ export default async function VerificationPage({
     expectedSurface: "verification",
     recentTrackKey: handoff.recentTrackKey,
   });
-  const handoffHrefArgs = buildConsoleVerificationChecklistHandoffArgs(handoff);
+  const handoffHrefArgs = buildConsoleVerificationChecklistHandoffArgs(runAwareHandoff);
   const adminReturnHref = buildConsoleAdminReturnHref({
     pathname: "/admin",
-    handoff,
+    handoff: runAwareHandoff,
     workspaceSlug: workspaceContext.workspace.slug,
     queueSurface: adminReturnState.adminQueueSurface,
   });
@@ -60,10 +72,10 @@ export default async function VerificationPage({
         workspaceSlug={workspaceContext.workspace.slug}
         sourceDetail={workspaceContext.source_detail}
         surfaceLabel="Verification"
-        sessionHref={buildConsoleHandoffHref("/session", handoff)}
+        sessionHref={buildConsoleRunAwareHandoffHref("/session", handoff, activeRunId)}
       />
       <ConsoleAdminFollowUp
-        handoff={handoff}
+        handoff={runAwareHandoff}
         payload={
           followUpSource
             ? {
@@ -149,7 +161,7 @@ export default async function VerificationPage({
       <Week8VerificationChecklist
         workspaceSlug={workspaceContext.workspace.slug}
         source={handoff.source}
-        runId={handoff.runId}
+        runId={activeRunId}
         week8Focus={handoff.week8Focus}
         attentionWorkspace={handoff.attentionWorkspace}
         attentionOrganization={handoff.attentionOrganization}
@@ -160,6 +172,11 @@ export default async function VerificationPage({
         recentOwnerLabel={handoff.recentOwnerLabel}
         recentOwnerDisplayName={handoff.recentOwnerDisplayName}
         recentOwnerEmail={handoff.recentOwnerEmail}
+        auditReceiptFilename={handoff.auditReceiptFilename}
+        auditReceiptExportedAt={handoff.auditReceiptExportedAt}
+        auditReceiptFromDate={handoff.auditReceiptFromDate}
+        auditReceiptToDate={handoff.auditReceiptToDate}
+        auditReceiptSha256={handoff.auditReceiptSha256}
       />
       <WorkspaceDeliveryTrackPanel
         workspaceSlug={workspaceContext.workspace.slug}
@@ -168,7 +185,7 @@ export default async function VerificationPage({
         description={verificationDeliveryDescription}
         source={handoff.source}
         surface="verification"
-        runId={handoff.runId}
+        runId={activeRunId}
         week8Focus={handoff.week8Focus}
         attentionWorkspace={handoff.attentionWorkspace}
         attentionOrganization={handoff.attentionOrganization}
@@ -179,6 +196,11 @@ export default async function VerificationPage({
         recentOwnerLabel={handoff.recentOwnerLabel}
         recentOwnerDisplayName={handoff.recentOwnerDisplayName}
         recentOwnerEmail={handoff.recentOwnerEmail}
+        auditReceiptFilename={handoff.auditReceiptFilename}
+        auditReceiptExportedAt={handoff.auditReceiptExportedAt}
+        auditReceiptFromDate={handoff.auditReceiptFromDate}
+        auditReceiptToDate={handoff.auditReceiptToDate}
+        auditReceiptSha256={handoff.auditReceiptSha256}
       />
     </div>
   );
