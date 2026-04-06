@@ -635,6 +635,7 @@ export async function fetchAdminOverview(): Promise<ControlPlaneAdminOverview> {
             display_name: "Preview Workspace",
             organization_id: "org_preview",
             organization_display_name: "Preview Organization",
+            latest_demo_run_id: null,
             baseline_ready: false,
             credentials_ready: false,
             demo_run_succeeded: false,

@@ -24,6 +24,13 @@ test("Verification page keeps console handoff helper contract and admin return c
   assert.match(source, /const handoff = parseConsoleHandoffState\(searchParams\);/);
   assert.match(source, /const recentDeliveryMetadata = buildRecentDeliveryMetadata\(handoff\);/);
   assert.match(source, /const handoffHrefArgs = buildConsoleVerificationChecklistHandoffArgs\(handoff\);/);
+  assert.match(source, /recentOwnerDisplayName=\{handoff\.recentOwnerDisplayName\}/);
+  assert.match(source, /recentOwnerEmail=\{handoff\.recentOwnerEmail\}/);
+  assert.match(source, /<Week8VerificationChecklist[\s\S]*runId=\{handoff\.runId\}/);
+  assert.match(
+    source,
+    /<WorkspaceDeliveryTrackPanel[\s\S]*runId=\{handoff\.runId\}[\s\S]*recentOwnerLabel=\{handoff\.recentOwnerLabel\}[\s\S]*recentOwnerDisplayName=\{handoff\.recentOwnerDisplayName\}[\s\S]*recentOwnerEmail=\{handoff\.recentOwnerEmail\}/,
+  );
   assert.match(
     source,
     /const adminReturnState = buildConsoleAdminReturnState\(\{\s*source: handoff\.source,\s*surface: handoff\.surface,\s*expectedSurface: "verification",\s*recentTrackKey: handoff\.recentTrackKey,\s*\}\);/s,
@@ -33,10 +40,14 @@ test("Verification page keeps console handoff helper contract and admin return c
     /const adminReturnHref = buildConsoleAdminReturnHref\(\{\s*pathname: "\/admin",\s*handoff,\s*workspaceSlug: workspaceContext\.workspace\.slug,\s*queueSurface: adminReturnState\.adminQueueSurface,\s*\}\);/s,
   );
 
-  assert.match(source, /\{adminReturnState\.showAttentionHandoff \? \(/);
-  assert.match(source, /<AdminFollowUpNotice[\s\S]*source="admin-attention"[\s\S]*surface="verification"/);
-  assert.match(source, /\{adminReturnState\.showReadinessHandoff \? \(/);
-  assert.match(source, /<AdminFollowUpNotice[\s\S]*source="admin-readiness"[\s\S]*surface="verification"/);
+  assert.match(source, /import \{ ConsoleAdminFollowUp \} from "@\/components\/admin\/console-admin-follow-up";/);
+  assert.match(
+    source,
+    /const followUpSource =\s*adminReturnState\.showAttentionHandoff\s*\?\s*"admin-attention"\s*:\s*adminReturnState\.showReadinessHandoff\s*\?\s*"admin-readiness"\s*:\s*null;/s,
+  );
+  assert.match(source, /<ConsoleAdminFollowUp[\s\S]*payload=\{/);
+  assert.match(source, /source: followUpSource/);
+  assert.match(source, /surface="verification"/);
   assert.match(source, /\{adminReturnState\.showAdminReturn \? \(/);
   assert.match(source, /href=\{adminReturnHref\}/);
   assert.match(source, /\{adminReturnState\.adminReturnLabel\}/);
@@ -49,13 +60,30 @@ test("Verification page keeps console handoff helper contract and admin return c
 });
 
 test("Verification page keeps explicit go_live continuation link contract", async () => {
-  const source = await readSource(verificationPagePath);
+  const [source, checklistSource] = await Promise.all([
+    readSource(verificationPagePath),
+    readSource(path.resolve(testDir, "../../components/verification/week8-verification-checklist.tsx")),
+  ]);
 
+  assert.match(source, /import \{ buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/);
   assert.match(source, /<CardTitle>Verification evidence lane<\/CardTitle>/);
+  assert.match(source, /buildVerificationChecklistHandoffHref\(\{ pathname: "\/go-live\?surface=go_live", \.\.\.handoffHrefArgs \}\)/);
+  assert.match(source, />\s*Continue to go-live drill\s*<\/Link>/);
+  assert.match(checklistSource, /<CardTitle>Latest demo run context<\/CardTitle>/);
+  assert.match(checklistSource, /runId\?: string \| null;/);
+  assert.match(checklistSource, /const activeRunId = latestDemoRun\?\.run_id \?\? runId \?\? null;/);
+  assert.match(checklistSource, /runId: activeRunId,/);
   assert.match(
-    source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/go-live\?surface=go_live", \.\.\.handoffHrefArgs \}\)\}[\s\S]*?>\s*Continue to go-live drill\s*<\/Link>/s,
+    checklistSource,
+    /const buildRunAwareChecklistHref = \(pathname: string\): string =>\s*buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/s,
   );
+  assert.match(
+    checklistSource,
+    /buildSettingsIntentHref\("manage-plan", normalizedSource, activeRunId,/,
+  );
+  assert.match(checklistSource, /href=\{buildRunAwareChecklistHref\(primarySurface\)\}/);
+  assert.match(checklistSource, /href=\{buildRunAwareChecklistHref\("\/artifacts"\)\}/);
+  assert.match(checklistSource, /href=\{buildRunAwareChecklistHref\("\/settings\?intent=rollback"\)\}/);
 });
 
 test("Go-live page keeps console handoff helper contract and explicit surface query continuity", async () => {
@@ -78,6 +106,10 @@ test("Go-live page keeps console handoff helper contract and explicit surface qu
   assert.match(source, /const artifactsHref = buildConsoleHandoffHref\("\/artifacts", handoff\);/);
   assert.match(
     source,
+    /<WorkspaceDeliveryTrackPanel[\s\S]*runId=\{handoff\.runId\}[\s\S]*recentOwnerLabel=\{recentOwnerLabel\}[\s\S]*recentOwnerDisplayName=\{recentOwnerDisplayName\}[\s\S]*recentOwnerEmail=\{recentOwnerEmail\}/,
+  );
+  assert.match(
+    source,
     /const adminReturnHref = buildConsoleAdminReturnHref\(\{\s*pathname: "\/admin",\s*handoff,\s*workspaceSlug: workspaceContext\.workspace\.slug,\s*queueSurface: adminReturnState\.adminQueueSurface,\s*\}\);/s,
   );
   assert.match(source, /const adminHref = adminReturnState\.showAdminReturn \? adminReturnHref : "\/admin";/);
@@ -85,11 +117,17 @@ test("Go-live page keeps console handoff helper contract and explicit surface qu
     source,
     /const adminLinkLabel = adminReturnState\.showAdminReturn \? adminReturnState\.adminReturnLabel : "Admin overview";/,
   );
+  assert.match(source, /import \{ ConsoleAdminFollowUp \} from "@\/components\/admin\/console-admin-follow-up";/);
+  assert.match(
+    source,
+    /const followUpSource =\s*adminReturnState\.showAttentionHandoff\s*\?\s*"admin-attention"\s*:\s*adminReturnState\.showReadinessHandoff\s*\?\s*"admin-readiness"\s*:\s*null;/s,
+  );
 
   assert.match(source, /<WorkspaceContextSurfaceNotice[\s\S]*surfaceLabel="Go-live drill"/);
   assert.match(source, /sessionHref=\{buildConsoleHandoffHref\("\/session", handoff\)\}/);
-  assert.match(source, /\{adminReturnState\.showAttentionHandoff \? \(/);
-  assert.match(source, /\{adminReturnState\.showReadinessHandoff \? \(/);
+  assert.match(source, /<ConsoleAdminFollowUp[\s\S]*payload=\{/);
+  assert.match(source, /source: followUpSource/);
+  assert.match(source, /surface="go_live"/);
   assert.match(source, /\{adminReturnState\.showAdminReturn \? \(/);
   assert.match(source, /\{adminReturnState\.adminReturnLabel\}/);
 });
@@ -120,5 +158,37 @@ test("Delivery description stitching stays centralized in console handoff helper
 test("Go-live drill panel keeps verification handoff link surface semantics for admin-attention continuity", async () => {
   const source = await readSource(goLivePanelPath);
 
+  assert.match(
+    source,
+    /import \{ buildAdminReturnHref, buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/,
+  );
+  assert.match(source, /type DeliveryContext = "recent_activity" \| "week8";/);
+  assert.match(source, /return value === "recent_activity" \|\| value === "week8" \? value : null;/);
+  assert.match(source, /recentOwnerDisplayName\?: string \| null;/);
+  assert.match(source, /recentOwnerEmail\?: string \| null;/);
+  assert.match(source, /const latestDemoRun = onboarding\?\.latest_demo_run \?\? null;/);
+  assert.match(source, /runId\?: string \| null;/);
+  assert.match(source, /const activeRunId = latestDemoRun\?\.run_id \?\? runId \?\? null;/);
+  assert.match(
+    source,
+    /const adminReturnLabel =\s*normalizedSource === "admin-attention"\s*\?\s*"Return to admin queue"\s*:\s*normalizedSource === "admin-readiness"\s*\?\s*"Return to admin readiness view"\s*:\s*"Return to admin overview";/s,
+  );
+  assert.match(source, /recentOwnerDisplayName,/);
+  assert.match(source, /recentOwnerEmail,/);
+  assert.match(source, /runId: activeRunId,/);
   assert.match(source, /href: buildHref\("\/verification\?surface=verification"\),/);
+  assert.match(source, /<CardTitle>Audit export continuity<\/CardTitle>/);
+  assert.match(
+    source,
+    /Before closing the drill, reopen the Latest export receipt from \/settings and confirm the same filename,/,
+  );
+  assert.match(source, /Reopen audit export receipt/);
+  assert.match(source, /Reopen verification evidence/);
+  assert.match(source, /\{adminReturnLabel\}/);
+  assert.match(
+    source,
+    /Navigation only: these links preserve workspace context, but they do not attach the receipt automatically or/,
+  );
+  assert.match(source, /title: "Admin return path reviewed"/);
+  assert.match(source, /matching admin follow-up lane/);
 });

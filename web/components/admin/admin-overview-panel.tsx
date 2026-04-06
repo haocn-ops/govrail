@@ -304,11 +304,13 @@ function buildAdminHref({
 
 function buildSurfaceFollowUpHref({
   pathname,
+  runId,
   readinessFocus,
   workspaceSlug,
   organizationId,
 }: {
   pathname: string;
+  runId?: string | null;
   readinessFocus?: ControlPlaneAdminWeek8ReadinessFocus | null;
   workspaceSlug?: string | null;
   organizationId?: string | null;
@@ -317,6 +319,7 @@ function buildSurfaceFollowUpHref({
     pathname,
     {
       source: "admin-readiness",
+      runId,
       week8Focus: readinessFocus,
       attentionWorkspace: workspaceSlug,
       attentionOrganization: organizationId,
@@ -327,6 +330,7 @@ function buildSurfaceFollowUpHref({
 
 function readinessFollowUpAction(
   readinessFocus: ControlPlaneAdminWeek8ReadinessFocus | null,
+  runId?: string | null,
   attentionWorkspaceSlug?: string | null,
   attentionOrganizationId?: string | null,
 ): { label: string; href: string; hint: string } | null {
@@ -338,6 +342,7 @@ function readinessFollowUpAction(
       label: "Open billing warning flow",
       href: buildSurfaceFollowUpHref({
         pathname: "/settings?intent=resolve-billing",
+        runId,
         readinessFocus,
         workspaceSlug: attentionWorkspaceSlug,
         organizationId: attentionOrganizationId,
@@ -351,6 +356,7 @@ function readinessFollowUpAction(
       label: "Open onboarding flow",
       href: buildSurfaceFollowUpHref({
         pathname: "/onboarding",
+        runId,
         readinessFocus,
         workspaceSlug: attentionWorkspaceSlug,
         organizationId: attentionOrganizationId,
@@ -364,6 +370,7 @@ function readinessFollowUpAction(
       label: "Open Week 8 checklist",
       href: buildSurfaceFollowUpHref({
         pathname: "/verification?surface=verification",
+        runId,
         readinessFocus,
         workspaceSlug: attentionWorkspaceSlug,
         organizationId: attentionOrganizationId,
@@ -376,6 +383,7 @@ function readinessFollowUpAction(
     label: "Open mock go-live drill",
     href: buildSurfaceFollowUpHref({
       pathname: "/go-live?surface=go_live",
+      runId,
       readinessFocus,
       workspaceSlug: attentionWorkspaceSlug,
       organizationId: attentionOrganizationId,
@@ -623,6 +631,15 @@ export function AdminOverviewPanel({
         readinessReturned,
       })
     : null;
+  const clearReadinessReturnedHref = readinessReturned
+    ? buildAdminHref({
+        surface: activeSurface,
+        readinessFocus,
+        organizationId: attentionOrganizationId,
+        workspaceSlug: attentionWorkspaceSlug,
+        queueReturned,
+      })
+    : null;
   const clearAllHref = hasFocusState ? "/admin" : null;
   const router = useRouter();
   const [switchingWorkspace, setSwitchingWorkspace] = useState<string | null>(null);
@@ -703,6 +720,7 @@ export function AdminOverviewPanel({
       searchParams: {
         source: "admin-attention",
         surface: targetSurface,
+        run_id: workspace.latest_demo_run_id ?? null,
         attention_workspace: workspace.slug,
         attention_organization: options?.attentionOrganizationId ?? null,
         delivery_context: options?.deliveryContext ?? null,
@@ -733,6 +751,7 @@ export function AdminOverviewPanel({
         source: "admin-readiness",
         surface:
           targetSurface === "go_live" || targetSurface === "verification" ? targetSurface : null,
+        run_id: workspace.latest_demo_run_id ?? null,
         week8_focus: readinessFocus,
         attention_workspace: workspace.slug,
         attention_organization: workspace.organization_id || attentionOrganizationId || null,
@@ -920,6 +939,20 @@ export function AdminOverviewPanel({
           return rightOrganizationMatches - leftOrganizationMatches;
         })
       : filteredReadinessWorkspaces;
+  const focusedReadinessWorkspace = attentionWorkspaceSlug
+    ? prioritizedReadinessWorkspaces.find((workspace) => workspace.slug === attentionWorkspaceSlug) ?? null
+    : null;
+  const focusedAttentionWorkspace = attentionWorkspaceSlug
+    ? filteredOrganizationWorkspaces.find((workspace) => workspace.slug === attentionWorkspaceSlug) ?? null
+    : null;
+  const focusedRecentDeliveryWorkspace = attentionWorkspaceSlug
+    ? recentDeliveryWorkspacesWithMetadata.find((workspace) => workspace.slug === attentionWorkspaceSlug) ?? null
+    : null;
+  const focusedRunId =
+    focusedRecentDeliveryWorkspace?.latest_demo_run_id
+    ?? focusedReadinessWorkspace?.latest_demo_run_id
+    ?? focusedAttentionWorkspace?.latest_demo_run_id
+    ?? null;
   const defaultReadinessLimit = 4;
   const [readinessLimit, setReadinessLimit] = useState(defaultReadinessLimit);
   useEffect(() => {
@@ -931,6 +964,7 @@ export function AdminOverviewPanel({
   const readinessActionLabel = (surface: AdminNavigationSurface) => surfaceActionInfo[surface].buttonLabel;
   const readinessFollowUp = readinessFollowUpAction(
     readinessFocus,
+    focusedRunId,
     attentionWorkspaceSlug,
     attentionOrganizationId,
   );
@@ -943,11 +977,13 @@ export function AdminOverviewPanel({
         organization={focusedOrganizationLabel}
         workspace={focusedWorkspaceLabel}
         queueReturned={queueReturned}
+        readinessReturned={readinessReturned}
         clearSurfaceHref={clearSurfaceHref}
         clearReadinessHref={clearReadinessHref}
         clearOrganizationHref={clearOrganizationHref}
         clearWorkspaceHref={clearWorkspaceHref}
         clearQueueReturnedHref={clearQueueReturnedHref}
+        clearReadinessReturnedHref={clearReadinessReturnedHref}
         clearAllHref={clearAllHref}
       />
       {showReadinessReturnBanner ? (
@@ -1724,6 +1760,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/go-live?surface=go_live",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1735,6 +1772,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/verification?surface=verification",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1746,6 +1784,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/onboarding",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1757,6 +1796,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/usage",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1768,6 +1808,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/settings",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1779,6 +1820,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/playground",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,

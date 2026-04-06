@@ -18,6 +18,7 @@ test("Admin overview keeps readiness follow-up handoff links on shared query hel
   assert.match(source, /function buildSurfaceFollowUpHref\(\{/);
   assert.match(source, /return buildHandoffHref\(/);
   assert.match(source, /source: "admin-readiness",/);
+  assert.match(source, /runId,/);
   assert.match(source, /week8Focus: readinessFocus,/);
   assert.match(source, /attentionWorkspace: workspaceSlug,/);
   assert.match(source, /attentionOrganization: organizationId,/);
@@ -35,6 +36,7 @@ test("Admin overview keeps attention action query naming consistent for surface 
 
   assert.match(source, /searchParams:\s*\{[\s\S]*source: "admin-attention"/);
   assert.match(source, /surface: targetSurface,/);
+  assert.match(source, /run_id: workspace\.latest_demo_run_id \?\? null,/);
   assert.match(source, /pathname: targetSurface === "go_live" \? "\/go-live" : "\/verification"/);
   assert.match(source, /attention_workspace: workspace\.slug,/);
   assert.match(source, /attention_organization:/);
@@ -55,6 +57,7 @@ test("Admin overview keeps direct admin-attention go-live queue entry and return
   assert.match(source, /const targetSurface = workspace\.next_action_surface \?\? "verification";/);
   assert.match(source, /source: "admin-attention",/);
   assert.match(source, /surface: targetSurface,/);
+  assert.match(source, /run_id: workspace\.latest_demo_run_id \?\? null,/);
   assert.match(source, /targetSurface === "go_live" \? "Open go-live drill" : "Open verification checklist"/);
   assert.match(source, /<p className="font-medium">Admin queue focus restored<\/p>/);
   assert.match(source, /Continue the governance review from the filtered queue/);

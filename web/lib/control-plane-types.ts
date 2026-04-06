@@ -380,6 +380,7 @@ export type ControlPlaneAdminDeliveryWorkspace = {
   display_name: string;
   organization_id: string;
   organization_display_name: string;
+  latest_demo_run_id?: string | null;
   verification_status: ControlPlaneDeliveryTrackStatus | null;
   go_live_status: ControlPlaneDeliveryTrackStatus | null;
   next_action_surface: "verification" | "go_live";
@@ -398,6 +399,7 @@ export type ControlPlaneAdminAttentionWorkspace = {
   display_name: string;
   organization_id: string;
   organization_display_name: string;
+  latest_demo_run_id?: string | null;
   verification_status: ControlPlaneDeliveryTrackStatus | null;
   go_live_status: ControlPlaneDeliveryTrackStatus | null;
   updated_at: string | null;
@@ -445,6 +447,7 @@ export type ControlPlaneAdminWeek8ReadinessWorkspace = {
   display_name: string;
   organization_id: string;
   organization_display_name: string;
+  latest_demo_run_id?: string | null;
   baseline_ready: boolean;
   credentials_ready: boolean;
   demo_run_succeeded: boolean;
@@ -525,7 +528,9 @@ export type ControlPlaneWorkspaceOnboardingState = {
     policies_created: number;
     policies_existing: number;
     service_accounts_total: number;
+    active_service_accounts_total: number;
     api_keys_total: number;
+    active_api_keys_total: number;
     demo_runs_total: number;
   };
   latest_demo_run: {

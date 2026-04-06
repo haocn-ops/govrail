@@ -28,7 +28,14 @@ test("Admin readiness overview keeps drill-down navigation-only continuity and r
   const source = await readSource(adminOverviewPath);
 
   assert.match(source, /const showReadinessReturnBanner =\s*!!readinessReturned && !!readinessFocus;/);
+  assert.match(source, /const clearReadinessReturnedHref = readinessReturned/);
+  assert.match(source, /const focusedRunId =/);
   assert.match(source, /const readinessFollowUp = readinessFollowUpAction\(/);
+  assert.match(source, /readinessFocus,\s*focusedRunId,\s*attentionWorkspaceSlug,\s*attentionOrganizationId,/s);
+  assert.match(
+    source,
+    /<AdminFocusBar[\s\S]*queueReturned=\{queueReturned\}[\s\S]*readinessReturned=\{readinessReturned\}[\s\S]*clearQueueReturnedHref=\{clearQueueReturnedHref\}[\s\S]*clearReadinessReturnedHref=\{clearReadinessReturnedHref\}/,
+  );
   assert.match(source, /<AdminReadinessReturnBanner[\s\S]*focusLabel=\{readinessFocusLabelText\}[\s\S]*clearHref=\{clearReadinessHref\}[\s\S]*focusHint=\{readinessFollowUp\?\.hint \?\? null\}[\s\S]*followUpHref=\{readinessFollowUp\?\.href \?\? null\}[\s\S]*followUpLabel=\{readinessFollowUp\?\.label \?\? null\}/);
   assert.match(source, /Use this list to move from a readiness metric into the specific workspaces that still need onboarding,/);
   assert.match(source, /These actions only switch workspace context and open the/);
@@ -43,6 +50,7 @@ test("Admin attention queue and recent activity keep workspace/context continuit
   assert.match(source, /const handleAction = async \(/);
   assert.match(source, /source: "admin-attention",/);
   assert.match(source, /surface: targetSurface,/);
+  assert.match(source, /run_id: workspace\.latest_demo_run_id \?\? null,/);
   assert.match(source, /attention_workspace: workspace\.slug,/);
   assert.match(source, /attention_organization: options\?\.attentionOrganizationId \?\? null,/);
   assert.match(source, /delivery_context: options\?\.deliveryContext \?\? null,/);
@@ -54,6 +62,7 @@ test("Admin attention queue and recent activity keep workspace/context continuit
   assert.match(source, /const handleReadinessAction = async \(workspace: ControlPlaneAdminWeek8ReadinessWorkspace\) => \{/);
   assert.match(source, /source: "admin-readiness",/);
   assert.match(source, /week8_focus: readinessFocus,/);
+  assert.match(source, /run_id: workspace\.latest_demo_run_id \?\? null,/);
   assert.match(source, /attention_workspace: workspace\.slug,/);
   assert.match(source, /attention_organization: workspace\.organization_id \|\| attentionOrganizationId \|\| null,/);
 

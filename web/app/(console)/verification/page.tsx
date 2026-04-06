@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
+import { ConsoleAdminFollowUp } from "@/components/admin/console-admin-follow-up";
 import { WorkspaceContextSurfaceNotice } from "@/components/console/workspace-context-surface-notice";
 import { WorkspaceDeliveryTrackPanel } from "@/components/delivery/workspace-delivery-track-panel";
 import { PageHeader } from "@/components/page-header";
@@ -47,6 +47,12 @@ export default async function VerificationPage({
     workspaceSlug: workspaceContext.workspace.slug,
     queueSurface: adminReturnState.adminQueueSurface,
   });
+  const followUpSource =
+    adminReturnState.showAttentionHandoff
+      ? "admin-attention"
+      : adminReturnState.showReadinessHandoff
+        ? "admin-readiness"
+        : null;
 
   return (
     <div className="space-y-8">
@@ -56,37 +62,26 @@ export default async function VerificationPage({
         surfaceLabel="Verification"
         sessionHref={buildConsoleHandoffHref("/session", handoff)}
       />
-      {adminReturnState.showAttentionHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-attention"
-          surface="verification"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoff.attentionWorkspace}
-          attentionOrganization={handoff.attentionOrganization}
-          deliveryContext={handoff.deliveryContext}
-          recentTrackKey={handoff.recentTrackKey}
-          recentUpdateKind={handoff.recentUpdateKind}
-          evidenceCount={handoff.evidenceCount}
-          ownerDisplayName={handoff.recentOwnerDisplayName}
-          ownerEmail={handoff.recentOwnerEmail}
-        />
-      ) : null}
-      {adminReturnState.showReadinessHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-readiness"
-          surface="verification"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoff.attentionWorkspace}
-          week8Focus={handoff.week8Focus}
-          attentionOrganization={handoff.attentionOrganization}
-          deliveryContext={handoff.deliveryContext}
-          recentTrackKey={handoff.recentTrackKey}
-          recentUpdateKind={handoff.recentUpdateKind}
-          evidenceCount={handoff.evidenceCount}
-          ownerDisplayName={handoff.recentOwnerDisplayName}
-          ownerEmail={handoff.recentOwnerEmail}
-        />
-      ) : null}
+      <ConsoleAdminFollowUp
+        handoff={handoff}
+        payload={
+          followUpSource
+            ? {
+                source: followUpSource,
+                week8Focus: handoff.week8Focus,
+                attentionOrganization: handoff.attentionOrganization,
+                deliveryContext: handoff.deliveryContext,
+                recentTrackKey: handoff.recentTrackKey,
+                recentUpdateKind: handoff.recentUpdateKind,
+                evidenceCount: handoff.evidenceCount,
+                ownerDisplayName: handoff.recentOwnerDisplayName,
+                ownerEmail: handoff.recentOwnerEmail,
+              }
+            : null
+        }
+        surface="verification"
+        workspaceSlug={workspaceContext.workspace.slug}
+      />
       <PageHeader
         eyebrow="Verification"
         title="Week 8 launch checklist"
@@ -154,6 +149,7 @@ export default async function VerificationPage({
       <Week8VerificationChecklist
         workspaceSlug={workspaceContext.workspace.slug}
         source={handoff.source}
+        runId={handoff.runId}
         week8Focus={handoff.week8Focus}
         attentionWorkspace={handoff.attentionWorkspace}
         attentionOrganization={handoff.attentionOrganization}
@@ -162,6 +158,8 @@ export default async function VerificationPage({
         recentUpdateKind={handoff.recentUpdateKind}
         evidenceCount={handoff.evidenceCount}
         recentOwnerLabel={handoff.recentOwnerLabel}
+        recentOwnerDisplayName={handoff.recentOwnerDisplayName}
+        recentOwnerEmail={handoff.recentOwnerEmail}
       />
       <WorkspaceDeliveryTrackPanel
         workspaceSlug={workspaceContext.workspace.slug}
@@ -170,6 +168,7 @@ export default async function VerificationPage({
         description={verificationDeliveryDescription}
         source={handoff.source}
         surface="verification"
+        runId={handoff.runId}
         week8Focus={handoff.week8Focus}
         attentionWorkspace={handoff.attentionWorkspace}
         attentionOrganization={handoff.attentionOrganization}
@@ -177,6 +176,9 @@ export default async function VerificationPage({
         recentTrackKey={handoff.recentTrackKey}
         recentUpdateKind={handoff.recentUpdateKind}
         evidenceCount={handoff.evidenceCount}
+        recentOwnerLabel={handoff.recentOwnerLabel}
+        recentOwnerDisplayName={handoff.recentOwnerDisplayName}
+        recentOwnerEmail={handoff.recentOwnerEmail}
       />
     </div>
   );
