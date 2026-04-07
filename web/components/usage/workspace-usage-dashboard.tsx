@@ -122,7 +122,7 @@ function getContextCard(
       actions: [
         { label: "Open playground run", path: "/playground" },
         { label: "Capture verification evidence", path: "/verification?surface=verification" },
-        { label: "Review billing + settings", path: "/settings" },
+        { label: "Review billing + settings", path: "/settings?intent=manage-plan" },
       ],
       metaLines: metaLines.length > 0 ? metaLines : undefined,
     };
@@ -135,7 +135,7 @@ function getContextCard(
       actions: [
         { label: "Back to playground run", path: "/playground" },
         { label: "Capture verification evidence", path: "/verification?surface=verification" },
-        { label: "Review billing + features", path: "/settings" },
+        { label: "Review billing + features", path: "/settings?intent=manage-plan" },
       ],
       metaLines: metaLines.length > 0 ? metaLines : undefined,
     };

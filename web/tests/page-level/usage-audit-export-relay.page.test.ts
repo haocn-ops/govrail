@@ -45,6 +45,10 @@ test("usage dashboard keeps audit export continuity lane explicit", async () => 
   );
   assert.match(source, /const ownerSummary = metadata\.ownerDisplayName \?\? metadata\.ownerEmail \?\? metadata\.ownerLabel \?\? null;/);
   assert.match(source, /lines\.push\(`Latest handoff owner: \$\{ownerSummary\}`\);/);
+  assert.match(source, /title: "Admin queue usage follow-up"/);
+  assert.match(source, /title: "Onboarding usage checkpoint"/);
+  assert.match(source, /\{ label: "Review billing \+ settings", path: "\/settings\?intent=manage-plan" \}/);
+  assert.match(source, /\{ label: "Review billing \+ features", path: "\/settings\?intent=manage-plan" \}/);
   assert.match(source, /<CardTitle>Audit export continuity<\/CardTitle>/);
   assert.match(
     source,
