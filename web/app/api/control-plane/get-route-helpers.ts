@@ -7,17 +7,29 @@ export type MetadataGetArgs = {
   message: string;
 };
 
-export async function proxyMetadataGet(args: MetadataGetArgs): Promise<Response> {
-  const workspaceContext = await resolveWorkspaceContextForServer();
-  const metadataGuard = requireMetadataWorkspaceContext({
+export async function proxyMetadataGet(
+  args: MetadataGetArgs,
+  options?: {
+    resolveWorkspaceContext?: typeof resolveWorkspaceContextForServer;
+    proxy?: typeof proxyControlPlane;
+    metadataGuard?: typeof requireMetadataWorkspaceContext;
+  },
+): Promise<Response> {
+  const resolveWorkspaceContext =
+    options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
+  const proxy = options?.proxy ?? proxyControlPlane;
+  const metadataGuard =
+    options?.metadataGuard ?? requireMetadataWorkspaceContext;
+  const workspaceContext = await resolveWorkspaceContext();
+  const guardResponse = metadataGuard({
     workspaceContext,
     message: args.message,
   });
-  if (metadataGuard) {
-    return metadataGuard;
+  if (guardResponse) {
+    return guardResponse;
   }
 
-  return proxyControlPlane(args.getPath(workspaceContext), {
+  return proxy(args.getPath(workspaceContext), {
     includeTenant: args.includeTenant,
   });
 }

@@ -262,9 +262,7 @@ test("proxyAuthenticatedPostRequest builds auth headers and returns base-missing
   }
 });
 
-test("proxyWorkspaceScopedDetailPost resolves workspace context and posts via helper", async () => {
-  const previousBase = process.env.CONTROL_PLANE_BASE_URL;
-  process.env.CONTROL_PLANE_BASE_URL = "https://control-plane.test";
+test("proxyWorkspaceScopedDetailPost resolves workspace context and posts via injected helper contracts", async () => {
   const context = {
     source: "metadata" as const,
     source_detail: {
@@ -295,26 +293,39 @@ test("proxyWorkspaceScopedDetailPost resolves workspace context and posts via he
       "content-type": "application/json",
     },
   });
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    assert.equal(String(input), "https://control-plane.test/api/v1/saas/workspaces/ws_123/api-keys/x:revoke");
-    assert.equal(init?.method, "POST");
-    assert.equal(new Headers(init?.headers).get("content-type"), "application/json");
-    return new Response("{}", {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  }) as typeof fetch;
+  let capturedPath = "";
+  let capturedWorkspaceId = "";
+  let capturedInit: RequestInit | undefined;
 
-  try {
-    const response = await proxyWorkspaceScopedDetailPost({
-      request,
-      buildPath: (workspaceId) => `/api/v1/saas/workspaces/${workspaceId}/api-keys/x:revoke`,
-      resolveWorkspaceContext: async () => context as never,
-    });
-    assert.equal(response.status, 200);
-  } finally {
-    process.env.CONTROL_PLANE_BASE_URL = previousBase;
-    globalThis.fetch = originalFetch;
-  }
+  const response = await proxyWorkspaceScopedDetailPost({
+    request,
+    buildPath: (workspaceId) => `/api/v1/saas/workspaces/${workspaceId}/api-keys/x:revoke`,
+    resolveWorkspaceContext: async () => context as never,
+    initBuilder: async ({ request: requestArg }) => {
+      assert.equal(requestArg, request);
+      return {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: '{"ok":true}',
+      };
+    },
+    proxy: async (path, options) => {
+      capturedPath = path;
+      capturedWorkspaceId = (options?.workspaceContext as typeof context | undefined)?.workspace.workspace_id ?? "";
+      capturedInit = options?.init;
+      return new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(capturedPath, "/api/v1/saas/workspaces/ws_123/api-keys/x:revoke");
+  assert.equal(capturedWorkspaceId, "ws_123");
+  assert.equal(capturedInit?.method, "POST");
+  assert.equal(new Headers(capturedInit?.headers).get("content-type"), "application/json");
+  assert.equal(capturedInit?.body, '{"ok":true}');
 });

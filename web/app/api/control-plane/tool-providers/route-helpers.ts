@@ -9,15 +9,33 @@ export function buildToolProviderPath(toolProviderId: string, action?: ToolProvi
   return action === "disable" ? `${basePath}:disable` : basePath;
 }
 
+export async function buildToolProviderPostInit(request: Request): Promise<RequestInit> {
+  return buildProxyControlPlanePostInit({
+    request,
+    accept: request.headers.get("accept") ?? undefined,
+    contentType: request.headers.get("content-type") ?? undefined,
+    emptyBodyAsUndefined: true,
+  });
+}
+
 export async function proxyToolProviderPost(
   request: Request,
   toolProviderId: string,
   action?: ToolProviderAction,
-  resolveWorkspaceContext: typeof resolveWorkspaceContextForServer = resolveWorkspaceContextForServer,
+  options?: {
+    resolveWorkspaceContext?: typeof resolveWorkspaceContextForServer;
+    proxy?: typeof proxyControlPlane;
+    initBuilder?: typeof buildToolProviderPostInit;
+  },
 ): Promise<Response> {
+  const resolveWorkspaceContext =
+    options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
+  const proxy = options?.proxy ?? proxyControlPlane;
+  const initBuilder = options?.initBuilder ?? buildToolProviderPostInit;
   const workspaceContext = await resolveWorkspaceContext();
-  return proxyControlPlane(buildToolProviderPath(toolProviderId, action), {
+
+  return proxy(buildToolProviderPath(toolProviderId, action), {
     workspaceContext,
-    init: await buildProxyControlPlanePostInit({ request }),
+    init: await initBuilder(request),
   });
 }

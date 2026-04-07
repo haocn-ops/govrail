@@ -157,12 +157,17 @@ export async function proxyWorkspaceScopedDetailPost(args: {
   request: Request;
   buildPath: (workspaceId: string) => string;
   resolveWorkspaceContext?: typeof resolveWorkspaceContextForServer;
+  proxy?: typeof proxyControlPlane;
+  initBuilder?: typeof buildProxyControlPlanePostInit;
 }): Promise<Response> {
   const resolveContext = args.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
+  const proxy = args.proxy ?? proxyControlPlane;
+  const initBuilder = args.initBuilder ?? buildProxyControlPlanePostInit;
   const workspaceContext = await resolveContext();
   const workspaceId = workspaceContext.workspace.workspace_id;
-  return proxyControlPlane(args.buildPath(workspaceId), {
+
+  return proxy(args.buildPath(workspaceId), {
     workspaceContext,
-    init: await buildProxyControlPlanePostInit({ request: args.request }),
+    init: await initBuilder({ request: args.request }),
   });
 }
