@@ -56,10 +56,11 @@ test(
 
     const settingsLink = page.getByRole("link", { name: "Review billing + settings" }).first();
     await expect(settingsLink).toBeVisible();
-    await settingsLink.click();
+  await settingsLink.click();
 
-    await expect(page).toHaveURL(/\/settings\?/);
-    await expect(page).toHaveURL(/source=admin-readiness/);
+  await expect(page).toHaveURL(/\/settings\?/);
+  await expect(page).toHaveURL(/intent=manage-plan/);
+  await expect(page).toHaveURL(/source=admin-readiness/);
     await expect(page).toHaveURL(/week8_focus=billing_warning/);
     await expect(page).toHaveURL(/attention_workspace=preview/);
     await expect(page).toHaveURL(/attention_organization=org_preview/);
