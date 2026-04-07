@@ -28,6 +28,11 @@ test("billing summary keeps Stripe-first upgrade and resolve/manage intent seman
   );
   assert.match(
     source,
+    /const selfServeReasonCode =\s*!checkoutProvider && !allowMockCheckout \? "billing_self_serve_not_configured" : null;/,
+  );
+  assert.match(source, /self_serve_reason_code: actionReady \? null : selfServeReasonCode,/);
+  assert.match(
+    source,
     /label: isPaidPlan\s*\? "Coordinate plan changes"\s*:\s*actionReady && checkoutProviderIsStripe\s*\? "Upgrade to Pro"\s*:\s*actionReady && checkoutProviderIsMock\s*\? "Run test checkout flow"\s*:\s*"Prepare self-serve upgrade"/s,
   );
   assert.match(source, /href: isPaidPlan \? "\/settings\?intent=manage-plan" : "\/settings\?intent=upgrade"/);
@@ -37,6 +42,7 @@ test("billing summary keeps Stripe-first upgrade and resolve/manage intent seman
     source,
     /label: resolveBillingSelfServeEnabled \? "Resolve billing" : "Coordinate billing recovery"/,
   );
+  assert.match(source, /self_serve_reason_code: resolveBillingSelfServeEnabled \? null : selfServeReasonCode,/);
   assert.match(source, /href: "\/settings\?intent=resolve-billing"/);
 
   assert.match(source, /status_label: "Scheduled to end"/);
@@ -44,6 +50,7 @@ test("billing summary keeps Stripe-first upgrade and resolve/manage intent seman
     source,
     /label: manageSelfServeEnabled \? "Manage scheduled cancellation" : "Coordinate renewal"/,
   );
+  assert.match(source, /self_serve_reason_code: manageSelfServeEnabled \? null : selfServeReasonCode,/);
   assert.match(source, /description: "The workspace is scheduled to leave its current plan at the end of the billing window\."/);
   assert.match(source, /availability: manageSelfServeEnabled \? "ready" : "staged"/);
   assert.match(source, /href: "\/settings\?intent=manage-plan"/);
@@ -57,6 +64,7 @@ test("billing summary keeps Stripe-first upgrade and resolve/manage intent seman
     source,
     /label: manageSelfServeEnabled \? "Manage paused subscription" : "Coordinate resume"/,
   );
+  assert.match(source, /self_serve_reason_code: manageSelfServeEnabled \? null : selfServeReasonCode,/);
   assert.match(source, /availability: manageSelfServeEnabled \? "ready" : "staged"/);
   assert.match(source, /href: "\/settings\?intent=manage-plan"/);
 
@@ -81,5 +89,7 @@ test("billing summary keeps Stripe-first upgrade and resolve/manage intent seman
     source,
     /"Prepare replacement plan"/,
   );
+  assert.match(source, /self_serve_reason_code: replacementUpgradeReady \? null : selfServeReasonCode,/);
   assert.match(source, /availability: replacementUpgradeReady \? "ready" : "staged"/);
+  assert.match(source, /self_serve_reason_code: activeManageReady \? null : selfServeReasonCode,/);
 });

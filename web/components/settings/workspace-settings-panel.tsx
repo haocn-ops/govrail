@@ -548,7 +548,11 @@ function formatBillingActionAvailabilityText(args: {
   providerCode?: string | null;
   selfServeEnabled?: boolean;
   providerSupportsCheckout?: boolean;
+  selfServeReasonCode?: string | null;
 }): string {
+  if (args.selfServeReasonCode === "billing_self_serve_not_configured") {
+    return "Contract: billing_self_serve_not_configured. Configure Stripe-backed self-serve before operators rely on in-product upgrade or portal flows.";
+  }
   if (isMockBillingProvider(args.providerCode)) {
     return "Mock checkout is kept as a test-only fallback; production self-serve flows rely on Stripe when enabled.";
   }
@@ -562,6 +566,13 @@ function formatBillingActionAvailabilityText(args: {
     return "Provider checkout is configured but not currently ready. Refresh provider state and retry.";
   }
   return "Self-serve checkout is not live for this workspace yet. Continue with the workspace-managed fallback flow.";
+}
+
+function formatSelfServeSetupNotice(reasonCode?: string | null): string | null {
+  if (reasonCode !== "billing_self_serve_not_configured") {
+    return null;
+  }
+  return "Stripe-backed production self-serve is not configured for this workspace yet. Operators can review billing posture here, but upgrade, portal, and renewal recovery stay in the workspace-managed fallback lane until Stripe is enabled.";
 }
 
 function formatCheckoutActionError(
@@ -971,6 +982,7 @@ export function WorkspaceSettingsPanel({
   const resolvedBillingProviderCode =
     subscription?.billing_provider ?? billingSummary?.provider ?? currentBillingProvider?.code ?? null;
   const isStripeWorkspace = isStripeBillingProvider(resolvedBillingProviderCode);
+  const selfServeSetupNotice = formatSelfServeSetupNotice(billingSummary?.self_serve_reason_code ?? null);
   const canOpenBillingPortal =
     Boolean(subscription) && Boolean(currentBillingProvider?.supports_customer_portal);
   const showLocalSubscriptionControls = !isStripeWorkspace && (canScheduleCancellation || canResumeRenewal);
@@ -2837,6 +2849,13 @@ export function WorkspaceSettingsPanel({
             <p className="mt-2 text-xs text-muted">
               Self-serve enabled: {billingSummary?.self_serve_enabled ? "yes" : "no (workspace-managed fallback)"}
             </p>
+            {selfServeSetupNotice ? (
+              <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50/80 p-3 text-xs text-amber-900">
+                <p className="font-medium">Self-serve provider setup required</p>
+                <p className="mt-1">{selfServeSetupNotice}</p>
+                <p className="mt-1 font-mono">billing_self_serve_not_configured</p>
+              </div>
+            ) : null}
           </div>
           {providerEntries.length > 0 ? (
             <div className="rounded-2xl border border-border bg-background p-4">
@@ -2890,6 +2909,7 @@ export function WorkspaceSettingsPanel({
                   providerCode: currentBillingProvider?.code ?? resolvedBillingProviderCode,
                   selfServeEnabled: billingSummary.self_serve_enabled,
                   providerSupportsCheckout: currentBillingProvider?.supports_checkout,
+                  selfServeReasonCode: billingSummary.self_serve_reason_code ?? null,
                 })}
               </p>
               {canStartCheckout ? (

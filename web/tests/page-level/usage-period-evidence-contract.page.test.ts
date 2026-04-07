@@ -27,6 +27,9 @@ test("usage dashboard keeps current-period evidence and plan-limit follow-up con
   assert.match(source, /Resolve plan limits in settings/);
   assert.match(source, /Capture over-limit evidence/);
   assert.match(source, /Current billing window: \{usageWindowLabel\}/);
+  assert.match(source, /const selfServeSetupNotice = formatSelfServeSetupNotice\(billingSummary\?\.self_serve_reason_code \?\? null\);/);
+  assert.match(source, /Self-serve provider setup required/);
+  assert.match(source, /billing_self_serve_not_configured/);
 });
 
 test("onboarding wizard keeps persisted bootstrap summary and current-period usage awareness lane", async () => {

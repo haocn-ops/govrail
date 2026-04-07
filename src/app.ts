@@ -7279,6 +7279,7 @@ function buildWorkspaceBillingSummary(
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   self_serve_enabled: boolean;
+  self_serve_reason_code: "billing_self_serve_not_configured" | null;
   description: string;
   action: {
     kind: "upgrade" | "manage_plan" | "resolve_billing" | "contact_support";
@@ -7309,6 +7310,8 @@ function buildWorkspaceBillingSummary(
   const checkoutProviderIsStripe = checkoutProvider?.code === "stripe";
   const checkoutProviderIsMock = checkoutProvider?.code === "mock_checkout";
   const checkoutSelfServeEnabled = checkoutProvider?.supports_checkout === true;
+  const selfServeReasonCode =
+    !checkoutProvider && !allowMockCheckout ? "billing_self_serve_not_configured" : null;
   const manageSelfServeEnabled = Boolean(
     providerConfig &&
       (providerConfig.supports_customer_portal || providerConfig.supports_subscription_cancel),
@@ -7334,6 +7337,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: actionReady,
+      self_serve_reason_code: actionReady ? null : selfServeReasonCode,
       description: isPaidPlan
         ? "This workspace is on a paid plan with manual billing operations."
         : actionReady && checkoutProviderIsStripe
@@ -7369,6 +7373,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: resolveBillingSelfServeEnabled,
+      self_serve_reason_code: resolveBillingSelfServeEnabled ? null : selfServeReasonCode,
       description: "The subscription is past due and feature access may tighten if billing is not resolved.",
       action: {
         kind: "resolve_billing",
@@ -7394,6 +7399,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: trialUpgradeReady,
+      self_serve_reason_code: trialUpgradeReady ? null : selfServeReasonCode,
       description: "The workspace is in trial and can be converted into an ongoing paid subscription.",
       action: {
         kind: "upgrade",
@@ -7423,6 +7429,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: manageSelfServeEnabled,
+      self_serve_reason_code: manageSelfServeEnabled ? null : selfServeReasonCode,
       description: "The current subscription is paused and should be resumed or replaced before go-live.",
       action: {
         kind: "contact_support",
@@ -7446,6 +7453,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: manageSelfServeEnabled,
+      self_serve_reason_code: manageSelfServeEnabled ? null : selfServeReasonCode,
       description: "The workspace is scheduled to leave its current plan at the end of the billing window.",
       action: {
         kind: "manage_plan",
@@ -7470,6 +7478,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: replacementUpgradeReady,
+      self_serve_reason_code: replacementUpgradeReady ? null : selfServeReasonCode,
       description: "The previous paid subscription is no longer active for this workspace.",
       action: {
         kind: "upgrade",
@@ -7499,6 +7508,7 @@ function buildWorkspaceBillingSummary(
     current_period_end: currentPeriodEnd,
     cancel_at_period_end: cancelAtPeriodEnd,
     self_serve_enabled: activeManageReady,
+    self_serve_reason_code: activeManageReady ? null : selfServeReasonCode,
     description: activeManageReady
       ? "The workspace has an active self-serve-capable subscription."
       : "The workspace is active on its current plan, with manual billing operations behind the scenes.",

@@ -50,3 +50,32 @@ test("settings and usage surfaces keep mock checkout labeled as a test-only fall
   assert.match(settingsSource, /This mock checkout entry is retained as a test\/fallback option, not a production self-serve provider\./);
   assert.match(usageSource, /Mock checkout is a test-only fallback; rely on Stripe when it is enabled for production self-serve\./);
 });
+
+test("settings and usage surfaces keep production self-serve provider setup gaps explicit", async () => {
+  const [settingsSource, usageSource] = await Promise.all([
+    readSource(settingsPanelPath),
+    readSource(usageDashboardPath),
+  ]);
+
+  assert.match(
+    settingsSource,
+    /Contract: billing_self_serve_not_configured\. Configure Stripe-backed self-serve before operators rely on in-product upgrade or portal flows\./,
+  );
+  assert.match(
+    settingsSource,
+    /Stripe-backed production self-serve is not configured for this workspace yet\. Operators can review billing posture here, but upgrade, portal, and renewal recovery stay in the workspace-managed fallback lane until Stripe is enabled\./,
+  );
+  assert.match(settingsSource, /Self-serve provider setup required/);
+  assert.match(settingsSource, /billing_self_serve_not_configured/);
+
+  assert.match(
+    usageSource,
+    /Contract: billing_self_serve_not_configured\. Configure Stripe-backed self-serve before operators rely on in-product upgrade, portal, or renewal recovery\./,
+  );
+  assert.match(
+    usageSource,
+    /Stripe-backed production self-serve is not configured for this workspace yet\. This dashboard can still carry evidence into verification and settings, but operators should not expect in-product upgrade or portal flows until Stripe is enabled\./,
+  );
+  assert.match(usageSource, /Self-serve provider setup required/);
+  assert.match(usageSource, /billing_self_serve_not_configured/);
+});

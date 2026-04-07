@@ -129,6 +129,7 @@ export type ControlPlaneWorkspaceBillingSummary = {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   self_serve_enabled: boolean;
+  self_serve_reason_code?: "billing_self_serve_not_configured" | null;
   description: string;
   action: ControlPlaneWorkspaceBillingAction | null;
 };

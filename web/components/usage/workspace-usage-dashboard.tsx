@@ -290,7 +290,11 @@ function billingActionHelpText(args: {
   availability?: string;
   provider?: string | null;
   selfServeEnabled?: boolean;
+  selfServeReasonCode?: string | null;
 }): string {
+  if (args.selfServeReasonCode === "billing_self_serve_not_configured") {
+    return "Contract: billing_self_serve_not_configured. Configure Stripe-backed self-serve before operators rely on in-product upgrade, portal, or renewal recovery.";
+  }
   const normalizedProvider = (args.provider ?? "").toLowerCase();
   const providerIsMock = normalizedProvider === "mock_checkout" || normalizedProvider === "mock";
   if (providerIsMock) {
@@ -307,6 +311,13 @@ function billingActionHelpText(args: {
     return "Billing is enabled, but this action is temporarily unavailable. Retry after the provider state refreshes.";
   }
   return "Self-serve billing is not enabled for this workspace yet. Use the configured workspace-managed fallback path.";
+}
+
+function formatSelfServeSetupNotice(reasonCode?: string | null): string | null {
+  if (reasonCode !== "billing_self_serve_not_configured") {
+    return null;
+  }
+  return "Stripe-backed production self-serve is not configured for this workspace yet. This dashboard can still carry evidence into verification and settings, but operators should not expect in-product upgrade or portal flows until Stripe is enabled.";
 }
 
 function isEnabledFeature(value: unknown): boolean {
@@ -421,6 +432,7 @@ export function WorkspaceUsageDashboard({
       : normalizedSource === "admin-readiness"
         ? "Return to admin readiness view"
         : "Return to admin overview";
+  const selfServeSetupNotice = formatSelfServeSetupNotice(billingSummary?.self_serve_reason_code ?? null);
 
   return (
     <div className="space-y-6">
@@ -671,6 +683,13 @@ export function WorkspaceUsageDashboard({
                 </Badge>
               </div>
               <p className="mt-2 text-xs text-muted">{billingSummary.description}</p>
+              {selfServeSetupNotice ? (
+                <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50/80 p-3 text-xs text-amber-900">
+                  <p className="font-medium">Self-serve provider setup required</p>
+                  <p className="mt-1">{selfServeSetupNotice}</p>
+                  <p className="mt-1 font-mono">billing_self_serve_not_configured</p>
+                </div>
+              ) : null}
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 <p className="text-xs text-muted">Provider: {billingSummary.provider}</p>
                 <p className="text-xs text-muted">
@@ -685,6 +704,7 @@ export function WorkspaceUsageDashboard({
                     availability: billingSummary.action?.availability,
                     provider: billingSummary.provider,
                     selfServeEnabled: billingSummary.self_serve_enabled,
+                    selfServeReasonCode: billingSummary.self_serve_reason_code ?? null,
                   })}
                 </p>
               </div>
