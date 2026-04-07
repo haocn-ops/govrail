@@ -192,6 +192,14 @@ test("Settings panel keeps enterprise preflight and submit-status guidance seman
     source,
     /Dedicated environment configuration requires workspace owner or admin access before controlled live write is enabled\./,
   );
+  assert.match(
+    source,
+    /<Button[\s\S]*variant="secondary"[\s\S]*disabled=\{!hasEnterpriseWriteAccess \|\| !ssoPreflightReady\}[\s\S]*>\s*Validate preflight/s,
+  );
+  assert.match(
+    source,
+    /<Button[\s\S]*variant="secondary"[\s\S]*disabled=\{!hasEnterpriseWriteAccess \|\| !dedicatedPreflightReady\}[\s\S]*>\s*Validate preflight/s,
+  );
   assert.match(source, /Submit status: \{ssoSubmitDisabledReason \?\? "Ready for controlled live write\."\}/);
   assert.match(
     source,

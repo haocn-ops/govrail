@@ -2437,7 +2437,7 @@ export function WorkspaceSettingsPanel({
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={!ssoPreflightReady}
+                disabled={!hasEnterpriseWriteAccess || !ssoPreflightReady}
                 onClick={() => {
                   setSsoPreflightNotice(
                     "SSO preflight is ready. Review the summary, then use controlled live write to record configuration intent.",
@@ -2825,7 +2825,7 @@ export function WorkspaceSettingsPanel({
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={!dedicatedPreflightReady}
+                disabled={!hasEnterpriseWriteAccess || !dedicatedPreflightReady}
                 onClick={() => {
                   setDedicatedPreflightNotice(
                     "Dedicated environment preflight is ready. Review the summary, then use controlled live write to record the provisioning request.",
