@@ -20,12 +20,38 @@ test("settings page keeps self-serve billing lane framing navigation-only and ev
   const source = await readSource(settingsPagePath);
 
   assert.match(source, /<CardTitle>Enterprise evidence lane<\/CardTitle>/);
+  assert.match(source, /import \{ ConsoleAdminFollowUp \} from "@\/components\/admin\/console-admin-follow-up";/);
   assert.match(source, /import \{ WorkspaceContextSurfaceNotice \} from "@\/components\/console\/workspace-context-surface-notice";/);
-  assert.match(source, /import \{ buildConsoleHandoffHref, parseConsoleHandoffState \} from "@\/lib\/console-handoff";/);
+  assert.match(
+    source,
+    /import \{[\s\S]*buildConsoleAdminReturnHref,[\s\S]*buildConsoleAdminReturnState,[\s\S]*buildConsoleRunAwareHandoffHref,[\s\S]*parseConsoleHandoffState[\s\S]*\} from "@\/lib\/console-handoff";/s,
+  );
+  assert.match(source, /import \{ requestControlPlanePageData \} from "@\/lib\/server-control-plane-page-fetch";/);
   assert.match(source, /const handoff = parseConsoleHandoffState\(searchParams\);/);
+  assert.match(source, /const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>\("\/api\/control-plane\/workspace"\);/);
+  assert.match(source, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+  assert.match(source, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
+  assert.match(
+    source,
+    /const adminReturnState = buildConsoleAdminReturnState\(\{\s*source: handoff\.source,\s*surface: handoff\.surface,\s*expectedSurface: "verification",\s*recentTrackKey: handoff\.recentTrackKey,\s*\}\);/s,
+  );
+  assert.match(
+    source,
+    /const adminReturnHref = buildConsoleAdminReturnHref\(\{\s*pathname: "\/admin",\s*handoff: runAwareHandoff,\s*workspaceSlug: workspaceContext\.workspace\.slug,\s*queueSurface: adminReturnState\.adminQueueSurface,\s*\}\);/s,
+  );
   assert.match(source, /const buildSettingsPageHref = \(pathname: string\) =>/);
-  assert.match(source, /buildConsoleHandoffHref\(pathname,/);
+  assert.match(source, /buildConsoleRunAwareHandoffHref\(pathname, handoff, activeRunId\)/);
+  assert.match(source, /const adminHref = adminReturnState\.showAdminReturn \? adminReturnHref : "\/admin";/);
+  assert.match(
+    source,
+    /const adminLinkLabel = adminReturnState\.showAdminReturn \? adminReturnState\.adminReturnLabel : "Admin overview";/,
+  );
   assert.match(source, /<WorkspaceContextSurfaceNotice[\s\S]*surfaceLabel="Settings"[\s\S]*sessionHref=\{buildSettingsPageHref\("\/session"\)\}/);
+  assert.match(
+    source,
+    /<ConsoleAdminFollowUp[\s\S]*handoff=\{runAwareHandoff\}[\s\S]*surface="settings"[\s\S]*workspaceSlug=\{workspaceContext\.workspace\.slug\}[\s\S]*ownerDisplayName=\{runAwareHandoff\.recentOwnerDisplayName \?\? runAwareHandoff\.recentOwnerLabel\}[\s\S]*ownerEmail=\{runAwareHandoff\.recentOwnerEmail\}/,
+  );
+  assert.match(source, /<WorkspaceSettingsPanel[\s\S]*runId=\{activeRunId\}/);
   assert.match(
     source,
     /description="Review workspace tenancy, self-serve billing follow-up, subscription status, and retention defaults while keeping the verification\/go-live\/admin-readiness governance lane connected\."/,
@@ -45,12 +71,13 @@ test("settings page keeps self-serve billing lane framing navigation-only and ev
   );
   assert.match(source, /href=\{buildSettingsPageHref\("\/usage"\)\}/);
   assert.match(source, /href=\{buildSettingsPageHref\("\/go-live\?surface=go_live"\)\}/);
-  assert.match(source, /href=\{buildSettingsPageHref\("\/admin"\)\}/);
+  assert.match(source, /href=\{adminHref\}/);
   assert.match(source, /<WorkspaceContextSurfaceNotice[\s\S]*surfaceLabel="Settings"/);
   assert.match(source, /sessionHref=\{buildSettingsPageHref\("\/session"\)\}/);
   assert.match(source, /Capture verification evidence/);
   assert.match(source, /Rehearse go-live readiness/);
-  assert.match(source, /Return to admin readiness view/);
+  assert.match(source, /adminReturnLabel/);
+  assert.match(source, /Admin overview/);
 });
 
 test("workspace context surface notice keeps metadata-vs-fallback checkpoint wording explicit", async () => {

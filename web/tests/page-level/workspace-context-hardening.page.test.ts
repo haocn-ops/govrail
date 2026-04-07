@@ -110,4 +110,10 @@ test("Settings panel keeps audit export section and plan-gated/export action sem
   assert.match(source, /Export disabled reason: current plan does not include audit export\./);
   assert.match(source, /Attach in verification/);
   assert.match(source, /Carry to go-live drill/);
+  assert.match(source, /Latest export receipt/);
+  assert.match(source, /Full workspace history/);
+  assert.match(source, /Unavailable in this browser/);
+  assert.match(source, /Date filters above reflect the manual input on this page/);
+  assert.match(source, /UTC day boundaries/);
+  assert.match(source, /Evidence note/);
 });

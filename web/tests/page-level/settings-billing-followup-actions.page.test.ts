@@ -77,8 +77,36 @@ test("billing follow-up body text keeps verification and go-live evidence signal
 test("follow-up href builders keep verification, usage, admin, and go-live routes explicit", async () => {
   const source = await readSource(settingsPanelPath);
 
-  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin",\s*\{[\s\S]*?attentionOrganization,\s*\}\);/s);
+  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin",\s*\{[\s\S]*runId,/);
+  assert.match(source, /attentionWorkspace: attentionWorkspace \?\? workspaceSlug,/);
+  assert.match(source, /attentionOrganization,/);
+  assert.match(source, /deliveryContext: normalizedDeliveryContext,/);
+  assert.match(source, /recentTrackKey: normalizedRecentTrackKey,/);
+  assert.match(source, /recentUpdateKind: normalizedRecentUpdateKind,/);
+  assert.match(source, /evidenceCount: normalizedEvidenceCount,/);
   assert.match(source, /const usageHref = buildSettingsHref\(\{ pathname: "\/usage",/s);
   assert.match(source, /const verificationHref = buildSettingsHref\(\{ pathname: "\/verification\?surface=verification",/s);
   assert.match(source, /const goLiveHref = buildSettingsHref\(\{ pathname: "\/go-live\?surface=go_live",/s);
+});
+
+test("billing live actions refresh enterprise readiness queries alongside workspace settings", async () => {
+  const source = await readSource(settingsPanelPath);
+
+  assert.match(
+    source,
+    /async function invalidateBillingAndEnterpriseQueries\(\): Promise<void> \{\s*await Promise\.all\(\[\s*queryClient\.invalidateQueries\(\{\s*queryKey: \["workspace-settings", workspaceSlug\],\s*\}\),\s*queryClient\.invalidateQueries\(\{\s*queryKey: \["workspace-sso-readiness", workspaceSlug\],\s*\}\),\s*queryClient\.invalidateQueries\(\{\s*queryKey: \["workspace-dedicated-environment-readiness", workspaceSlug\],\s*\}\),\s*\]\);\s*\}/s,
+  );
+  assert.match(source, /await invalidateBillingAndEnterpriseQueries\(\);/);
+  assert.match(
+    source,
+    /const payload = await completeBillingCheckoutSession\(checkout\.session\.session_id\);[\s\S]*?await invalidateBillingAndEnterpriseQueries\(\);/s,
+  );
+  assert.match(
+    source,
+    /await cancelBillingSubscription\(\);[\s\S]*?await invalidateBillingAndEnterpriseQueries\(\);/s,
+  );
+  assert.match(
+    source,
+    /await resumeBillingSubscription\(\);[\s\S]*?await invalidateBillingAndEnterpriseQueries\(\);/s,
+  );
 });

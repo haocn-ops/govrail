@@ -231,7 +231,10 @@ test("Settings panel keeps submit-payload and saved-sections coupling contract f
   assert.match(source, /const ssoConfiguredDomains = normalizeDomainList\(\[/);
   assert.match(source, /ssoReadiness\?\.email_domains/);
   assert.match(source, /ssoReadiness\?\.email_domain/);
-  assert.match(source, /const ssoConfiguredIdentity =\s*ssoReadiness\?\.provider_type === "saml" \? \(ssoReadiness\?\.audience \?\? null\) : \(ssoReadiness\?\.client_id \?\? null\);/s);
+  assert.match(
+    source,
+    /const ssoConfiguredIdentity = readString\(\s*ssoReadiness\?\.provider_type === "saml" \? ssoReadiness\?\.audience : ssoReadiness\?\.client_id,\s*\);/s,
+  );
   assert.match(source, /ssoReadiness\?\.metadata_url \?\? "Not saved"/);
   assert.match(source, /ssoReadiness\?\.entrypoint_url \?\? "Not saved"/);
 
@@ -257,6 +260,7 @@ test("Settings panel keeps handoff query passthrough contract for settings/verif
   assert.match(source, /function buildSettingsHref\(args: SettingsHrefArgs\): string/);
   assert.match(source, /const href = buildHandoffHref\(/);
   assert.match(source, /source: args\.source,/);
+  assert.match(source, /runId: args\.runId,/);
   assert.match(source, /week8Focus: args\.week8Focus,/);
   assert.match(source, /attentionWorkspace: args\.attentionWorkspace,/);
   assert.match(source, /attentionOrganization: args\.attentionOrganization,/);
@@ -265,11 +269,21 @@ test("Settings panel keeps handoff query passthrough contract for settings/verif
   assert.match(source, /recentUpdateKind: args\.recentUpdateKind,/);
   assert.match(source, /evidenceCount: args\.evidenceCount,/);
   assert.match(source, /recentOwnerLabel: args\.recentOwnerLabel,/);
+  assert.match(source, /recentOwnerDisplayName: args\.recentOwnerDisplayName,/);
+  assert.match(source, /recentOwnerEmail: args\.recentOwnerEmail,/);
   assert.match(source, /\{ preserveExistingQuery: true \}/);
   assert.match(source, /searchParams\.set\("intent", args\.intent\);/);
-  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{/);
+  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{[\s\S]*runId,/);
   assert.match(source, /queueSurface: normalizedRecentTrackKey,/);
   assert.match(source, /attentionWorkspace: attentionWorkspace \?\? workspaceSlug,/);
+  assert.match(source, /deliveryContext: normalizedDeliveryContext,/);
+  assert.match(source, /recentTrackKey: normalizedRecentTrackKey,/);
+  assert.match(source, /recentUpdateKind: normalizedRecentUpdateKind,/);
+  assert.match(source, /evidenceCount: normalizedEvidenceCount,/);
+  assert.match(source, /recentOwnerLabel,/);
+  assert.match(source, /recentOwnerDisplayName,/);
+  assert.match(source, /recentOwnerEmail,/);
+  assert.match(source, /runId,/);
 
   assert.match(source, /const usageHref = buildSettingsHref\(\{ pathname: "\/usage", \.\.\.handoffHrefArgs \}\);/);
   assert.match(

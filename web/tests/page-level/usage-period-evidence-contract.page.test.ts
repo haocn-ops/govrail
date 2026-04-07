@@ -46,11 +46,11 @@ test("workspace context callout documents usage and go-live usage surfaces", asy
   assert.match(source, /if \(surface === "usage"\) \{/);
   assert.match(
     source,
-    /Confirm workspace identity before recording usage pressure, quota evidence, or plan-limit remediation cues\./,
+    /Confirm workspace identity before recording usage pressure, quota evidence, or plan-limit remediation cues that will later be relayed into verification, settings, and admin notes\./,
   );
   assert.match(source, /return "Go-live context checkpoint";/);
   assert.match(
     source,
-    /Confirm workspace identity before running mock go-live drill notes and handing readiness status back to admin\./,
+    /Confirm workspace identity before running mock go-live drill notes, reusing the same audit export evidence thread, and handing readiness status back to admin\./,
   );
 });
