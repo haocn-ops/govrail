@@ -76,10 +76,27 @@ test("Onboarding/playground/usage pages keep source + recent metadata query pars
   assert.match(usageSource, /const handoff = parseConsoleHandoffState\(searchParams\);/);
   assert.match(usageSource, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
   assert.match(usageSource, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
-  assert.match(usageSource, /const adminReturnState = buildConsoleAdminReturnState\(\{/);
+  assert.match(
+    usageSource,
+    /const adminReturnState = buildConsoleAdminReturnState\(\{\s*source: handoff\.source,\s*surface: handoff\.surface,\s*expectedSurface: "verification",\s*recentTrackKey: handoff\.recentTrackKey,\s*\}\);/s,
+  );
   assert.match(usageSource, /const handoffHrefArgs = buildConsoleVerificationChecklistHandoffArgs\(runAwareHandoff\);/);
-  assert.match(usageSource, /const adminReturnHref = buildConsoleAdminReturnHref\(\{/);
+  assert.match(
+    usageSource,
+    /const settingsPlanHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/settings\?intent=manage-plan",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+  );
+  assert.match(
+    usageSource,
+    /const settingsBillingHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/settings\?intent=resolve-billing",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+  );
+  assert.match(
+    usageSource,
+    /const adminReturnHref = buildConsoleAdminReturnHref\(\{\s*pathname: "\/admin",\s*handoff: runAwareHandoff,\s*workspaceSlug: workspaceContext\.workspace\.slug,\s*queueSurface: adminReturnState\.adminQueueSurface,\s*\}\);/s,
+  );
   assert.match(usageSource, /const sessionHref = buildConsoleHandoffHref\("\/session", runAwareHandoff\);/);
+  assert.match(usageSource, /href=\{settingsPlanHref\}[\s\S]*Review plan limits in Settings/s);
+  assert.match(usageSource, /href=\{settingsBillingHref\}[\s\S]*Resolve billing warning/s);
+  assert.match(usageSource, /href=\{adminReturnHref\}[\s\S]*\{adminReturnState\.adminReturnLabel\}/s);
 });
 
 test("Onboarding/playground/usage pages keep admin follow-up surface wiring aligned with source contract", async () => {
