@@ -1,3 +1,4 @@
+import React from "react";
 import type { AuditExportReceiptSummary } from "@/lib/audit-export-receipt";
 import {
   formatAuditExportReceiptEvidenceNote,
