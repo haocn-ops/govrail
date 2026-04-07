@@ -767,56 +767,73 @@ export async function downloadWorkspaceAuditExportViewModel(input?: {
   const url = query
     ? `/api/control-plane/workspace/audit-events/export?${query}`
     : "/api/control-plane/workspace/audit-events/export";
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      accept: "application/x-ndjson,application/json",
-    },
-    cache: "no-store",
-  });
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        accept: "application/x-ndjson,application/json",
+      },
+      cache: "no-store",
+    });
 
-  if (!response.ok) {
-    const payload = await readErrorEnvelope(response);
-    const issue: ControlPlaneContractIssue = {
-      code: payload.error?.code ?? "request_failed",
-      message: payload.error?.message ?? `Control plane request failed with status ${response.status}`,
-      status: response.status,
-      retryable: response.status >= 500 || response.status === 429,
-      details: payload.error?.details ?? {},
+    if (!response.ok) {
+      const payload = await readErrorEnvelope(response);
+      const issue: ControlPlaneContractIssue = {
+        code: payload.error?.code ?? "request_failed",
+        message: payload.error?.message ?? `Control plane request failed with status ${response.status}`,
+        status: response.status,
+        retryable: response.status >= 500 || response.status === 429,
+        details: payload.error?.details ?? {},
+      };
+      return {
+        ok: false,
+        blob: null,
+        filename: null,
+        format,
+        content_type: response.headers.get("content-type"),
+        error: issue,
+        contract_meta: {
+          source:
+            issue.code === "workspace_feature_unavailable"
+              ? "fallback_feature_gate"
+              : issue.code === "control_plane_base_missing"
+                ? "fallback_control_plane_unavailable"
+                : "fallback_error",
+          normalized_at: nowIsoUtc(),
+          issue,
+        },
+      };
+    }
+
+    const defaultName = input?.format === "json" ? "workspace-audit-export.json" : "workspace-audit-export.jsonl";
+    return {
+      ok: true,
+      blob: await response.blob(),
+      filename: extractDownloadFileName(response.headers, defaultName),
+      format,
+      content_type: response.headers.get("content-type"),
+      contract_meta: {
+        source: "live",
+        normalized_at: nowIsoUtc(),
+        issue: null,
+      },
     };
+  } catch (error) {
+    const issue = toContractIssue(error, "Audit export request could not be completed.");
     return {
       ok: false,
       blob: null,
       filename: null,
       format,
-      content_type: response.headers.get("content-type"),
+      content_type: null,
       error: issue,
-      contract_meta: {
-        source:
-          issue.code === "workspace_feature_unavailable"
-            ? "fallback_feature_gate"
-            : issue.code === "control_plane_base_missing"
-              ? "fallback_control_plane_unavailable"
-              : "fallback_error",
-        normalized_at: nowIsoUtc(),
-        issue,
-      },
+      contract_meta: buildEnterpriseFallbackMeta(
+        "fallback_error",
+        error,
+        "Audit export request could not be completed.",
+      ),
     };
   }
-
-  const defaultName = input?.format === "json" ? "workspace-audit-export.json" : "workspace-audit-export.jsonl";
-  return {
-    ok: true,
-    blob: await response.blob(),
-    filename: extractDownloadFileName(response.headers, defaultName),
-    format,
-    content_type: response.headers.get("content-type"),
-    contract_meta: {
-      source: "live",
-      normalized_at: nowIsoUtc(),
-      issue: null,
-    },
-  };
 }
 
 export async function fetchWorkspaceSsoReadiness(): Promise<ControlPlaneWorkspaceSsoReadiness> {

@@ -701,6 +701,25 @@ function formatEnterpriseWriteError(
   return `Unable to submit ${featureLabel.toLowerCase()} configuration.`;
 }
 
+function formatAuditExportActionError(error: unknown): string {
+  if (isControlPlaneRequestError(error)) {
+    const normalizedCode = error.code.toLowerCase();
+    if (normalizedCode === "workspace_feature_unavailable") {
+      return "Audit export is gated by current plan entitlements. Upgrade to unlock export.";
+    }
+    if (normalizedCode === "control_plane_base_missing") {
+      return "Control plane is unavailable; audit export cannot be generated right now.";
+    }
+    if (error.message) {
+      return `Audit export request failed. Retry after checking workspace/control-plane health. (${error.message})`;
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return `Audit export request failed. Retry after checking workspace/control-plane health. (${error.message})`;
+  }
+  return "Audit export request failed. Retry after checking workspace/control-plane health.";
+}
+
 type SettingsSource = "admin-attention" | "admin-readiness" | "onboarding";
 type DeliveryContext = "recent_activity" | "week8";
 
@@ -1802,60 +1821,71 @@ export function WorkspaceSettingsPanel({
       contractIssueMessage: null,
       contractIssueCode: null,
     });
+    try {
+      const result = await downloadWorkspaceAuditExportViewModel({
+        format: auditExportFormat,
+        from: from ?? undefined,
+        to: to ?? undefined,
+      });
+      const contractSource = result.contract_meta.source;
+      if (result.ok) {
+        const download = result;
+        const sha256 = await computeBlobSha256(download.blob);
+        const objectUrl = URL.createObjectURL(download.blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = download.filename;
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(objectUrl);
+        setAuditExport({
+          exporting: false,
+          error: null,
+          notice: "Audit export downloaded. Attach it to verification/go-live evidence as needed.",
+          contractSource,
+          contractIssueMessage: null,
+          contractIssueCode: null,
+        });
+        setAuditExportReceipt({
+          filename: download.filename,
+          format: download.format,
+          exportedAt: new Date().toISOString(),
+          fromDate: auditFromDate.trim() || null,
+          toDate: auditToDate.trim() || null,
+          contentType: download.content_type,
+          sizeBytes: download.blob.size,
+          sha256,
+        });
+        return;
+      }
 
-    const result = await downloadWorkspaceAuditExportViewModel({
-      format: auditExportFormat,
-      from: from ?? undefined,
-      to: to ?? undefined,
-    });
-    const contractSource = result.contract_meta.source;
-    if (result.ok) {
-      const download = result;
-      const sha256 = await computeBlobSha256(download.blob);
-      const objectUrl = URL.createObjectURL(download.blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = download.filename;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
+      const issue = result.error;
+      const sourceMessage =
+        contractSource === "fallback_feature_gate"
+          ? "Audit export is gated by current plan entitlements. Upgrade to unlock export."
+          : contractSource === "fallback_control_plane_unavailable"
+            ? "Control plane is unavailable; audit export cannot be generated right now."
+            : "Audit export request failed. Retry after checking workspace/control-plane health.";
       setAuditExport({
         exporting: false,
-        error: null,
-        notice: "Audit export downloaded. Attach it to verification/go-live evidence as needed.",
+        error: `${sourceMessage}${issue.message ? ` (${issue.message})` : ""}`,
+        notice: null,
         contractSource,
-        contractIssueMessage: null,
-        contractIssueCode: null,
+        contractIssueMessage: issue.message,
+        contractIssueCode: issue.code,
       });
-      setAuditExportReceipt({
-        filename: download.filename,
-        format: download.format,
-        exportedAt: new Date().toISOString(),
-        fromDate: auditFromDate.trim() || null,
-        toDate: auditToDate.trim() || null,
-        contentType: download.content_type,
-        sizeBytes: download.blob.size,
-        sha256,
+    } catch (error) {
+      setAuditExport({
+        exporting: false,
+        error: formatAuditExportActionError(error),
+        notice: null,
+        contractSource: "fallback_error",
+        contractIssueMessage:
+          isControlPlaneRequestError(error) || error instanceof Error ? error.message : null,
+        contractIssueCode: isControlPlaneRequestError(error) ? error.code : "request_failed",
       });
-      return;
     }
-
-    const issue = result.error;
-    const sourceMessage =
-      contractSource === "fallback_feature_gate"
-        ? "Audit export is gated by current plan entitlements. Upgrade to unlock export."
-        : contractSource === "fallback_control_plane_unavailable"
-          ? "Control plane is unavailable; audit export cannot be generated right now."
-          : "Audit export request failed. Retry after checking workspace/control-plane health.";
-    setAuditExport({
-      exporting: false,
-      error: `${sourceMessage}${issue.message ? ` (${issue.message})` : ""}`,
-      notice: null,
-      contractSource,
-      contractIssueMessage: issue.message,
-      contractIssueCode: issue.code,
-    });
   }
 
   return (

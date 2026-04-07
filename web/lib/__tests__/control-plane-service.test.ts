@@ -410,6 +410,24 @@ test("downloadWorkspaceAuditExportViewModel maps generic request failure to fall
   });
 });
 
+test("downloadWorkspaceAuditExportViewModel maps transport failures to fallback_error contract", async () => {
+  await withMockFetch(async () => {
+    throw new Error("network down");
+  }, async () => {
+    const result = await downloadWorkspaceAuditExportViewModel();
+    assert.equal(result.ok, false);
+    if (result.ok) {
+      throw new Error("Expected failed audit export result");
+    }
+    assert.equal(result.contract_meta.source, "fallback_error");
+    assert.equal(result.error.code, "request_failed");
+    assert.equal(result.error.message, "network down");
+    assert.equal(result.error.status, null);
+    assert.equal(result.error.retryable, true);
+    assert.equal(result.content_type, null);
+  });
+});
+
 test("fetchWorkspaceSsoReadiness maps 409 workspace_feature_unavailable to fallback_feature_gate", async () => {
   await withMockFetch(async (input) => {
     assert.equal(String(input), "/api/control-plane/workspace/sso");
