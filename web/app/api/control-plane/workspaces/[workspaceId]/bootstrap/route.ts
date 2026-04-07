@@ -1,6 +1,4 @@
-import { proxyControlPlane } from "@/lib/control-plane-proxy";
-import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
-import { buildWorkspaceBootstrapProxyInit } from "../../route-helpers";
+import { proxyWorkspaceBootstrapPost } from "../../route-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +19,5 @@ export async function POST(
     );
   }
 
-  const workspaceContext = await resolveWorkspaceContextForServer();
-  return proxyControlPlane(`/api/v1/saas/workspaces/${workspaceId}/bootstrap`, {
-    includeTenant: false,
-    init: await buildWorkspaceBootstrapProxyInit(request, {
-      workspaceId,
-      currentWorkspace: workspaceContext.workspace,
-    }),
-  });
+  return proxyWorkspaceBootstrapPost(request, { workspaceId });
 }

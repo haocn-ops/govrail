@@ -2,9 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  type WorkspaceBootstrapHeaderContext,
+  buildWorkspaceBootstrapPath,
   buildWorkspaceBootstrapProxyInit,
   buildWorkspaceCreateProxyInit,
+  proxyWorkspaceCreatePost,
+  proxyWorkspaceBootstrapPost,
 } from "../workspaces/route-helpers";
+
+test("buildWorkspaceBootstrapPath composes workspace bootstrap endpoint", () => {
+  assert.equal(
+    buildWorkspaceBootstrapPath("ws_123"),
+    "/api/v1/saas/workspaces/ws_123/bootstrap",
+  );
+});
 
 test("buildWorkspaceCreateProxyInit preserves method/body/idempotency without injecting accept", async () => {
   const payload = JSON.stringify({ foo: "bar" });
@@ -106,4 +117,127 @@ test("buildWorkspaceBootstrapProxyInit does not forward legacy x-subject-id with
   assert.equal(headers.get("x-workspace-slug"), "acme");
   assert.equal(headers.get("x-tenant-id"), "tenant_123");
   assert.equal(init.body, body);
+});
+
+test("proxyWorkspaceCreatePost keeps includeTenant=false and uses injected proxy/init builder", async () => {
+  let capturedPath = "";
+  let capturedOptions: { includeTenant?: boolean; init?: RequestInit } | undefined;
+  const response = new Response(null, { status: 202 });
+
+  const result = await proxyWorkspaceCreatePost(
+    new Request("https://example.com", {
+      method: "POST",
+      body: '{"slug":"acme"}',
+    }),
+    {
+      initBuilder: async () => ({
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: '{"slug":"acme"}',
+      }),
+      proxy: async (path, options) => {
+        capturedPath = path;
+        capturedOptions = options;
+        return response;
+      },
+    },
+  );
+
+  assert.equal(result, response);
+  assert.equal(capturedPath, "/api/v1/saas/workspaces");
+  assert.equal(capturedOptions?.includeTenant, false);
+  assert.equal(capturedOptions?.init?.method, "POST");
+  assert.equal(new Headers(capturedOptions?.init?.headers).get("content-type"), "application/json");
+  assert.equal(capturedOptions?.init?.body, '{"slug":"acme"}');
+});
+
+test("proxyWorkspaceBootstrapPost resolves current workspace through helper when caller omits it", async () => {
+  const body = JSON.stringify({ foo: "bar" });
+  const request = new Request("https://example.com", {
+    method: "POST",
+    headers: {
+      "x-authenticated-subject": "owner@example.com",
+      "x-authenticated-roles": "workspace_owner",
+    },
+    body,
+  });
+
+  let capturedPath = "";
+  let capturedOptions: { includeTenant?: boolean; init?: RequestInit } | undefined;
+  const response = new Response(null, { status: 204 });
+
+  const result = await proxyWorkspaceBootstrapPost(
+    request,
+    {
+      workspaceId: "ws_123",
+    },
+    {
+      resolveWorkspaceContext: async () => ({
+        workspace: {
+          workspace_id: "ws_123",
+          slug: "acme",
+          tenant_id: "tenant_123",
+        },
+      }),
+      proxy: async (path, options) => {
+        capturedPath = path;
+        capturedOptions = options;
+        return response;
+      },
+    },
+  );
+
+  const headers = new Headers(capturedOptions?.init?.headers);
+
+  assert.equal(result, response);
+  assert.equal(capturedPath, "/api/v1/saas/workspaces/ws_123/bootstrap");
+  assert.equal(capturedOptions?.includeTenant, false);
+  assert.equal(headers.get("x-authenticated-subject"), "owner@example.com");
+  assert.equal(headers.get("x-authenticated-roles"), "workspace_owner");
+  assert.equal(headers.get("x-workspace-id"), "ws_123");
+  assert.equal(headers.get("x-workspace-slug"), "acme");
+  assert.equal(headers.get("x-tenant-id"), "tenant_123");
+  assert.equal(capturedOptions?.init?.body, body);
+});
+
+test("proxyWorkspaceBootstrapPost uses injected init builder with resolved current workspace", async () => {
+  let capturedCurrentWorkspace: WorkspaceBootstrapHeaderContext | null = null;
+
+  await proxyWorkspaceBootstrapPost(
+    new Request("https://example.com", {
+      method: "POST",
+      body: '{"foo":"bar"}',
+    }),
+    {
+      workspaceId: "ws_123",
+    },
+    {
+      resolveWorkspaceContext: async () => ({
+        workspace: {
+          workspace_id: "ws_123",
+          slug: "acme",
+          tenant_id: "tenant_123",
+        },
+      }),
+      initBuilder: async (_request, args) => {
+        capturedCurrentWorkspace = args.currentWorkspace;
+        return {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: '{"foo":"bar"}',
+        };
+      },
+      proxy: async () => new Response(null, { status: 204 }),
+    },
+  );
+
+  assert.deepEqual(capturedCurrentWorkspace, {
+    workspace_id: "ws_123",
+    slug: "acme",
+    tenant_id: "tenant_123",
+  });
 });
