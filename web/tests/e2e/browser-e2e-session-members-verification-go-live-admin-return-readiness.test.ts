@@ -22,7 +22,7 @@ test(
     );
     assert.match(
       browserSmokeSpec,
-      /\/session\?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_preview&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Ops/,
+      /\/session\?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_preview&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Ops&recent_owner_display_name=Avery%20Ops&recent_owner_email=avery\.ops%40govrail\.test/,
     );
     assert.match(browserSmokeSpec, /Session and workspace access/);
     assert.match(browserSmokeSpec, /Before entering a managed lane/);
@@ -39,7 +39,8 @@ test(
     assert.match(browserSmokeSpec, /surface=go_live/);
     assert.match(browserSmokeSpec, /Mock go-live drill/);
     assert.match(browserSmokeSpec, /Session-aware drill lane/);
-    assert.match(browserSmokeSpec, /recent_owner_\(label\|display_name\)=Ops/);
+    assert.match(browserSmokeSpec, /recent_owner_display_name=Avery%20Ops/);
+    assert.match(browserSmokeSpec, /recent_owner_email=avery\.ops%40govrail\.test/);
     assert.match(browserSmokeSpec, /Return to admin readiness view/);
     assert.match(browserSmokeSpec, /readiness_returned=1/);
     assert.match(browserSmokeSpec, /SaaS admin overview/);
