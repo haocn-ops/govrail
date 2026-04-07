@@ -106,6 +106,41 @@ test("Settings panel keeps contract source issue mapping distinct for 409 featur
   assert.match(source, /contractSourceDescription\(auditContractSource, auditContractIssue\)/);
 });
 
+test("Settings panel keeps enterprise recovery lanes aligned with session checkpoint, upgrade, and verification routes", async () => {
+  const source = await readSource(settingsPanelPath);
+
+  assert.match(source, /type EnterpriseRecoveryCard = \{/);
+  assert.match(source, /function buildEnterpriseRecoveryCard\(args: \{/);
+  assert.match(source, /const featureLabel = args\.feature === "sso" \? "SSO" : "Dedicated environment";/);
+  assert.match(source, /const sessionHref = buildSettingsHref\(\{ pathname: "\/session", \.\.\.handoffHrefArgs \}\);/);
+  assert.match(
+    source,
+    /args\.writeResponseCode === "workspace_context_not_metadata"[\s\S]*?title: `\$\{featureLabel\} context checkpoint`[\s\S]*?Review workspace context on \/session[\s\S]*?Capture verification evidence/s,
+  );
+  assert.match(
+    source,
+    /args\.writeResponseCode === "workspace_feature_unavailable" \|\| args\.contractSource === "fallback_feature_gate"[\s\S]*?title: `\$\{featureLabel\} upgrade lane`[\s\S]*?Upgrade plan[\s\S]*?Capture verification evidence/s,
+  );
+  assert.match(
+    source,
+    /args\.writeResponseCode === "control_plane_base_missing"[\s\S]*?\|\|[\s\S]*?args\.contractSource === "fallback_control_plane_unavailable"[\s\S]*?title: `\$\{featureLabel\} recovery lane`[\s\S]*?Review workspace context on \/session/s,
+  );
+  assert.match(
+    source,
+    /args\.contractSource === "fallback_error"[\s\S]*?title: `\$\{featureLabel\} fallback continuity lane`[\s\S]*?Fallback continuity keeps the workspace lane auditable, but it does not replace the live readiness check\./s,
+  );
+  assert.match(source, /const ssoRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /writeResponseCode: ssoWriteState\.responseCode,/);
+  assert.match(source, /upgradeHref: ssoUpgradeHref,/);
+  assert.match(source, /const dedicatedRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /writeResponseCode: dedicatedWriteState\.responseCode,/);
+  assert.match(source, /upgradeHref: dedicatedEnvironmentUpgradeHref,/);
+  assert.match(source, /\{ssoRecoveryCard \? \(/);
+  assert.match(source, /\{dedicatedRecoveryCard \? \(/);
+  assert.match(source, /ssoRecoveryCard\.footnote/);
+  assert.match(source, /dedicatedRecoveryCard\.footnote/);
+});
+
 test("Settings panel keeps SSO controlled live-write submit path, payload, and refresh contract", async () => {
   const source = await readSource(settingsPanelPath);
 

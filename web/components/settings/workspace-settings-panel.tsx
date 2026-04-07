@@ -297,6 +297,80 @@ function contractSourceDescription(source?: ContractMetaSource | null, issue?: C
   return "Contract source information is unavailable.";
 }
 
+type EnterpriseRecoveryCard = {
+  title: string;
+  body: string;
+  actions: Array<{
+    label: string;
+    href: string;
+  }>;
+  footnote: string;
+} | null;
+
+function buildEnterpriseRecoveryCard(args: {
+  feature: "sso" | "dedicated_environment";
+  contractSource?: ContractMetaSource | null;
+  contractIssue?: ContractMetaIssue;
+  writeResponseCode?: string | null;
+  sessionHref: string;
+  verificationHref: string;
+  upgradeHref: string;
+}): EnterpriseRecoveryCard {
+  const featureLabel = args.feature === "sso" ? "SSO" : "Dedicated environment";
+  if (args.writeResponseCode === "workspace_context_not_metadata") {
+    return {
+      title: `${featureLabel} context checkpoint`,
+      body: `${featureLabel} live write needs a metadata-backed workspace context before another submit. Re-open /session, confirm the active workspace identity, then keep any partial rollout notes tied to the same verification lane.`,
+      actions: [
+        { label: "Review workspace context on /session", href: args.sessionHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "Navigation only: re-check session context first, then retry from this workspace once the metadata-backed lane is restored.",
+    };
+  }
+  if (args.writeResponseCode === "workspace_feature_unavailable" || args.contractSource === "fallback_feature_gate") {
+    return {
+      title: `${featureLabel} upgrade lane`,
+      body: `${featureLabel} is still plan gated for this workspace. Use the upgrade path, then return here to re-check readiness before treating the controlled write surface as available.`,
+      actions: [
+        { label: "Upgrade plan", href: args.upgradeHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "This lane preserves workspace context and evidence links, but it does not unlock the feature automatically.",
+    };
+  }
+  if (
+    args.writeResponseCode === "control_plane_base_missing" ||
+    args.contractSource === "fallback_control_plane_unavailable"
+  ) {
+    return {
+      title: `${featureLabel} recovery lane`,
+      body: `${featureLabel} readiness is currently fallback-derived because the control plane is unavailable. Re-check session context, keep manual evidence notes, and retry after control-plane recovery.`,
+      actions: [
+        { label: "Review workspace context on /session", href: args.sessionHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "Use verification to capture what was attempted while live readiness remains unavailable; return here after recovery to retry.",
+    };
+  }
+  if (args.contractSource === "fallback_error") {
+    return {
+      title: `${featureLabel} fallback continuity lane`,
+      body: `${featureLabel} readiness could not be loaded from the live contract. Keep the verification notes current, confirm workspace context, and retry once the control-plane route is healthy again.`,
+      actions: [
+        { label: "Review workspace context on /session", href: args.sessionHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "Fallback continuity keeps the workspace lane auditable, but it does not replace the live readiness check.",
+    };
+  }
+  return null;
+}
+
 type EnterpriseAdditiveState = {
   configured: boolean | null;
   configurationState: string | null;
@@ -1008,6 +1082,7 @@ export function WorkspaceSettingsPanel({
     recentOwnerEmail,
     ...buildAuditExportReceiptContinuityArgs(auditExportReceipt),
   } satisfies Omit<SettingsHrefArgs, "pathname" | "intent">;
+  const sessionHref = buildSettingsHref({ pathname: "/session", ...handoffHrefArgs });
   const adminReturnHref = buildAdminReturnHref("/admin", {
     source: normalizedSource,
     runId,
@@ -1121,6 +1196,24 @@ export function WorkspaceSettingsPanel({
   const dedicatedDataClassification = readString(dedicatedEnvironmentReadiness?.data_classification);
   const dedicatedRequestedCapacity = readString(dedicatedEnvironmentReadiness?.requested_capacity);
   const dedicatedRequestedSla = readString(dedicatedEnvironmentReadiness?.requested_sla);
+  const ssoRecoveryCard = buildEnterpriseRecoveryCard({
+    feature: "sso",
+    contractSource: ssoContractSource,
+    contractIssue: ssoContractIssue,
+    writeResponseCode: ssoWriteState.responseCode,
+    sessionHref,
+    verificationHref,
+    upgradeHref: ssoUpgradeHref,
+  });
+  const dedicatedRecoveryCard = buildEnterpriseRecoveryCard({
+    feature: "dedicated_environment",
+    contractSource: dedicatedContractSource,
+    contractIssue: dedicatedContractIssue,
+    writeResponseCode: dedicatedWriteState.responseCode,
+    sessionHref,
+    verificationHref,
+    upgradeHref: dedicatedEnvironmentUpgradeHref,
+  });
   const ssoDomainList = ssoDraft.domains
     .split(",")
     .map((item) => item.trim().toLowerCase())
@@ -2154,6 +2247,24 @@ export function WorkspaceSettingsPanel({
               <p className="mt-1 text-xs text-muted">Issue: {ssoContractIssue.message}</p>
             ) : null}
           </div>
+          {ssoRecoveryCard ? (
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <p className="font-medium text-foreground">{ssoRecoveryCard.title}</p>
+              <p className="mt-1 text-xs text-muted">{ssoRecoveryCard.body}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ssoRecoveryCard.actions.map((action) => (
+                  <Link
+                    key={action.href}
+                    href={action.href}
+                    className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+                  >
+                    {action.label}
+                  </Link>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted">{ssoRecoveryCard.footnote}</p>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-border bg-background p-4">
@@ -2482,6 +2593,24 @@ export function WorkspaceSettingsPanel({
               <p className="mt-1 text-xs text-muted">Issue: {dedicatedContractIssue.message}</p>
             ) : null}
           </div>
+          {dedicatedRecoveryCard ? (
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <p className="font-medium text-foreground">{dedicatedRecoveryCard.title}</p>
+              <p className="mt-1 text-xs text-muted">{dedicatedRecoveryCard.body}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {dedicatedRecoveryCard.actions.map((action) => (
+                  <Link
+                    key={action.href}
+                    href={action.href}
+                    className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+                  >
+                    {action.label}
+                  </Link>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted">{dedicatedRecoveryCard.footnote}</p>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-border bg-background p-4">

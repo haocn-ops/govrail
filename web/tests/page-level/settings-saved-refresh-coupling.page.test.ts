@@ -101,6 +101,9 @@ test("Settings panel keeps SSO saved sections coupled with runtime badges, sourc
   assert.match(source, /formatTokenLabel\(ssoConfigurationState \?\? "unknown"\)/);
   assert.match(source, /formatTokenLabel\(ssoDeliveryStatus \?\? "unknown"\)/);
   assert.match(source, /queryKey: \["workspace-sso-readiness", workspaceSlug\]/);
+  assert.match(source, /const ssoRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /contractSource: ssoContractSource,/);
+  assert.match(source, /contractIssue: ssoContractIssue,/);
 });
 
 test("Settings panel keeps dedicated saved sections coupled with runtime badges, source badges, and readiness/live-write refresh", async () => {
@@ -128,6 +131,9 @@ test("Settings panel keeps dedicated saved sections coupled with runtime badges,
   assert.match(source, /formatTokenLabel\(dedicatedConfigurationState \?\? "unknown"\)/);
   assert.match(source, /formatTokenLabel\(dedicatedDeliveryStatus \?\? "unknown"\)/);
   assert.match(source, /queryKey: \["workspace-dedicated-environment-readiness", workspaceSlug\]/);
+  assert.match(source, /const dedicatedRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /contractSource: dedicatedContractSource,/);
+  assert.match(source, /contractIssue: dedicatedContractIssue,/);
 });
 
 test("Settings panel keeps readiness/attention/onboarding cards aligned with verification and go-live handoff links", async () => {
