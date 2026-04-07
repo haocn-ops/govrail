@@ -14,11 +14,13 @@ export function AdminFocusBar({
   organization,
   workspace,
   queueReturned,
+  readinessReturned,
   clearSurfaceHref,
   clearReadinessHref,
   clearOrganizationHref,
   clearWorkspaceHref,
   clearQueueReturnedHref,
+  clearReadinessReturnedHref,
   clearAllHref,
 }: {
   surface?: string | null;
@@ -26,11 +28,13 @@ export function AdminFocusBar({
   organization?: string | null;
   workspace?: string | null;
   queueReturned?: boolean;
+  readinessReturned?: boolean;
   clearSurfaceHref?: string | null;
   clearReadinessHref?: string | null;
   clearOrganizationHref?: string | null;
   clearWorkspaceHref?: string | null;
   clearQueueReturnedHref?: string | null;
+  clearReadinessReturnedHref?: string | null;
   clearAllHref?: string | null;
 }) {
   const chips: FocusChip[] = [];
@@ -68,6 +72,13 @@ export function AdminFocusBar({
       label: "Follow-up return",
       value: "Returned from follow-up",
       clearHref: clearQueueReturnedHref ?? null,
+    });
+  }
+  if (readinessReturned) {
+    chips.push({
+      label: "Readiness return",
+      value: "Returned from readiness",
+      clearHref: clearReadinessReturnedHref ?? null,
     });
   }
 

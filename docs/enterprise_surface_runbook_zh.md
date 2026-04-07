@@ -177,15 +177,17 @@
   - `npm run web:test:contract`
   - `npm run web:test:page`
   - `npm run web:test:e2e`
+  - `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`
 - 補充說明：
   - `web:test` 目前已拆為 `unit -> contract -> page` 三層串聯，並保持舊入口兼容。
+  - `npm run web:test:e2e` 會執行整包 non-browser smoke；若只需快速重跑 enterprise 主線 smoke，請改用 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`，不要期待 `npm run web:test:e2e -- <file>` 只跑單檔。
   - `page` 層目前覆蓋 `Topbar` fallback warning badge、`Members` 的 metadata guard / plan-gated / control-plane-unavailable / no-members live-only、`Settings` 中 enterprise saved sections / audit export 展示語義與 live-write submit/error 語義，以及 shared handoff continuity source contract（已擴到 `verification/go-live/api-keys/service-accounts`，並納入 `onboarding/playground/usage` 相關護欄）。
   - enterprise live-write 與 route wrapper 相關的最小 source/route 護欄目前由 `web/lib/__tests__/enterprise-surface-routes.test.ts` 提供（含 `audit-events:export` contract）。
   - 本輪 route wrapper consistency 進度會把 mutation/detail route 從各自的 `getBaseUrl + fetch` 樣板換成 `proxyControlPlane` helper，並讓 `workspace_context_not_metadata` 412 guard、`cache: "no-store"`、`x-authenticated-*`/`x-workspace-*`/`x-tenant-id` header 轉發在測試中得以驗證（`metadata-guard.routes.test.ts`、`control-plane-proxy.test.ts`）。
   - execution harness 當前已落地：
     - `unit` 已覆蓋 audit export service 映射，以及 members service（`fetchWorkspaceMembersViewModel`）的 `live / workspace_context_not_metadata / fallback_feature_gate / fallback_control_plane_unavailable / fallback_error` 映射，並補上 enterprise save mutation 的 non-2xx throw contract。
     - `contract` 已覆蓋 `workspace-context` route 的 metadata `GET/POST` 執行路徑，並包含 cf-access/cookie 的選擇與回寫一致性驗證，以及 explicit auth headers 優先於 cf-access headers 的執行語義。
-  - `e2e` 已補最小 non-browser smoke 入口（`npm run web:test:e2e`），目前除 `workspace-context` metadata path 與 `settings` live-write affordance contract 外，也已補一層 source-assisted+execution 的 handoff continuity smoke（含 surface -> verification/go-live -> admin-return continuity，以及 onboarding/playground/usage shared helper continuity）；但仍不等同完整瀏覽器端到端驗收，不作為當前最小驗收阻塞項。
+  - `e2e` 已補最小 non-browser smoke 入口（`npm run web:test:e2e`）；若只需快速重跑 enterprise 主線，請改用 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`。目前除 `workspace-context` metadata path 與 `settings` live-write affordance contract 外，也已補一層 source-assisted+execution 的 handoff continuity smoke（含 surface -> verification/go-live -> admin-return continuity，以及 onboarding/playground/usage shared helper continuity）；但仍不等同完整瀏覽器端到端驗收，不作為當前最小驗收阻塞項。
   - 目前已能覆蓋 `workspace-context` 與 `workspace/me/members` 的 route-contract 最小護欄。
   - 但這仍主要是最小 contract / source guard，並不等同完整 e2e 或完整 route execution harness。
 - 構建驗收：
@@ -195,7 +197,7 @@
   - 機器 contract（已覆蓋）：
     - `unit`：save mutation non-2xx 會拋出結構化 `ControlPlaneRequestError`（避免失敗被吞）。
     - `page/source`：`settings` 的 submit affordance、success/error、saved sections（含 `Saved configuration` / `Saved provisioning request`）與 draft hydration / payload 字段耦合（W12-P04/W12-P05）不回歸。
-    - `e2e(non-browser)`：`npm run web:test:e2e` 已覆蓋 `workspace-context` metadata 主路徑 `GET + POST`，以及 `settings` 的 submit -> readiness refresh -> saved-sections 最小 contract loop（含 source-assisted 檢查）。
+    - `e2e(non-browser)`：`npm run web:test:e2e` 已覆蓋 `workspace-context` metadata 主路徑 `GET + POST`，以及 `settings` 的 submit -> readiness refresh -> saved-sections 最小 contract loop（含 source-assisted 檢查）；若只需 targeted 重跑主線，請改用 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`。
   - 機器 contract（已覆蓋，含本輪 shared handoff continuity 同步）：
     - 共享 helper 護欄（machine）：
       - `settings` 的 handoff URL helper（`buildSettingsHref`）需持續保留 `source/week8_focus/attention_workspace/attention_organization/delivery_context/recent_track_key/recent_update_kind/evidence_count/recent_owner_label/intent` 等 query passthrough 語義。
@@ -220,7 +222,7 @@
 - `多 surface handoff（settings + onboarding/playground/usage/artifacts/logs/members/service-accounts/api-keys）` 新版 checklist（建議按順序）：
   1. 機器檢查：跑 `npm run web:test:unit`，確認 save mutation 非 2xx throw contract 正常。
   2. 機器檢查：跑 `npm run web:test:page`，確認 settings submit/error/success 與 saved-sections/draft-hydration contract 正常（W12-P04/W12-P05）。
-  3. 機器檢查：跑 `npm run web:test:e2e`，確認 non-browser mainline smoke（`workspace-context GET+POST` + `settings` submit->refresh->saved loop + source-assisted/execution handoff continuity）可執行。
+  3. 機器檢查：跑 `npm run web:test:e2e`，確認整包 non-browser smoke 可執行；若只需快速重跑 enterprise 主線，改用 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts` 驗證 `workspace-context GET+POST` + `settings` submit->refresh->saved loop + source-assisted/execution handoff continuity。
   4. 機器檢查（共享 helper 護欄）：確認 handoff helper 在多 surface 仍保留一致 query passthrough（至少與 `settings/go-live` 當前 key 集一致）。
   5. 機器檢查（page/source contract）：確認 `settings` 的 delivery panel/context card 與 `Attach in verification` / `Carry to go-live drill` 導流語義仍在。
   6. 機器檢查（page/source contract）：確認 `verification/go-live` 頁仍承接 handoff context，且 `WorkspaceDeliveryTrackPanel`/notice 顯示語義不回歸。

@@ -16,10 +16,15 @@ async function readSource(filePath: string): Promise<string> {
 test("API keys panel keeps link labels coupled to service-accounts/playground/verification handoff targets with shared query args", async () => {
   const source = await readSource(apiKeysPanelPath);
 
-  assert.match(source, /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/);
+  assert.match(source, /import \{ buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/);
   assert.match(
     source,
-    /const handoffHrefArgs = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext: normalizedDeliveryContext,\s*recentTrackKey: normalizedRecentTrackKey,\s*recentUpdateKind: normalizedRecentUpdateKind,\s*evidenceCount: normalizedEvidenceCount,\s*recentOwnerLabel,\s*\};/s,
+    /const latestDemoRun = workspaceQuery\.data\?\.onboarding\?\.latest_demo_run \?\? null;/,
+  );
+  assert.match(source, /const activeRunId = latestDemoRun\?\.run_id \?\? null;/);
+  assert.match(
+    source,
+    /const handoffHrefArgs = \{\s*source: normalizedSource,\s*runId: activeRunId,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext: normalizedDeliveryContext,\s*recentTrackKey: normalizedRecentTrackKey,\s*recentUpdateKind: normalizedRecentUpdateKind,\s*evidenceCount: normalizedEvidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\};/s,
   );
   assert.match(source, /const serviceAccountsHref = buildVerificationChecklistHandoffHref\(\{ pathname: "\/service-accounts", \.\.\.handoffHrefArgs \}\);/);
   assert.match(source, /const playgroundHref = buildVerificationChecklistHandoffHref\(\{ pathname: "\/playground", \.\.\.handoffHrefArgs \}\);/);
@@ -38,17 +43,21 @@ test("API keys panel keeps link labels coupled to service-accounts/playground/ve
   assert.match(source, /href=\{playgroundHref\}[\s\S]*Run a verification demo/);
   assert.match(source, /href=\{verificationHref\}[\s\S]*Capture Week 8 evidence/);
   assert.match(source, /href=\{verificationHref\}[\s\S]*Continue to verification/);
-  assert.match(source, /href=\{serviceAccountsHref\}[\s\S]*Review service accounts/);
   assert.match(source, /href=\{playgroundHref\}[\s\S]*Run a governance demo/);
 });
 
 test("Service-accounts panel keeps source-specific context-card labels mapped to target paths and shared handoff query continuity", async () => {
   const source = await readSource(serviceAccountsPanelPath);
 
-  assert.match(source, /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/);
+  assert.match(source, /import \{ buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/);
   assert.match(
     source,
-    /const handoffHrefArgs: HandoffQuery = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*\};/s,
+    /const latestDemoRun = workspaceQuery\.data\?\.onboarding\?\.latest_demo_run \?\? null;/,
+  );
+  assert.match(source, /const activeRunId = latestDemoRun\?\.run_id \?\? null;/);
+  assert.match(
+    source,
+    /const handoffHrefArgs: HandoffQuery = \{\s*source: normalizedSource,\s*runId: activeRunId,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\};/s,
   );
   assert.match(source, /href={buildVerificationChecklistHandoffHref\({ pathname: action\.path, \.\.\.handoffHrefArgs }\)}/);
   assert.match(
@@ -79,17 +88,45 @@ test("Service-accounts panel keeps source-specific context-card labels mapped to
   assert.match(source, /Review service accounts/);
   assert.match(source, /Run a verification demo/);
   assert.match(source, /Capture Week 8 evidence/);
+  assert.match(source, /function credentialCoverage\(active\?: number \| null, total\?: number \| null\): string \| null/);
+  assert.match(source, /function hasHistoricalOnly\(total\?: number \| null, active\?: number \| null\): boolean/);
+  assert.match(source, /Only historical or disabled service accounts remain\./);
+});
+
+test("Credential panels keep active-vs-historical onboarding coverage guidance aligned with next-step copy", async () => {
+  const [apiKeysSource, serviceAccountsSource] = await Promise.all([
+    readSource(apiKeysPanelPath),
+    readSource(serviceAccountsPanelPath),
+  ]);
+
+  assert.match(apiKeysSource, /summary\?: \{\s*api_keys_total: number;\s*active_api_keys_total: number;/s);
+  assert.match(apiKeysSource, /Only revoked or historical API keys remain\. Issue a new active key before you treat Playground as ready\./);
+  assert.match(apiKeysSource, /Current coverage: \$\{coverage\}\./);
+
+  assert.match(serviceAccountsSource, /summary\?: \{\s*service_accounts_total: number;\s*active_service_accounts_total: number;/s);
+  assert.match(serviceAccountsSource, /Only historical or disabled service accounts remain\. Create a new active machine identity before you treat Playground as ready\./);
+  assert.match(serviceAccountsSource, /Current coverage: \$\{value\}\./);
 });
 
 test("Usage dashboard keeps explicit verification surface links coupled to shared handoff continuity", async () => {
   const source = await readSource(usageDashboardPath);
 
-  assert.match(source, /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/);
-  assert.match(source, /\{ label: "Return to verification", path: "\/verification\?surface=verification" \}/);
-  assert.match(source, /\{ label: "Capture verification evidence", path: "\/verification\?surface=verification" \}/);
+  assert.match(source, /import \{ buildAdminReturnHref, buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/);
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/verification\?surface=verification", \.\.\.handoffHrefArgs \}\)\}/,
+    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext: normalizeDeliveryContext\(deliveryContext\),\s*recentTrackKey: normalizeRecentTrackKey\(recentTrackKey\),\s*recentUpdateKind: normalizeRecentUpdateKind\(recentUpdateKind\),\s*evidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\};/s,
   );
-  assert.match(source, /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: action\.path, \.\.\.handoffHrefArgs \}\)\}/);
+  assert.match(source, /\{ label: "Capture verification evidence", path: "\/verification\?surface=verification" \}/);
+  assert.match(source, /const latestDemoRun = onboardingState\?\.latest_demo_run \?\? null;/);
+  assert.match(source, /const activeRunId = latestDemoRun\?\.run_id \?\? runId \?\? null;/);
+  assert.match(
+    source,
+    /const buildRunAwareUsageHref = \(pathname: string\): string =>\s*buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/s,
+  );
+  assert.match(source, /const verificationHref = buildRunAwareUsageHref\("\/verification\?surface=verification"\);/);
+  assert.match(source, /const artifactsHref = buildRunAwareUsageHref\("\/artifacts"\);/);
+  assert.match(source, /const settingsHref = buildRunAwareUsageHref\("\/settings"\);/);
+  assert.match(source, /href=\{verificationHref\}[\s\S]*Capture verification evidence/);
+  assert.match(source, /href=\{verificationHref\}[\s\S]*Reopen verification evidence/);
+  assert.match(source, /href=\{buildRunAwareUsageHref\(action\.path\)\}/);
 });

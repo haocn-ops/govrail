@@ -33,12 +33,12 @@ function surfaceGuidance(surface: WorkspaceContextCalloutSurface): string {
     return "Confirm workspace identity before billing follow-up, SSO readiness, or dedicated-environment governance updates.";
   }
   if (surface === "usage") {
-    return "Confirm workspace identity before recording usage pressure, quota evidence, or plan-limit remediation cues.";
+    return "Confirm workspace identity before recording usage pressure, quota evidence, or plan-limit remediation cues that will later be relayed into verification, settings, and admin notes.";
   }
   if (surface === "verification") {
     return "Confirm workspace identity before attaching verification notes, checklist evidence, or rollout readiness commentary.";
   }
-  return "Confirm workspace identity before running mock go-live drill notes and handing readiness status back to admin.";
+  return "Confirm workspace identity before running mock go-live drill notes, reusing the same audit export evidence thread, and handing readiness status back to admin.";
 }
 
 export function WorkspaceContextCallout({

@@ -50,6 +50,14 @@
   - 固定 console pages 的 shared query continuity 契約
 - `web/tests/e2e/saas-mainline-smoke.e2e.test.ts`
   - 固定 surface -> verification/go-live -> admin return 的 non-browser smoke
+- `web/tests/e2e/browser-e2e-mainline-console-readiness.test.ts`
+  - 固定 mainline console focused browser batch 與 admin return wiring
+- `web/tests/e2e/browser-e2e-console-surface-verification-readiness.test.ts`
+  - 固定 `settings/usage -> verification -> admin` 這組 readiness wrapper 映射
+- `web/tests/e2e/browser-e2e-console-surface-go-live-delivery-readiness.test.ts`
+  - 固定 `settings/verification/go-live -> admin` 這組 go-live/delivery wrapper 映射
+- 若只需快速重跑這條主線 smoke，請從倉庫根目錄執行 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`；`npm run web:test:e2e` 仍保留給整包 non-browser smoke。
+- 若只需 focused browser 重跑，主線 console 可從倉庫根目錄執行 `npm run web:test:browser:mainline-console-verification` 或 `npm run web:test:browser:mainline-console-go-live`；admin return lane 會透過這兩組 batch 與上面的 readiness wrapper 一起覆蓋。
 
 ## 5. 已完成範圍與保守邊界
 

@@ -47,15 +47,18 @@
 建議搭配以下命令做最小驗收：
 
 - `npm run smoke`
-- `cd web && npm run check`
-- `cd web && node --import tsx --test lib/__tests__/control-plane-service.test.ts`
-- `cd web && node --import tsx --test tests/page-level/accept-invitation-guardrails.page.test.ts tests/page-level/usage-period-evidence-contract.page.test.ts`
-- `cd web && node --import tsx --test tests/page-level/session-access-checkpoint.page.test.ts tests/page-level/launchpad-session-guidance.page.test.ts tests/page-level/settings-self-serve-lane.page.test.ts`
-- `cd web && node --import tsx --test app/api/control-plane/invitations/accept/__tests__/route.test.ts tests/route-wrapper-consistency.test.ts`
+- `npm run web:check`
+- `npm run web:test:unit`
+- `npm run web:test:contract`
+- `npm run web:test:page`
+- `npm run web:test:e2e`
+- `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`
 - `npm run web:test:browser:smoke`
 - `npm run web:test:browser:smoke:stable`
 - `npm run web:test:browser:smoke:dev`
 - `npm run web:test:browser:spike`
+
+若只是在 `web/` 目錄做低階/局部調試，才建議直接使用 raw `node --import tsx --test ...` 指定單一測試檔；contributors 預設應優先使用上述 `npm run web:test:*` 入口，避免把局部調試命令誤當成標準驗收流程。
 
 目前 browser smoke suite 已真實覆蓋多條最小鏈路：
 

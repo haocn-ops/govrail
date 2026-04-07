@@ -16,7 +16,7 @@
 目前頁面由以下區塊構成：
 
 1. `WorkspaceContextSurfaceNotice`
-2. `AdminFollowUpNotice`
+2. `ConsoleAdminFollowUp`
    - 視 source 顯示 `admin-attention` / `admin-readiness`
 3. `PageHeader`
 4. `Verification evidence lane`
@@ -37,6 +37,7 @@
 - `buildConsoleAdminReturnState(...)`
 - `buildConsoleAdminReturnHref(...)`
 - `buildConsoleHandoffHref("/session", handoff)`
+- `buildVerificationChecklistHandoffHref(...)`
 
 關鍵契約：
 
@@ -54,6 +55,12 @@
   - 固定 verification delivery track 與 admin return / go-live continuation mapping
 - `web/tests/e2e/saas-mainline-smoke.e2e.test.ts`
   - 固定 verification/go-live/admin return 的 source-assisted smoke
+- `web/tests/browser/verification-delivery-admin-return.smoke.spec.ts`
+  - 固定 verification -> go-live -> admin focused browser smoke
+- `web/tests/e2e/browser-e2e-mainline-console-readiness.test.ts`
+  - 固定 mainline console focused batch 與 runner mapping
+- 若只需快速重跑這條主線 smoke，請從倉庫根目錄執行 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`；`npm run web:test:e2e` 仍保留給整包 non-browser smoke。
+- 若只需 focused browser 重跑，請從倉庫根目錄執行 `npm run web:test:browser:mainline-console-go-live`；這組 batch 會覆蓋 `verification-delivery-admin-return` 這條 verification -> go-live/admin 回流主線。
 
 ## 5. 已完成範圍與保守邊界
 

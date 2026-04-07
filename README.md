@@ -111,6 +111,11 @@ npm run post-deploy:verify:readonly
 | `npm run tenant:handoff:update -- --bundle <file>` | Fold request/verify evidence back into a handoff-state JSON |
 | `npm run post-deploy:verify` | Write-mode remote verification for staging or dedicated verify tenants |
 | `npm run post-deploy:verify:readonly` | Readonly remote verification for production or shared tenants |
+| `npm run web:preview:staging` | Build the web console with the `web` staging env and open the Cloudflare/OpenNext local preview |
+| `npm run web:deploy:staging:dry-run` | Dry-run the isolated `workers.dev` web staging deploy without touching production routes |
+| `npm run web:deploy:staging` | Deploy the isolated `workers.dev` web staging console |
+| `npm run web:test:e2e` | Run the full root-level web non-browser e2e batch from `web/tests/e2e` |
+| `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts` | Run one targeted root-level web non-browser e2e file for focused debugging or contract checks |
 | `npm run web:test:browser:smoke` | Run the default browser smoke suite on the production-backed local server |
 | `npm run web:test:browser:smoke:stable` | Run the same browser smoke suite with explicit stable-server settings |
 | `npm run web:test:browser:smoke:dev` | Run the browser smoke suite against a local Next dev server for quicker iteration |
@@ -208,10 +213,23 @@ Use the verification paths like this:
   - `npm run verify:build`
 - Observability example contract validation:
   - `npm run validate:observability`
+- Root-level web non-browser e2e, full batch:
+  - `npm run web:test:e2e`
+- Root-level web non-browser e2e, targeted single file:
+  - `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`
 - Staging or isolated verification tenant:
   - `npm run post-deploy:verify`
+- Web staging preview or deploy from repo root:
+  - `npm run web:preview:staging`
+  - `npm run web:deploy:staging:dry-run`
+  - `npm run web:deploy:staging`
+- Browser smoke against an existing staging console URL:
+  - `PLAYWRIGHT_BASE_URL="https://<web-staging>.workers.dev" npm run web:test:browser:session-checkpoint:existing-server`
+  - `PLAYWRIGHT_BASE_URL="https://<web-staging>.workers.dev" npm run web:test:browser:mainline-console-verification:existing-server`
 - Production or shared tenant:
   - `npm run post-deploy:verify:readonly`
+
+`npm run web:test:e2e -- <file>` 仍會帶上整包 `web/tests/e2e/*.test.ts`；若只需 targeted 單檔重跑，請改用 `npm run web:test:e2e:file -- <file>`。
 
 ## CI Baseline
 

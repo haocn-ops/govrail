@@ -54,22 +54,17 @@ test("workspace dedicated environment route keeps shared helper GET and controll
   );
 });
 
-test("workspace audit export route keeps GET wrapper path and accept-header passthrough semantics", async () => {
+test("workspace audit export route reuses shared enterprise GET helper with query and accept passthrough", async () => {
   const source = await readSource(auditExportRoutePath);
+  assert.match(
+    source,
+    /import \{ auditExportAcceptHeader, proxyWorkspaceEnterpriseGet \} from "\.\.\/\.\.\/route-helpers";/,
+  );
   assert.match(source, /export async function GET\(request: Request\)/);
-  assert.match(source, /const requestUrl = new URL\(request\.url\);/);
-  assert.match(source, /const query = requestUrl\.searchParams\.toString\(\);/);
   assert.match(
     source,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/audit-events:export\?\$\{query\}`/,
+    /return proxyWorkspaceEnterpriseGet\("\/audit-events:export",\s*\{\s*request,\s*defaultAccept:\s*auditExportAcceptHeader,\s*\}\);/s,
   );
-  assert.match(
-    source,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/audit-events:export`/,
-  );
-  assert.match(source, /return proxyControlPlane\(path,\s*\{/);
-  assert.match(source, /method:\s*"GET"/);
-  assert.match(source, /accept:\s*request\.headers\.get\("accept"\)\s*\?\?\s*"application\/json, application\/x-ndjson"/);
 });
 
 test("backend app keeps enterprise surface handlers on both GET and controlled POST methods", async () => {

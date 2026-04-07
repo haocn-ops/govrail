@@ -22,8 +22,12 @@ test("Workspace launchpad keeps verification/go-live explicit surface routing an
   assert.match(source, /if \(surface === "verification"\) \{\s*return "\/verification\?surface=verification";\s*\}/s);
   assert.match(source, /if \(surface === "go_live" \|\| surface === "go-live"\) \{\s*return "\/go-live\?surface=go_live";\s*\}/s);
 
-  assert.match(source, /href=\{toSurfacePath\(recommendedNextStep\.surface\)\}/);
-  assert.match(source, /href=\{toSurfacePath\(entry\.surface\)\}/);
+  assert.match(source, /function buildLaunchpadHref\(pathname: string\): string \{/);
+  assert.match(source, /const latestDemoRun = onboarding\?\.latest_demo_run \?\? null;/);
+  assert.match(source, /const activeRunId = latestDemoRun\?\.run_id \?\? null;/);
+  assert.match(source, /return buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/);
+  assert.match(source, /href=\{buildLaunchpadHref\(toSurfacePath\(recommendedNextStep\.surface\)\)\}/);
+  assert.match(source, /href=\{buildLaunchpadHref\(toSurfacePath\(entry\.surface\)\)\}/);
   assert.match(source, /const latestDemoRunHint = onboarding\?\.latest_demo_run_hint \?\? null;/);
   assert.match(source, /const deliveryGuidance = onboarding\?\.delivery_guidance \?\? null;/);
   assert.match(source, /const onboardingRecoveryTitle = latestDemoRunHint\?\.needs_attention/);

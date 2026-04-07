@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { ReadinessTile } from "@/components/home/readiness-tile";
-import { buildVerificationChecklistHandoffHref } from "@/components/verification/week8-verification-checklist";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildAdminReturnHref, resolveAdminQueueSurface } from "@/lib/handoff-query";
+import { buildAdminReturnHref, buildVerificationChecklistHandoffHref, resolveAdminQueueSurface } from "@/lib/handoff-query";
 import { fetchCurrentWorkspace, fetchWorkspaceDeliveryTrack } from "@/services/control-plane";
 
 type OnboardingSurface =
@@ -138,6 +137,20 @@ function toSurfacePath(surface: OnboardingSurface): string {
   return `/${surface}`;
 }
 
+type OnboardingStatusSummary = {
+  service_accounts_total: number;
+  active_service_accounts_total: number;
+  api_keys_total: number;
+  active_api_keys_total: number;
+};
+
+function hasHistoricalOnly(total?: number, active?: number): boolean {
+  if (typeof total !== "number" || typeof active !== "number") {
+    return false;
+  }
+  return total > 0 && active === 0;
+}
+
 function getRecommendedNextStep(args: {
   onboardingStatus?: {
     checklist: {
@@ -150,6 +163,7 @@ function getRecommendedNextStep(args: {
     recommended_next_surface?: OnboardingSurface | null;
     recommended_next_action?: string | null;
     recommended_next_reason?: string | null;
+    summary?: OnboardingStatusSummary | null;
   } | null;
 }): { surface: OnboardingSurface; action: string; reason: string } {
   if (args.onboardingStatus?.recommended_next_surface) {
@@ -169,18 +183,26 @@ function getRecommendedNextStep(args: {
       reason: "Bootstrap providers and policies before credential setup.",
     };
   }
+  const serviceAccountsTotal = args.onboardingStatus?.summary?.service_accounts_total ?? 0;
+  const activeServiceAccounts = args.onboardingStatus?.summary?.active_service_accounts_total ?? 0;
   if (args.onboardingStatus?.checklist.service_account_created !== true) {
     return {
       surface: "service_accounts",
       action: "Create service account",
-      reason: "Service account is required for first governed API path.",
+      reason: args.onboardingStatus?.summary && hasHistoricalOnly(serviceAccountsTotal, activeServiceAccounts)
+        ? "Only historical or disabled service accounts remain. Create a new active machine identity for the first governed API path."
+        : "Service account is required for first governed API path.",
     };
   }
+  const apiKeysTotal = args.onboardingStatus?.summary?.api_keys_total ?? 0;
+  const activeApiKeys = args.onboardingStatus?.summary?.active_api_keys_total ?? 0;
   if (args.onboardingStatus?.checklist.api_key_created !== true) {
     return {
       surface: "api_keys",
       action: "Create API key",
-      reason: "Create a narrow key (for example `runs:write`) for the first run.",
+      reason: args.onboardingStatus?.summary && hasHistoricalOnly(apiKeysTotal, activeApiKeys)
+        ? "Only revoked or historical API keys remain. Issue a new active key for the first governed run."
+        : "Create a narrow key (for example `runs:write`) for the first run.",
     };
   }
   if (args.onboardingStatus?.checklist.demo_run_succeeded !== true) {
@@ -339,6 +361,8 @@ export function WorkspaceLaunchpad({
   recentUpdateKind,
   evidenceCount,
   recentOwnerLabel,
+  recentOwnerDisplayName,
+  recentOwnerEmail,
 }: {
   workspaceSlug: string;
   workspaceRole?: string | null;
@@ -352,6 +376,8 @@ export function WorkspaceLaunchpad({
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 }) {
   const workspaceQuery = useQuery({
     queryKey: ["home-launchpad-workspace", workspaceSlug],
@@ -369,6 +395,8 @@ export function WorkspaceLaunchpad({
   const billing = workspaceQuery.data?.billing_summary;
   const usage = workspaceQuery.data?.usage;
   const delivery = deliveryQuery.data;
+  const latestDemoRun = onboarding?.latest_demo_run ?? null;
+  const activeRunId = latestDemoRun?.run_id ?? null;
 
   const onboardingReady = onboarding?.checklist.baseline_ready === true;
   const credentialsReady =
@@ -436,6 +464,7 @@ export function WorkspaceLaunchpad({
     showAdminAttention || showAdminReadiness
       ? buildAdminReturnHref("/admin", {
           source: normalizedSource,
+          runId: activeRunId,
           queueSurface: showAdminAttention ? resolveAdminQueueSurface(recentTrackKey) : null,
           week8Focus,
           attentionWorkspace: attentionWorkspace ?? workspaceSlug,
@@ -444,6 +473,8 @@ export function WorkspaceLaunchpad({
           recentUpdateKind: normalizeRecentUpdateKind(recentUpdateKind),
           evidenceCount,
           recentOwnerLabel,
+          recentOwnerDisplayName,
+          recentOwnerEmail,
         })
       : null;
   const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {
@@ -456,10 +487,12 @@ export function WorkspaceLaunchpad({
     recentUpdateKind,
     evidenceCount,
     recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
   };
 
   function buildLaunchpadHref(pathname: string): string {
-    return buildVerificationChecklistHandoffHref({ pathname, ...handoffHrefArgs });
+    return buildVerificationChecklistHandoffHref({ pathname, ...handoffHrefArgs, runId: activeRunId });
   }
 
   return (
