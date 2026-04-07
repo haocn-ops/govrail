@@ -213,7 +213,7 @@ test("browser-e2e spike probe keeps executable readiness report aligned with cur
     "/session",
     "/onboarding",
     "/usage",
-    "/settings",
+    "/settings?intent=manage-plan",
     "/verification?surface=verification",
     "/go-live?surface=go_live",
     "/admin?readiness_returned=1",
@@ -221,7 +221,7 @@ test("browser-e2e spike probe keeps executable readiness report aligned with cur
   assert.match(report.boundary, /one minimal true browser smoke added/i);
   assert.match(
     report.boundary,
-    /launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin/i,
+    /launchpad -> session -> onboarding -> usage -> settings\?intent=manage-plan -> verification -> go-live -> admin/i,
   );
   assert.match(report.boundary, /does not claim full browser e2e is complete/i);
 });

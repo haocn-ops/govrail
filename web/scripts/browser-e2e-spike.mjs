@@ -17,7 +17,7 @@ const candidateRouteChain = [
   "/session",
   "/onboarding",
   "/usage",
-  "/settings",
+  "/settings?intent=manage-plan",
   "/verification?surface=verification",
   "/go-live?surface=go_live",
   "/admin?readiness_returned=1",
@@ -110,7 +110,7 @@ async function main() {
   const report = {
     status: browserSmokeReady ? "ready" : "pending",
     boundary:
-      "Current repo coverage is still centered on unit + contract + page + non-browser smoke, with one minimal true browser smoke added for launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin. This report does not claim full browser e2e is complete.",
+      "Current repo coverage is still centered on unit + contract + page + non-browser smoke, with one minimal true browser smoke added for launchpad -> session -> onboarding -> usage -> settings?intent=manage-plan -> verification -> go-live -> admin. This report does not claim full browser e2e is complete.",
     candidateRouteChain,
     playwright: {
       directDependency: playwrightDirectDependency,
@@ -130,8 +130,8 @@ async function main() {
     },
     recommendedNextStep:
       browserSmokeReady
-        ? "Run `npm run test:browser:smoke` against the production-backed local server and keep the browser scope limited to launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin until the next continuity slice is stable."
-        : "Install a direct browser test dependency/config and wire one minimal launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin smoke on a production-backed local server without overstating coverage.",
+        ? "Run `npm run test:browser:smoke` against the production-backed local server and keep the browser scope limited to launchpad -> session -> onboarding -> usage -> settings?intent=manage-plan -> verification -> go-live -> admin until the next continuity slice is stable."
+        : "Install a direct browser test dependency/config and wire one minimal launchpad -> session -> onboarding -> usage -> settings?intent=manage-plan -> verification -> go-live -> admin smoke on a production-backed local server without overstating coverage.",
   };
 
   if (process.argv.includes("--json")) {
