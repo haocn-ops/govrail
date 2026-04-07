@@ -28,6 +28,7 @@ test(
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Return to admin readiness view/);
     assert.match(browserSmokeSpec, /readiness_returned=1/);
-    assert.match(browserSmokeSpec, /recent_owner_\(label\|display_name\)=Ops/);
+    assert.match(browserSmokeSpec, /recent_owner_display_name=Avery%20Ops/);
+    assert.match(browserSmokeSpec, /recent_owner_email=avery\.ops%40govrail\.test/);
   },
 );
