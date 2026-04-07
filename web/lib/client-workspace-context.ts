@@ -6,6 +6,8 @@ export type WorkspaceContextSourceState = {
   isFallback: boolean;
   localOnly: boolean;
   warning: string | null;
+  sessionCheckpointRequired: boolean;
+  checkpointLabel: string;
 };
 
 export type ClientWorkspaceRecord = {
@@ -46,6 +48,8 @@ type WorkspaceContextSourceDetail = {
   is_fallback?: boolean;
   local_only?: boolean;
   warning?: string | null;
+  session_checkpoint_required?: boolean;
+  checkpoint_label?: string;
 };
 
 type WorkspaceContextResponse = {
@@ -145,12 +149,19 @@ function normalizeWorkspaceContextSourceState(
   source: WorkspaceContextSource,
   detail?: WorkspaceContextSourceDetail,
 ): WorkspaceContextSourceState {
+  const isFallback = detail?.is_fallback === true || source !== "metadata";
+  const localOnly = detail?.local_only === true || source !== "metadata";
+
   return {
     source,
     label: normalizeString(detail?.label) ?? defaultSourceLabel(source),
-    isFallback: detail?.is_fallback === true || source !== "metadata",
-    localOnly: detail?.local_only === true || source !== "metadata",
+    isFallback,
+    localOnly,
     warning: normalizeString(detail?.warning) ?? defaultSourceWarning(source),
+    sessionCheckpointRequired: detail?.session_checkpoint_required === true || isFallback,
+    checkpointLabel:
+      normalizeString(detail?.checkpoint_label) ??
+      (isFallback ? "Session checkpoint required" : "Trusted metadata session"),
   };
 }
 

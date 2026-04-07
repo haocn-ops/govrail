@@ -21,6 +21,8 @@ test("WorkspaceContextCallout renders fallback badges, warning copy, and session
         local_only: true,
         warning:
           "Workspace context was loaded from environment fallback values. Use metadata-backed session context before production rollout.",
+        session_checkpoint_required: true,
+        checkpoint_label: "Session checkpoint required",
       },
     }),
   );
@@ -28,6 +30,7 @@ test("WorkspaceContextCallout renders fallback badges, warning copy, and session
   assert.match(html, /Verification context checkpoint/);
   assert.match(html, /ops-secure/);
   assert.match(html, /context: Environment fallback \(non-production\)/);
+  assert.match(html, /Session checkpoint required/);
   assert.match(html, /fallback warning/);
   assert.match(html, /local-only context/);
   assert.match(
@@ -59,6 +62,8 @@ test("WorkspaceContextCallout keeps metadata context subtle and omits fallback-o
         is_fallback: false,
         local_only: false,
         warning: null,
+        session_checkpoint_required: false,
+        checkpoint_label: "Trusted metadata session",
       },
     }),
   );
@@ -72,6 +77,7 @@ test("WorkspaceContextCallout keeps metadata context subtle and omits fallback-o
   assert.doesNotMatch(html, /local-only context/);
   assert.doesNotMatch(html, /Live metadata is unavailable/);
   assert.match(html, /context: SaaS metadata/);
+  assert.match(html, /Trusted metadata session/);
   } finally {
     (globalThis as typeof globalThis & { React?: typeof React }).React = originalReact;
   }

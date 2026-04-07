@@ -164,12 +164,18 @@ test(
       const payload = (await response.json()) as {
         data: {
           source: string;
-          source_detail: { is_fallback: boolean };
+          source_detail: {
+            is_fallback: boolean;
+            session_checkpoint_required: boolean;
+            checkpoint_label: string;
+          };
           workspace: { workspace_id: string; slug: string };
         };
       };
       assert.equal(payload.data.source, "metadata");
       assert.equal(payload.data.source_detail.is_fallback, false);
+      assert.equal(payload.data.source_detail.session_checkpoint_required, false);
+      assert.equal(payload.data.source_detail.checkpoint_label, "Trusted metadata session");
       assert.equal(payload.data.workspace.workspace_id, "ws_mainline_2");
       assert.equal(payload.data.workspace.slug, "mainline-two");
       assert.equal(response.headers.get("x-govrail-workspace-context-source"), "metadata");
@@ -255,7 +261,11 @@ test(
       const payload = (await response.json()) as {
         data: {
           source: string;
-          source_detail: { is_fallback: boolean };
+          source_detail: {
+            is_fallback: boolean;
+            session_checkpoint_required: boolean;
+            checkpoint_label: string;
+          };
           workspace: { workspace_id: string; slug: string };
           selection: {
             requested_workspace_id: string | null;
@@ -267,6 +277,8 @@ test(
 
       assert.equal(payload.data.source, "metadata");
       assert.equal(payload.data.source_detail.is_fallback, false);
+      assert.equal(payload.data.source_detail.session_checkpoint_required, false);
+      assert.equal(payload.data.source_detail.checkpoint_label, "Trusted metadata session");
       assert.equal(payload.data.workspace.workspace_id, "ws_beta");
       assert.equal(payload.data.workspace.slug, "beta");
       assert.equal(payload.data.selection.requested_workspace_id, "ws_beta");

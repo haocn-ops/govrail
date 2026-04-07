@@ -19,6 +19,8 @@ test("fetchWorkspaceContextSource normalizes metadata-backed response details", 
             is_fallback: false,
             local_only: false,
             warning: null,
+            session_checkpoint_required: false,
+            checkpoint_label: "Trusted metadata session",
           },
           session_user: {
             user_id: "user_123",
@@ -60,6 +62,8 @@ test("fetchWorkspaceContextSource normalizes metadata-backed response details", 
   assert.equal(value.isFallback, false);
   assert.equal(value.localOnly, false);
   assert.equal(value.warning, null);
+  assert.equal(value.sessionCheckpointRequired, false);
+  assert.equal(value.checkpointLabel, "Trusted metadata session");
   assert.equal(value.requestId, "workspace-context");
   assert.equal(value.traceId, "workspace-context");
   assert.deepEqual(value.context.sessionUser, {
@@ -117,6 +121,8 @@ test("fetchWorkspaceContext aliases the richer workspace-context payload", async
   assert.equal(value.source, "preview-fallback");
   assert.equal(value.context.workspace?.workspaceId, "ws_preview");
   assert.equal(value.context.sourceDetail.warning, value.warning);
+  assert.equal(value.context.sourceDetail.sessionCheckpointRequired, true);
+  assert.equal(value.context.sourceDetail.checkpointLabel, "Session checkpoint required");
 });
 
 test("switchWorkspaceContext posts workspace selectors and fills fallback warning defaults", async () => {
@@ -160,6 +166,8 @@ test("switchWorkspaceContext posts workspace selectors and fills fallback warnin
   assert.equal(value.label, "Environment fallback (non-production)");
   assert.equal(value.isFallback, true);
   assert.equal(value.localOnly, true);
+  assert.equal(value.sessionCheckpointRequired, true);
+  assert.equal(value.checkpointLabel, "Session checkpoint required");
   assert.match(
     value.warning ?? "",
     /environment fallback values/i,

@@ -19,6 +19,8 @@ test("Topbar keeps fallback-aware context badge and warning semantics", async ()
 
   assert.match(source, /variant=\{sourceDetail\.is_fallback \? "default" : "subtle"\}/);
   assert.match(source, /context: \{sourceDetail\.label\}/);
+  assert.match(source, /variant=\{sourceDetail\.session_checkpoint_required \? "default" : "subtle"\}/);
+  assert.match(source, /\{sourceDetail\.checkpoint_label\}/);
   assert.match(
     source,
     /sourceDetail\.warning \?\s*\(\s*<Badge variant="default">review context details on \/session<\/Badge>\s*\)\s*:\s*null/s,
@@ -49,6 +51,8 @@ test("workspace context callout keeps reusable source/fallback/session guardrail
   assert.match(source, /export function WorkspaceContextCallout\(/);
   assert.match(source, /variant=\{sourceDetail\.is_fallback \? "default" : "subtle"\}/);
   assert.match(source, /context: \{sourceDetail\.label\}/);
+  assert.match(source, /variant=\{sourceDetail\.session_checkpoint_required \? "default" : "subtle"\}/);
+  assert.match(source, /\{sourceDetail\.checkpoint_label\}/);
   assert.match(source, /sourceDetail\.warning \? <Badge variant="default">fallback warning<\/Badge> : null/);
   assert.match(source, /sourceDetail\.local_only \? <Badge variant="default">local-only context<\/Badge> : null/);
   assert.match(source, /Live metadata is unavailable\./);

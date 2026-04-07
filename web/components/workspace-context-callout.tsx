@@ -61,6 +61,9 @@ export function WorkspaceContextCallout({
           <Badge variant={sourceDetail.is_fallback ? "default" : "subtle"}>
             context: {sourceDetail.label}
           </Badge>
+          <Badge variant={sourceDetail.session_checkpoint_required ? "default" : "subtle"}>
+            {sourceDetail.checkpoint_label}
+          </Badge>
           {sourceDetail.warning ? <Badge variant="default">fallback warning</Badge> : null}
           {sourceDetail.local_only ? <Badge variant="default">local-only context</Badge> : null}
         </div>
@@ -70,7 +73,7 @@ export function WorkspaceContextCallout({
             {sourceDetail.warning}
           </p>
         ) : null}
-        {(sourceDetail.is_fallback || sourceDetail.local_only) && (
+        {sourceDetail.session_checkpoint_required && (
           <p className="text-xs text-muted">
             Live metadata is unavailable. Treat this as preview data until you reconfirm metadata-backed identity and
             tenant on <code className="font-mono">/session</code>.
