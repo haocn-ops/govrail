@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
 import { performWorkspaceSwitch } from "@/lib/client-workspace-navigation";
+import {
+  applyWorkspaceSwitchOutcome,
+  beginWorkspaceSwitcherSelection,
+  createWorkspaceSwitcherViewState,
+  syncWorkspaceSwitcherViewState,
+} from "@/components/workspace-switcher-state";
 
 type WorkspaceOption = {
   workspace_id: string;
@@ -25,14 +31,11 @@ export function WorkspaceSwitcher({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState(currentWorkspaceSlug);
-  const [isSaving, setIsSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [warningMessage, setWarningMessage] = useState<string | null>(null);
+  const [viewState, setViewState] = useState(() => createWorkspaceSwitcherViewState(currentWorkspaceSlug));
+  const { selected, isSaving, errorMessage, warningMessage } = viewState;
 
   useEffect(() => {
-    setSelected(currentWorkspaceSlug);
-    setIsSaving(false);
+    setViewState((state) => syncWorkspaceSwitcherViewState(state, currentWorkspaceSlug));
   }, [currentWorkspaceSlug]);
 
   async function switchWorkspace(nextSlug: string, previousSlug: string) {
@@ -44,15 +47,16 @@ export function WorkspaceSwitcher({
       resetMode: "clear",
     });
 
-    if (outcome.status === "switched") {
-      setWarningMessage(outcome.warning);
+    const { nextState, shouldRefresh } = applyWorkspaceSwitchOutcome({
+      nextSlug,
+      previousSlug,
+      outcome,
+    });
+
+    setViewState(nextState);
+    if (shouldRefresh) {
       router.refresh();
-    } else {
-      setSelected(previousSlug);
-      setWarningMessage(null);
-      setErrorMessage(outcome.error?.message ?? "Failed to switch workspace");
     }
-    setIsSaving(false);
   }
 
   return (
@@ -65,14 +69,12 @@ export function WorkspaceSwitcher({
           disabled={isSaving}
           onChange={(event) => {
             const nextSlug = event.currentTarget.value;
-            if (nextSlug === selected) {
+            const nextState = beginWorkspaceSwitcherSelection(viewState, nextSlug);
+            if (!nextState) {
               return;
             }
             const previousSlug = selected;
-            setSelected(nextSlug);
-            setErrorMessage(null);
-            setWarningMessage(null);
-            setIsSaving(true);
+            setViewState(nextState);
             startTransition(() => {
               void switchWorkspace(nextSlug, previousSlug);
             });

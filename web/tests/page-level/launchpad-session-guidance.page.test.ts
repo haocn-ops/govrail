@@ -185,12 +185,17 @@ test("session surfaces and topbar keep role-aware navigation-only context guidan
 
   assert.match(workspaceSwitcherSource, /function workspaceCountLabel\(count: number\): string \{/);
   assert.match(workspaceSwitcherSource, /import \{ performWorkspaceSwitch \} from "@\/lib\/client-workspace-navigation";/);
+  assert.match(
+    workspaceSwitcherSource,
+    /import \{\s*applyWorkspaceSwitchOutcome,\s*beginWorkspaceSwitcherSelection,\s*createWorkspaceSwitcherViewState,\s*syncWorkspaceSwitcherViewState,\s*\} from "@\/components\/workspace-switcher-state";/s,
+  );
   assert.match(workspaceSwitcherSource, /reachable workspace/);
-  assert.match(workspaceSwitcherSource, /const \[warningMessage, setWarningMessage\] = useState<string \| null>\(null\);/);
+  assert.match(workspaceSwitcherSource, /const \[viewState, setViewState\] = useState\(\(\) => createWorkspaceSwitcherViewState\(currentWorkspaceSlug\)\);/);
   assert.match(workspaceSwitcherSource, /const outcome = await performWorkspaceSwitch\(\{/);
   assert.match(workspaceSwitcherSource, /resetMode: "clear",/);
-  assert.match(workspaceSwitcherSource, /if \(outcome\.status === "switched"\) \{/);
-  assert.match(workspaceSwitcherSource, /setWarningMessage\(outcome\.warning\);/);
+  assert.match(workspaceSwitcherSource, /const \{ nextState, shouldRefresh \} = applyWorkspaceSwitchOutcome\(\{/);
+  assert.match(workspaceSwitcherSource, /const nextState = beginWorkspaceSwitcherSelection\(viewState, nextSlug\);/);
+  assert.match(workspaceSwitcherSource, /setViewState\(nextState\);/);
   assert.match(workspaceSwitcherSource, /This control only updates the console's manual workspace context/);
   assert.match(workspaceSwitcherSource, /topbar badges:/);
   assert.match(
