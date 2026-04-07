@@ -162,9 +162,9 @@ test("Usage dashboard keeps label-to-target continuity for playground/verificati
   );
   assert.match(source, /\{ label: "Open playground run", path: "\/playground" \}/);
   assert.match(source, /\{ label: "Back to playground run", path: "\/playground" \}/);
-  assert.match(source, /\{ label: "Review billing \+ settings", path: "\/settings" \}/);
+  assert.match(source, /\{ label: "Review billing \+ settings", path: "\/settings\?intent=manage-plan" \}/);
   assert.match(source, /\{ label: "Capture verification evidence", path: "\/verification\?surface=verification" \}/);
-  assert.match(source, /\{ label: "Review billing \+ features", path: "\/settings" \}/);
+  assert.match(source, /\{ label: "Review billing \+ features", path: "\/settings\?intent=manage-plan" \}/);
   assert.match(source, /const latestDemoRunHint = args\.onboardingState\?\.latest_demo_run_hint \?\? null;/);
   assert.match(source, /const deliveryGuidance = args\.onboardingState\?\.delivery_guidance \?\? null;/);
   assert.match(

@@ -1721,7 +1721,7 @@ test(
       ...continuityArgs,
     });
     const usageHref = buildVerificationChecklistHandoffHref({
-      pathname: "/settings",
+      pathname: "/settings?intent=manage-plan",
       ...continuityArgs,
     });
 

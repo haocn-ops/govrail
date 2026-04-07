@@ -59,7 +59,7 @@ test("verification page keeps explicit run-aware session, checklist, admin-retur
   );
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/settings", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Review settings \+ billing/s,
+    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/settings\?intent=manage-plan", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Review settings \+ billing/s,
   );
   assert.match(
     source,
