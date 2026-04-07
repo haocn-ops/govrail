@@ -81,6 +81,8 @@ test("session access panel keeps role-aware lane mapping and visibility-only gua
   assert.match(source, /Workspace reachable/);
   assert.match(source, /Metadata-backed context/);
   assert.match(source, /Role-aware next lanes/);
+  assert.match(source, /const settingsManagePlanHref = buildConsoleHandoffHref\("\/settings\?intent=manage-plan", handoff\);/);
+  assert.match(source, /href=\{settingsManagePlanHref\}[\s\S]*Billing and settings/s);
   assert.match(
     source,
     /All context changes remain manual here; nothing impersonates another role or runs support automation\./,

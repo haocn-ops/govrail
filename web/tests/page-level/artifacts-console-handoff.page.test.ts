@@ -35,6 +35,7 @@ test("artifacts page uses shared console handoff plumbing for navigation CTAs", 
     /<ConsoleAdminFollowUp[\s\S]*handoff=\{runAwareHandoff\}[\s\S]*surface="artifacts"[\s\S]*workspaceSlug=\{workspaceContext\.workspace\.slug\}[\s\S]*ownerDisplayName=\{recentOwnerDisplayName \?\? recentOwnerLabel\}/,
   );
   assert.match(source, /href=\{buildConsoleRunAwareHandoffHref\("\/settings\?intent=upgrade", runAwareHandoff, activeRunId\)\}/);
+  assert.match(source, /href=\{buildConsoleRunAwareHandoffHref\("\/settings\?intent=manage-plan", runAwareHandoff, activeRunId\)\}[\s\S]*Review settings evidence lane/s);
   assert.match(
     source,
     /href=\{buildConsoleRunAwareHandoffHref\(\s*"\/verification\?surface=verification",\s*runAwareHandoff,\s*activeRunId,\s*\)\}/s,

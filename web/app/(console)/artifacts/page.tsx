@@ -198,7 +198,7 @@ export default async function ArtifactsPage({
               Confirm usage signal
             </Link>
             <Link
-              href={buildConsoleRunAwareHandoffHref("/settings", runAwareHandoff, activeRunId)}
+              href={buildConsoleRunAwareHandoffHref("/settings?intent=manage-plan", runAwareHandoff, activeRunId)}
               className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
             >
               Review settings evidence lane

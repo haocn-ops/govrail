@@ -150,6 +150,7 @@ export function SessionAccessPanel({ workspaceContext, handoff }: SessionAccessP
   });
 
   const settingsAuditExportHref = buildConsoleHandoffHref("/settings?intent=upgrade", handoff);
+  const settingsManagePlanHref = buildConsoleHandoffHref("/settings?intent=manage-plan", handoff);
   const verificationEvidenceHref = buildConsoleHandoffHref("/verification?surface=verification", handoff);
   const goLiveLaneHref = buildConsoleHandoffHref("/go-live?surface=go_live", handoff);
 
@@ -407,7 +408,7 @@ export function SessionAccessPanel({ workspaceContext, handoff }: SessionAccessP
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/settings"
+              href={settingsManagePlanHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Billing and settings
