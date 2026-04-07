@@ -15,14 +15,17 @@ async function readSource(filePath: string): Promise<string> {
 test("health route keeps /api/v1/health path and includeTenant=false guard", async () => {
   const source = await readSource(healthRoutePath);
 
-  assert.match(source, /proxyControlPlane\("\/api\/v1\/health"/);
-  assert.match(source, /includeTenant:\s*false/);
+  assert.match(source, /import \{ proxyHealthGet \} from "\.\.\/system-route-helpers";/);
+  assert.match(source, /return proxyHealthGet\(\);/);
+  assert.doesNotMatch(source, /proxyControlPlane\(/);
 });
 
 test("policies route keeps preview fallback contract", async () => {
   const source = await readSource(policiesRoutePath);
 
-  assert.match(source, /proxyControlPlaneOrFallback\(\s*"\/api\/v1\/policies",/s);
+  assert.match(source, /import \{ proxyPathCollectionGet \} from "\.\.\/collection-route-helpers";/);
+  assert.match(source, /return proxyPathCollectionGet\(\{/);
+  assert.match(source, /path:\s*"\/api\/v1\/policies"/);
   assert.match(source, /items:\s*previewPolicies,/);
-  assert.match(source, /page_info:\s*\{\s*next_cursor:\s*null\s*\}/s);
+  assert.match(source, /page_info:\s*\{\s*next_cursor:\s*null,?\s*\}/s);
 });
