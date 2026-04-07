@@ -50,6 +50,7 @@ test(
     await settingsLink.click();
 
     await expect(page).toHaveURL(/\/settings\?/);
+    await expect(page).toHaveURL(/intent=manage-plan/);
     await expect(page).toHaveURL(/source=admin-readiness/);
     await expect(page).toHaveURL(/week8_focus=credentials/);
     await expect(page).toHaveURL(/attention_workspace=preview/);
@@ -82,6 +83,7 @@ test(
     await reviewSettingsAgainLink.click();
 
     await expect(page).toHaveURL(/\/settings\?/);
+    await expect(page).toHaveURL(/intent=manage-plan/);
     await expect(page).toHaveURL(/source=admin-readiness/);
     await expect(page).toHaveURL(/week8_focus=credentials/);
     await expect(page).toHaveURL(/attention_workspace=preview/);
