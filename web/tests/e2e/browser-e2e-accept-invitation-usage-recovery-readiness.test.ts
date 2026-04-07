@@ -48,8 +48,11 @@ test("accept-invitation usage recovery browser batch stays wired into scripts an
   );
 
   assert.match(docsReadme, /web:test:browser:accept-invitation-usage-recovery/);
-  assert.match(docsReadme, /onboarding -> accept-invitation -> usage -> admin/);
-  assert.match(docsReadme, /members -> accept-invitation -> onboarding -> usage -> settings -> admin/);
+  assert.match(docsReadme, /usage -> \/settings\?intent=manage-plan/);
+  assert.match(
+    docsReadme,
+    /members -> accept-invitation -> onboarding -> [\s\S]*?usage -> \/settings\?intent=manage-plan/,
+  );
   assert.match(executionPlan, /accept-invitation-usage-recovery/);
-  assert.match(executionPlan, /onboarding -> accept-invitation -> usage -> settings -> admin/);
+  assert.match(executionPlan, /usage -> \/settings\?intent=manage-plan/);
 });

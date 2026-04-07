@@ -53,15 +53,15 @@ test("accept-invitation usage-settings go-live return batch stays wired into scr
   assert.match(docsReadme, /web:test:browser:accept-invitation-usage-settings-go-live-return/);
   assert.match(
     docsReadme,
-    /onboarding -> accept-invitation -> usage -> settings -> go-live -> admin/,
+    /onboarding -> accept-invitation -> [\s\S]*?usage -> \/settings\?intent=manage-plan -> go-live -> admin/,
   );
   assert.match(
     docsReadme,
-    /members -> accept-invitation -> onboarding -> usage -> settings -> go-live -> admin/,
+    /members -> accept-invitation -> onboarding -> [\s\S]*?usage -> \/settings\?intent=manage-plan -> go-live -> admin/,
   );
   assert.match(executionPlan, /accept-invitation-usage-settings-go-live-return/);
   assert.match(
     executionPlan,
-    /members -> accept-invitation -> onboarding -> usage -> settings -> go-live -> admin/,
+    /members -> accept-invitation -> onboarding -> [\s\S]*?usage -> \/settings\?intent=manage-plan -> go-live -> admin/,
   );
 });

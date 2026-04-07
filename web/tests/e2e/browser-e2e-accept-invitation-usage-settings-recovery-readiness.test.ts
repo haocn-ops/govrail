@@ -19,9 +19,11 @@ test("accept-invitation usage/settings recovery readability stays wired into doc
   const docsReadme = await readFile(docsReadmePath, "utf8");
   const executionPlan = await readFile(executionPlanPath, "utf8");
 
-  assert.match(docsReadme, /onboarding -> accept-invitation -> usage -> settings -> admin/);
-  assert.match(docsReadme, /members -> accept-invitation -> onboarding -> usage -> settings -> admin/);
-  assert.match(docsReadme, /usage -> settings -> verification -> admin/);
+  assert.match(docsReadme, /usage -> \/settings\?intent=manage-plan/);
+  assert.match(
+    docsReadme,
+    /members -> accept-invitation -> onboarding -> [\s\S]*?usage -> \/settings\?intent=manage-plan/,
+  );
   assert.match(executionPlan, /accept-invitation\s+.*usage\s+.*settings/);
   assert.match(executionPlan, /accept-invitation-usage-settings/);
   for (const spec of specs) {

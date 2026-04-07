@@ -45,8 +45,17 @@ test("credentials settings follow-up browser batch stays wired into scripts and 
   );
 
   assert.match(docsReadme, /web:test:browser:credentials-settings-followup/);
-  assert.match(docsReadme, /admin readiness credentials -> onboarding -> usage -> settings/);
+  assert.match(
+    docsReadme,
+    /admin readiness credentials -> onboarding -> usage -> \/settings\?intent=manage-plan -> admin/,
+  );
   assert.match(executionPlan, /credentials-settings-followup/);
-  assert.match(executionPlan, /onboarding -> usage -> settings -> verification -> admin/);
-  assert.match(executionPlan, /onboarding -> usage -> settings -> go-live -> admin/);
+  assert.match(
+    executionPlan,
+    /admin readiness credentials -> onboarding -> usage -> \/settings\?intent=manage-plan -> verification -> admin/,
+  );
+  assert.match(
+    executionPlan,
+    /admin readiness credentials -> onboarding -> usage -> \/settings\?intent=manage-plan -> go-live -> admin/,
+  );
 });
