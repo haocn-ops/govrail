@@ -6,11 +6,12 @@ import type {
   ControlPlaneAdminDeliveryUpdateKind,
   ControlPlaneAdminWeek8ReadinessFocus,
 } from "@/lib/control-plane-types";
+import { buildConsoleHandoffHref, type ConsoleHandoffState } from "@/lib/console-handoff";
 import { buildAdminReturnHref } from "@/lib/handoff-query";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type FollowUpSurface =
+export type AdminFollowUpSurface =
   | "onboarding"
   | "members"
   | "settings"
@@ -20,9 +21,13 @@ type FollowUpSurface =
   | "playground"
   | "artifacts"
   | "logs"
+  | "agents"
+  | "egress"
+  | "tasks"
+  | "launchpad"
   | "api-keys"
   | "service-accounts";
-type FollowUpSource = "admin-attention" | "admin-readiness";
+export type AdminFollowUpSource = "admin-attention" | "admin-readiness";
 
 type RecentDeliveryContext = {
   recentTrackKey?: "verification" | "go_live" | null;
@@ -32,8 +37,8 @@ type RecentDeliveryContext = {
   ownerEmail?: string | null;
 };
 
-function normalizeDeliveryContext(value?: string | null): "recent_activity" | null {
-  return value === "recent_activity" ? "recent_activity" : null;
+function normalizeDeliveryContext(value?: string | null): "recent_activity" | "week8" | null {
+  return value === "recent_activity" || value === "week8" ? value : null;
 }
 
 function normalizeRecentTrackKey(value?: string | null): "verification" | "go_live" | null {
@@ -67,7 +72,7 @@ function normalizeEvidenceCount(value?: number | string | null): number | null {
   return null;
 }
 
-function surfaceLabel(surface: FollowUpSurface): string {
+function surfaceLabel(surface: AdminFollowUpSurface): string {
   if (surface === "go_live") {
     return "Go-live";
   }
@@ -88,6 +93,18 @@ function surfaceLabel(surface: FollowUpSurface): string {
   }
   if (surface === "logs") {
     return "Logs";
+  }
+  if (surface === "agents") {
+    return "Agents";
+  }
+  if (surface === "egress") {
+    return "Egress";
+  }
+  if (surface === "tasks") {
+    return "Tasks";
+  }
+  if (surface === "launchpad") {
+    return "Launchpad";
   }
   if (surface === "api-keys") {
     return "API keys";
@@ -118,7 +135,7 @@ function deliveryTrackLabel(track?: "verification" | "go_live" | null): string {
   return "verification";
 }
 
-function followUpSourceLabel(source: FollowUpSource): string {
+function followUpSourceLabel(source: AdminFollowUpSource): string {
   return source === "admin-readiness" ? "Week 8 readiness" : "Attention queue";
 }
 
@@ -198,6 +215,7 @@ export function AdminFollowUpNotice({
   source,
   workspaceSlug,
   sourceWorkspaceSlug,
+  runId,
   surface,
   week8Focus,
   attentionOrganization,
@@ -208,10 +226,11 @@ export function AdminFollowUpNotice({
   ownerDisplayName,
   ownerEmail,
 }: {
-  source: FollowUpSource;
+  source: AdminFollowUpSource;
   workspaceSlug: string;
   sourceWorkspaceSlug: string | null;
-  surface: FollowUpSurface;
+  runId?: string | null;
+  surface: AdminFollowUpSurface;
   week8Focus?: string | null;
   attentionOrganization?: string | null;
   deliveryContext?: string | null;
@@ -221,6 +240,8 @@ export function AdminFollowUpNotice({
   ownerDisplayName?: string | null;
   ownerEmail?: string | null;
 }) {
+  const safeAttentionWorkspace =
+    sourceWorkspaceSlug && sourceWorkspaceSlug.trim() !== "" ? sourceWorkspaceSlug : null;
   const currentWorkspaceMatches =
     !sourceWorkspaceSlug || sourceWorkspaceSlug.trim() === "" || sourceWorkspaceSlug === workspaceSlug;
   const returnWorkspaceSlug = sourceWorkspaceSlug && sourceWorkspaceSlug.trim() !== "" ? sourceWorkspaceSlug : workspaceSlug;
@@ -243,6 +264,22 @@ export function AdminFollowUpNotice({
           ownerEmail,
         })
       : null;
+  const recentOwnerLabel = formatDeliveryOwnerLabel(ownerDisplayName, ownerEmail);
+  const handoffState: ConsoleHandoffState = {
+    source,
+    surface,
+    runId: runId ?? null,
+    attentionWorkspace: safeAttentionWorkspace,
+    attentionOrganization: attentionOrganization ?? null,
+    week8Focus: week8Focus ?? null,
+    deliveryContext: deliveryContext ?? null,
+    recentTrackKey: recentTrackKey ?? null,
+    recentUpdateKind: recentUpdateKind ?? null,
+    evidenceCount: normalizedEvidenceCount,
+    recentOwnerLabel,
+    recentOwnerDisplayName: ownerDisplayName ?? null,
+    recentOwnerEmail: ownerEmail ?? null,
+  };
   const baseReturnLabel = isReadinessFlow ? "Return to admin readiness view" : "Return to admin queue";
   const trackLabel = normalizedRecentTrackKey ? deliveryTrackLabel(normalizedRecentTrackKey) : null;
   const returnLabel = trackLabel ? `${baseReturnLabel} (continue ${trackLabel})` : baseReturnLabel;
@@ -250,14 +287,16 @@ export function AdminFollowUpNotice({
     surface === "verification" || surface === "go_live" ? surface : normalizedRecentTrackKey ?? null;
   const returnHref = buildAdminReturnHref("/admin", {
     source,
+    runId,
     queueSurface,
     week8Focus,
     attentionWorkspace: returnWorkspaceSlug,
     attentionOrganization,
     deliveryContext: normalizedDeliveryContext,
+    recentTrackKey: normalizedRecentTrackKey,
     recentUpdateKind: normalizedRecentUpdateKind,
     evidenceCount: normalizedEvidenceCount,
-    recentOwnerLabel: formatDeliveryOwnerLabel(ownerDisplayName, ownerEmail),
+    recentOwnerLabel,
     recentOwnerDisplayName: ownerDisplayName ?? null,
     recentOwnerEmail: ownerEmail ?? null,
   });
@@ -272,6 +311,28 @@ export function AdminFollowUpNotice({
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted">{description}</p>
+        <div className="rounded-xl border border-border bg-background p-3 text-xs text-muted">
+          <p className="font-medium text-foreground">Audit export continuity</p>
+          <p>
+            Reuse the same Latest export receipt from <code className="font-mono">/settings</code> so the filename,
+            filters, and SHA-256 stay chained from settings through verification, go-live, and back into this admin
+            handoff. This manual evidence relay is navigation-only; open the receipt, carry the proof in the workspace surfaces, and then return here to complete the queue or readiness loop.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link
+              href={buildConsoleHandoffHref("/settings?intent=upgrade", handoffState)}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Reopen audit export receipt
+            </Link>
+            <Link
+              href={buildConsoleHandoffHref("/verification?surface=verification", handoffState)}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Reopen verification evidence
+            </Link>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <Badge variant="subtle">{followUpSourceLabel(source)}</Badge>
           {isReadinessFlow && normalizedWeek8Focus ? (

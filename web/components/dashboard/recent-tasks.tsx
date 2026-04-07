@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 
 function statusVariant(status: string): "strong" | "subtle" | "default" {
   const normalized = status.toLowerCase();
@@ -32,37 +32,6 @@ type RunGraphStep = {
 type RunGraphResponse = {
   steps: RunGraphStep[];
 };
-
-function getBaseUrl(): string {
-  const requestHeaders = headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-  const proto = requestHeaders.get("x-forwarded-proto") ?? "http";
-  if (!host) {
-    return "";
-  }
-  return `${proto}://${host}`;
-}
-
-async function requestControlPlane<T>(path: string): Promise<T | null> {
-  const baseUrl = getBaseUrl();
-  if (!baseUrl) {
-    return null;
-  }
-
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store",
-    headers: {
-      accept: "application/json",
-      cookie: headers().get("cookie") ?? "",
-    },
-  });
-  if (!response.ok) {
-    return null;
-  }
-
-  const payload = (await response.json()) as { data?: T };
-  return payload.data ?? null;
-}
 
 function formatDuration(startedAt: string, endedAt: string | null): string {
   if (!endedAt) {
@@ -105,7 +74,7 @@ export async function RecentTasks({ runId }: RecentTasksProps) {
     );
   }
 
-  const graph = await requestControlPlane<RunGraphResponse>(`/api/control-plane/runs/${runId}/graph`);
+  const graph = await requestControlPlanePageData<RunGraphResponse>(`/api/control-plane/runs/${runId}/graph`);
   const rows = (graph?.steps ?? []).slice().sort((a, b) => b.sequence_no - a.sequence_no).slice(0, 12);
 
   return (
