@@ -53,7 +53,7 @@ test("Workspace delivery track panel keeps cross-page handoff query continuity f
   );
   assert.match(
     source,
-    /const settingsHref = buildContextHref\(\s*"\/settings",\s*{\s*source,\s*surface:\s*sectionKey,[\s\S]*?\}\s*\);/s,
+    /const settingsHref = buildContextHref\(\s*"\/settings\?intent=manage-plan",\s*{\s*source,\s*surface:\s*sectionKey,[\s\S]*?\}\s*\);/s,
   );
 });
 

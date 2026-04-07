@@ -508,7 +508,7 @@ function getContextCard(args: {
     auditReceiptToDate: auditReceipt.auditReceiptToDate,
     auditReceiptSha256: auditReceipt.auditReceiptSha256,
   });
-  const settingsHref = buildContextHref("/settings", {
+  const settingsHref = buildContextHref("/settings?intent=manage-plan", {
     source,
     surface: sectionKey,
     runId,
