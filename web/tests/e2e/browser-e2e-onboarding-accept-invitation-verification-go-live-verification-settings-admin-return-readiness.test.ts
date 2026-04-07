@@ -41,6 +41,7 @@ test(
     assert.match(browserSmokeSpec, /Session-aware drill lane/);
     assert.match(browserSmokeSpec, /Reopen verification evidence/);
     assert.match(browserSmokeSpec, /Review settings \+ billing/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Return to admin readiness view/);
     assert.match(browserSmokeSpec, /readiness_returned=1/);

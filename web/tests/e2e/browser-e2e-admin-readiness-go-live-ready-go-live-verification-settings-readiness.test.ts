@@ -29,6 +29,7 @@ test(
     assert.match(browserSmokeSpec, /attention_workspace=preview/);
     assert.match(browserSmokeSpec, /attention_organization=org_preview/);
     assert.match(browserSmokeSpec, /Review settings \+ billing/);
+  assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Return to admin readiness view/);
     assert.match(browserSmokeSpec, /readiness_returned=1/);

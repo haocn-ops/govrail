@@ -28,6 +28,7 @@ test("browser readiness demo-run go-live->settings smoke keeps continuity explic
   assert.match(browserSmokeSpec, /Open Week 8 checklist/);
   assert.match(browserSmokeSpec, /Continue to go-live drill/);
   assert.match(browserSmokeSpec, /Review billing \+ settings/);
+  assert.match(browserSmokeSpec, /intent=manage-plan/);
   assert.match(browserSmokeSpec, /surface=verification/);
   assert.match(browserSmokeSpec, /surface=go_live/);
   assert.match(browserSmokeSpec, /source=admin-readiness/);

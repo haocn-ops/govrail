@@ -40,6 +40,7 @@ test(
     assert.match(browserSmokeSpec, /Mock go-live drill/);
     assert.match(browserSmokeSpec, /Session-aware drill lane/);
     assert.match(browserSmokeSpec, /Review billing \+ settings/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Capture verification evidence/);
     assert.match(browserSmokeSpec, /Return to admin readiness view/);

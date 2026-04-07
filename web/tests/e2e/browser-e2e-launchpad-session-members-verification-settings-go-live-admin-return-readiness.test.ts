@@ -30,6 +30,7 @@ test(
     assert.match(browserSmokeSpec, /surface=verification/);
     assert.match(browserSmokeSpec, /Week 8 launch checklist/);
     assert.match(browserSmokeSpec, /Review settings \+ billing/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Rehearse go-live readiness/);
     assert.match(browserSmokeSpec, /surface=go_live/);

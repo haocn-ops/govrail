@@ -25,6 +25,7 @@ test(
     assert.match(browserSmokeSpec, /Review members and access/);
     assert.match(browserSmokeSpec, /Capture verification evidence/);
     assert.match(browserSmokeSpec, /Review settings \+ billing/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Return to admin readiness view/);
     assert.match(browserSmokeSpec, /readiness_returned=1/);

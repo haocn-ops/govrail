@@ -23,6 +23,7 @@ test(
     assert.match(browserSmokeSpec, /Continue onboarding lane/);
     assert.match(browserSmokeSpec, /Step 5: Confirm usage window/);
     assert.match(browserSmokeSpec, /Review plan limits in Settings/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Rehearse go-live readiness/);
     assert.match(browserSmokeSpec, /surface=go_live/);
     assert.match(browserSmokeSpec, /Mock go-live drill/);

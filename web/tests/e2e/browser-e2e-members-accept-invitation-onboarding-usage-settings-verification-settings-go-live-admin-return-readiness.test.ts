@@ -27,6 +27,7 @@ test(
     assert.match(browserSmokeSpec, /Continue onboarding lane/);
     assert.match(browserSmokeSpec, /Step 5: Confirm usage window/);
     assert.match(browserSmokeSpec, /Review plan limits in Settings/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Capture verification evidence/);
     assert.match(browserSmokeSpec, /surface=verification/);
     assert.match(browserSmokeSpec, /Review settings \+ billing/);

@@ -14,7 +14,7 @@
 - 操作回退
 - 最小驗收
 
-建議先開啟 `/settings`，以同一個 workspace 連續檢查三個能力，避免上下文切換造成誤判。
+建議先開啟 `/settings?intent=manage-plan`，以同一個 workspace 連續檢查三個能力，避免上下文切換造成誤判。
 
 ### 1.1 當前邊界（避免過度承諾）
 

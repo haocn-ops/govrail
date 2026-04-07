@@ -25,6 +25,7 @@ test(
     assert.match(browserSmokeSpec, /Continue to go-live drill/);
     assert.match(browserSmokeSpec, /Reopen verification evidence/);
     assert.match(browserSmokeSpec, /Review settings \+ billing/);
+  assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /surface=verification/);
     assert.match(browserSmokeSpec, /surface=go_live/);
     assert.match(browserSmokeSpec, /source=admin-readiness/);

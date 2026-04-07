@@ -37,6 +37,7 @@ test(
     assert.match(browserSmokeSpec, /Admin follow-up context/);
     assert.match(browserSmokeSpec, /Focus Credentials/);
     assert.match(browserSmokeSpec, /Review settings \+ billing/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Return to admin readiness view/);
     assert.match(browserSmokeSpec, /readiness_returned=1/);

@@ -34,6 +34,7 @@ test(
     assert.match(browserSmokeSpec, /Step 5: Confirm usage window/);
     assert.match(browserSmokeSpec, /Workspace usage and plan posture/);
     assert.match(browserSmokeSpec, /Review plan limits in Settings/);
+    assert.match(browserSmokeSpec, /intent=manage-plan/);
     assert.match(browserSmokeSpec, /Workspace configuration/);
     assert.match(browserSmokeSpec, /Rehearse go-live readiness/);
     assert.match(browserSmokeSpec, /surface=go_live/);

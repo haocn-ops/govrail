@@ -21,6 +21,7 @@ test("browser readiness billing-warning settings->go-live->settings smoke keeps 
   assert.match(browserSmokeSpec, /Open billing warning flow/);
   assert.match(browserSmokeSpec, /Rehearse go-live readiness/);
   assert.match(browserSmokeSpec, /Review billing \+ settings/);
+  assert.match(browserSmokeSpec, /intent=manage-plan/);
   assert.match(browserSmokeSpec, /surface=go_live/);
   assert.match(browserSmokeSpec, /source=admin-readiness/);
   assert.match(browserSmokeSpec, /week8_focus=billing_warning/);
