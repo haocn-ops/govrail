@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 
+import { AuditExportReceiptCallout } from "@/components/audit-export-receipt-callout";
 import type {
   ControlPlaneAdminDeliveryUpdateKind,
   ControlPlaneAdminWeek8ReadinessFocus,
 } from "@/lib/control-plane-types";
+import { resolveAuditExportReceiptSummary } from "@/lib/audit-export-receipt";
 import { buildConsoleHandoffHref, type ConsoleHandoffState } from "@/lib/console-handoff";
 import { buildAdminReturnHref } from "@/lib/handoff-query";
 import { Badge } from "@/components/ui/badge";
@@ -225,6 +227,11 @@ export function AdminFollowUpNotice({
   evidenceCount,
   ownerDisplayName,
   ownerEmail,
+  auditReceiptFilename,
+  auditReceiptExportedAt,
+  auditReceiptFromDate,
+  auditReceiptToDate,
+  auditReceiptSha256,
 }: {
   source: AdminFollowUpSource;
   workspaceSlug: string;
@@ -239,6 +246,11 @@ export function AdminFollowUpNotice({
   evidenceCount?: number | string | null;
   ownerDisplayName?: string | null;
   ownerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
 }) {
   const safeAttentionWorkspace =
     sourceWorkspaceSlug && sourceWorkspaceSlug.trim() !== "" ? sourceWorkspaceSlug : null;
@@ -254,6 +266,13 @@ export function AdminFollowUpNotice({
   const normalizedRecentUpdateKind = normalizeRecentUpdateKind(recentUpdateKind);
   const normalizedEvidenceCount = normalizeEvidenceCount(evidenceCount);
   const normalizedWeek8Focus = normalizeWeek8Focus(week8Focus);
+  const auditExportReceipt = resolveAuditExportReceiptSummary({
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
+  });
   const recentContextDescription =
     normalizedDeliveryContext === "recent_activity"
       ? describeRecentDeliveryContext({
@@ -332,6 +351,15 @@ export function AdminFollowUpNotice({
               Reopen verification evidence
             </Link>
           </div>
+          {auditExportReceipt ? (
+            <div className="mt-3">
+              <AuditExportReceiptCallout
+                receipt={auditExportReceipt}
+                title="Audit export continuity"
+                description="Keep the same receipt visible in the admin handoff so the final queue or readiness review cites the same export already used in verification and go-live."
+              />
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <Badge variant="subtle">{followUpSourceLabel(source)}</Badge>

@@ -139,7 +139,27 @@ test("Agents and egress pages keep shared governance continuity with console han
   assert.match(consoleAdminFollowUpSource, /workspaceSlug=\{workspaceSlug\}/);
   assert.match(consoleAdminFollowUpSource, /sourceWorkspaceSlug=\{handoff\.attentionWorkspace\}/);
   assert.match(consoleAdminFollowUpSource, /runId=\{handoff\.runId\}/);
+  assert.match(consoleAdminFollowUpSource, /auditReceiptFilename=\{handoff\.auditReceiptFilename\}/);
+  assert.match(consoleAdminFollowUpSource, /auditReceiptExportedAt=\{handoff\.auditReceiptExportedAt\}/);
+  assert.match(consoleAdminFollowUpSource, /auditReceiptFromDate=\{handoff\.auditReceiptFromDate\}/);
+  assert.match(consoleAdminFollowUpSource, /auditReceiptToDate=\{handoff\.auditReceiptToDate\}/);
+  assert.match(consoleAdminFollowUpSource, /auditReceiptSha256=\{handoff\.auditReceiptSha256\}/);
   assert.match(consoleAdminFollowUpSource, /\{\.\.\.payload\}/);
+
+  const adminFollowUpNoticeSource = await readSource(adminFollowUpNoticePath);
+  assert.match(adminFollowUpNoticeSource, /import \{ AuditExportReceiptCallout \} from "@\/components\/audit-export-receipt-callout";/);
+  assert.match(adminFollowUpNoticeSource, /import \{ resolveAuditExportReceiptSummary \} from "@\/lib\/audit-export-receipt";/);
+  assert.match(adminFollowUpNoticeSource, /auditReceiptFilename\?: string \| null;/);
+  assert.match(adminFollowUpNoticeSource, /auditReceiptExportedAt\?: string \| null;/);
+  assert.match(adminFollowUpNoticeSource, /auditReceiptFromDate\?: string \| null;/);
+  assert.match(adminFollowUpNoticeSource, /auditReceiptToDate\?: string \| null;/);
+  assert.match(adminFollowUpNoticeSource, /auditReceiptSha256\?: string \| null;/);
+  assert.match(adminFollowUpNoticeSource, /const auditExportReceipt = resolveAuditExportReceiptSummary\(\{/);
+  assert.match(adminFollowUpNoticeSource, /<AuditExportReceiptCallout[\s\S]*title="Audit export continuity"/s);
+  assert.match(
+    adminFollowUpNoticeSource,
+    /Keep the same receipt visible in the admin handoff so the final queue or readiness review cites the same export already used in verification and go-live\./,
+  );
 });
 
 test("Launchpad and tasks pages keep audit-export continuity on shared console handoff state", async () => {

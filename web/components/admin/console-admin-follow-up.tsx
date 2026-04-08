@@ -42,6 +42,11 @@ export function ConsoleAdminFollowUp({
       workspaceSlug={workspaceSlug}
       sourceWorkspaceSlug={handoff.attentionWorkspace}
       runId={handoff.runId}
+      auditReceiptFilename={handoff.auditReceiptFilename}
+      auditReceiptExportedAt={handoff.auditReceiptExportedAt}
+      auditReceiptFromDate={handoff.auditReceiptFromDate}
+      auditReceiptToDate={handoff.auditReceiptToDate}
+      auditReceiptSha256={handoff.auditReceiptSha256}
       {...payload}
     />
   );
