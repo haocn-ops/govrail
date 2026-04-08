@@ -57,6 +57,7 @@ export default async function TasksPage({
     runId,
   });
   const adminHref = adminLinkState.adminHref;
+  const adminFollowUpActionsHref = "#tasks-admin-follow-up";
 
   return (
     <div className="space-y-8">
@@ -78,14 +79,14 @@ export default async function TasksPage({
           <p>
             Task tracking is part of the same navigation-only audit-export relay. Reopen the Latest export receipt from{" "}
             <code className="font-mono">/settings?intent=upgrade</code>, keep the filename, filters, and SHA-256 in
-            view, and carry that proof through verification, go-live, and the admin follow-up loop while you inspect
-            run state here.
+            view, and carry that proof through verification, go-live, and the{" "}
+            <Link href={adminFollowUpActionsHref}>admin follow-up loop</Link> while you inspect run state here.
           </p>
           <p className="text-xs text-muted">
             Manual relay only: these links preserve workspace and run context, but they do not automate remediation,
             impersonate another operator, or attach evidence for you.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div id="tasks-admin-follow-up" className="flex flex-wrap gap-2">
             <Link
               href={buildConsoleRunAwareHandoffHref("/settings?intent=upgrade", runAwareHandoff, runId)}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"

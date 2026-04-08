@@ -31,11 +31,16 @@ test("tasks page keeps audit export continuity and run-aware handoff guidance", 
   );
   assert.match(source, /surface="tasks"/);
   assert.match(source, /Audit export continuity/);
+  assert.match(source, /const adminFollowUpActionsHref = "#tasks-admin-follow-up";/);
   assert.match(source, /Latest export receipt/);
   assert.match(source, /\/settings\?intent=upgrade/);
   assert.match(source, /filename, filters, and SHA-256/);
-  assert.match(source, /verification, go-live, and the admin follow-up loop/);
+  assert.match(
+    source,
+    /verification, go-live, and the\{" "\}\s*<Link href=\{adminFollowUpActionsHref\}>admin follow-up loop<\/Link>/,
+  );
   assert.match(source, /Manual relay only/);
+  assert.match(source, /<div id="tasks-admin-follow-up" className="flex flex-wrap gap-2">/);
   assert.match(source, /buildConsoleRunAwareHandoffHref\("\/settings\?intent=upgrade", runAwareHandoff, runId\)/);
   assert.match(
     source,
