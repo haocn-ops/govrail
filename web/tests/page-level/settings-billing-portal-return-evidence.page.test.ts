@@ -23,10 +23,12 @@ test("settings panel keeps portal-return notices coupled to billing evidence han
     /const showBillingFollowUpCard =\s*!intentCard && \(normalizedSource \|\| checkout\.session \|\| subscriptionAction\.notice \|\| auditExport\.notice\);/,
   );
   assert.match(source, /title: normalizedSource === "onboarding" \? "Onboarding billing evidence" : "Billing evidence handoff"/);
+  assert.match(source, /const billingEvidenceAdminReturnActionsHref = "#settings-billing-evidence-admin-return";/);
   assert.match(
     source,
     /Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane\./,
   );
+  assert.match(source, /<Link href=\{billingEvidenceAdminReturnActionsHref\}>admin readiness return action below<\/Link>/);
   assert.match(
     source,
     /actions:\s*normalizedSource === "onboarding"\s*\?\s*\[[\s\S]*?\]\s*:\s*\[\s*\{ label: "Return to Week 8 checklist", href: verificationHref \},\s*\{ label: "Continue to go-live drill", href: goLiveHref \},\s*\{ label: "Return to admin readiness view", href: adminReturnHref \},\s*\]/s,

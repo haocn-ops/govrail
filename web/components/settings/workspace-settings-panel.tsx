@@ -1457,6 +1457,7 @@ export function WorkspaceSettingsPanel({
           "These navigation cues keep checkout, portal, and audit evidence linked to the same workspace timeline; they do not open support workflows, automate remediation, or impersonate any role.",
       }
     : null;
+  const billingEvidenceAdminReturnActionsHref = "#settings-billing-evidence-admin-return";
 
   useEffect(() => {
     if (!initialCheckoutSessionId || checkout.session?.session_id === initialCheckoutSessionId) {
@@ -3201,7 +3202,16 @@ export function WorkspaceSettingsPanel({
             <div className="rounded-2xl border border-border bg-background p-4">
               <p className="font-medium text-foreground">{billingFollowUpCard.title}</p>
               <p className="mt-1 text-xs text-muted">{billingFollowUpCard.body}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              {!normalizedSource || normalizedSource !== "onboarding" ? (
+                <p className="mt-3 text-xs text-muted">
+                  Use the <Link href={billingEvidenceAdminReturnActionsHref}>admin readiness return action below</Link>{" "}
+                  once the billing evidence is ready to hand back.
+                </p>
+              ) : null}
+              <div
+                id={!normalizedSource || normalizedSource !== "onboarding" ? "settings-billing-evidence-admin-return" : undefined}
+                className="mt-3 flex flex-wrap gap-2"
+              >
                 {billingFollowUpCard.actions.map((action) => (
                   <Link
                     key={action.href}

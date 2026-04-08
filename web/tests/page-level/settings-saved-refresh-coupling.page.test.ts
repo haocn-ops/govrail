@@ -205,10 +205,13 @@ test("Settings panel keeps intent and billing follow-up cards coupled to source-
   assert.match(source, /const intentCard = highlightIntent \? intentContextMap\[highlightIntent\] : null;/);
   assert.match(source, /const showBillingFollowUpCard =\s*!intentCard && \(normalizedSource \|\| checkout\.session \|\| subscriptionAction\.notice \|\| auditExport\.notice\);/s);
   assert.match(source, /title: normalizedSource === "onboarding" \? "Onboarding billing evidence" : "Billing evidence handoff"/);
+  assert.match(source, /const billingEvidenceAdminReturnActionsHref = "#settings-billing-evidence-admin-return";/);
   assert.match(source, /normalizedSource === "onboarding"[\s\S]*\{ label: "Capture verification evidence", href: verificationHref \}/s);
   assert.match(source, /normalizedSource === "onboarding"[\s\S]*\{ label: "Review usage pressure", href: usageHref \}/s);
   assert.match(source, /:\s*\[[\s\S]*\{ label: "Return to Week 8 checklist", href: verificationHref \}/s);
   assert.match(source, /:\s*\[[\s\S]*\{ label: "Continue to go-live drill", href: goLiveHref \}/s);
+  assert.match(source, /<Link href=\{billingEvidenceAdminReturnActionsHref\}>admin readiness return action below<\/Link>/);
+  assert.match(source, /id=\{!normalizedSource \|\| normalizedSource !== "onboarding" \? "settings-billing-evidence-admin-return" : undefined\}/);
 });
 
 test("Settings panel keeps governance closure card aligned with billing warning routing", async () => {
