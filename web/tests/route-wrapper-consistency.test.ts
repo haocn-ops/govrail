@@ -466,16 +466,27 @@ test("workspace collection route helper composes workspace path and fallback GET
     source,
     /import \{ proxyControlPlaneOrFallback \} from "@\/lib\/control-plane-proxy";/,
   );
-  assert.match(source, /import \{ resolveWorkspaceContextForServer \} from "@\/lib\/workspace-context";/);
+  assert.match(
+    source,
+    /import \{ resolveWorkspaceContextForServer, type WorkspaceContext \} from "@\/lib\/workspace-context";/,
+  );
   assert.match(
     source,
     /export function buildWorkspaceCollectionPath\(workspaceId: string,\s*suffix: string\): string/,
   );
   assert.match(source, /const normalizedSuffix = suffix\.startsWith\("\/"\) \? suffix : `\/\$\{suffix\}`;/);
   assert.match(source, /return `\/api\/v1\/saas\/workspaces\/\$\{workspaceId\}\$\{normalizedSuffix\}`;/);
+  assert.match(source, /export function proxyWorkspaceContextCollectionGet<T>\(/);
+  assert.match(
+    source,
+    /buildWorkspaceCollectionPath\(args\.workspaceContext\.workspace\.workspace_id,\s*args\.suffix\)/,
+  );
+  assert.match(source, /workspaceContext:\s*args\.workspaceContext/);
   assert.match(source, /export async function proxyWorkspaceScopedCollectionGet<T>\(args: \{/);
   assert.match(source, /const workspaceContext = await resolveContext\(\);/);
-  assert.match(source, /return proxy\(/);
+  assert.match(source, /return proxyWorkspaceContextCollectionGet\(\{/);
+  assert.match(source, /workspaceContext,/);
+  assert.match(source, /proxy,\s*\}\);/);
   assert.match(source, /export async function proxyPathCollectionGet<T>\(args: \{/);
   assert.match(source, /return proxy\(args\.path,\s*args\.fallback\);/);
 });

@@ -1,5 +1,5 @@
 import { proxyControlPlaneOrFallback } from "@/lib/control-plane-proxy";
-import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
+import { resolveWorkspaceContextForServer, type WorkspaceContext } from "@/lib/workspace-context";
 import { proxyWorkspaceScopedPostRequest } from "./post-route-helpers";
 
 export type WorkspaceCollectionFallback<T> = {
@@ -8,6 +8,8 @@ export type WorkspaceCollectionFallback<T> = {
     next_cursor: string | null;
   };
 };
+
+type CollectionProxyFn = typeof proxyControlPlaneOrFallback;
 
 export function buildWorkspaceCollectionPath(workspaceId: string, suffix: string): string {
   const normalizedSuffix = suffix.startsWith("/") ? suffix : `/${suffix}`;
@@ -18,28 +20,69 @@ export async function proxyWorkspaceScopedCollectionGet<T>(args: {
   suffix: string;
   fallback: WorkspaceCollectionFallback<T>;
   resolveWorkspaceContext?: typeof resolveWorkspaceContextForServer;
-  proxy?: typeof proxyControlPlaneOrFallback;
+  proxy?: CollectionProxyFn;
 }): Promise<Response> {
   const resolveContext = args.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
-  const proxy = args.proxy ?? proxyControlPlaneOrFallback;
   const workspaceContext = await resolveContext();
 
-  return proxy(
-    buildWorkspaceCollectionPath(workspaceContext.workspace.workspace_id, args.suffix),
-    args.fallback,
-    {
-      workspaceContext,
-    },
-  );
+  return proxyWorkspaceContextCollectionGet({
+    workspaceContext,
+    suffix: args.suffix,
+    fallback: args.fallback,
+  }, {
+    proxy: args.proxy,
+  });
 }
 
-export async function proxyPathCollectionGet<T>(args: {
+export function proxyCollectionGet<T>(
+  args: {
+    path: string;
+    fallback: WorkspaceCollectionFallback<T>;
+    workspaceContext?: WorkspaceContext;
+  },
+  options?: {
+    proxy?: CollectionProxyFn;
+  },
+): Promise<Response> {
+  const proxy = options?.proxy ?? proxyControlPlaneOrFallback;
+
+  return proxy(args.path, args.fallback, args.workspaceContext
+    ? {
+        workspaceContext: args.workspaceContext,
+      }
+    : undefined);
+}
+
+export function proxyWorkspaceContextCollectionGet<T>(
+  args: {
+    workspaceContext: WorkspaceContext;
+    suffix: string;
+    fallback: WorkspaceCollectionFallback<T>;
+  },
+  options?: {
+    proxy?: CollectionProxyFn;
+  },
+): Promise<Response> {
+  return proxyCollectionGet({
+    path: buildWorkspaceCollectionPath(args.workspaceContext.workspace.workspace_id, args.suffix),
+    fallback: args.fallback,
+    workspaceContext: args.workspaceContext,
+  }, options);
+}
+
+export function proxyPathCollectionGet<T>(args: {
   path: string;
   fallback: WorkspaceCollectionFallback<T>;
-  proxy?: typeof proxyControlPlaneOrFallback;
+  proxy?: CollectionProxyFn;
+}, options?: {
+  proxy?: CollectionProxyFn;
 }): Promise<Response> {
-  const proxy = args.proxy ?? proxyControlPlaneOrFallback;
-  return proxy(args.path, args.fallback);
+  return proxyCollectionGet({
+    path: args.path,
+    fallback: args.fallback,
+  }, {
+    proxy: options?.proxy ?? args.proxy,
+  });
 }
 
 export async function proxyWorkspaceScopedCollectionPost(args: {

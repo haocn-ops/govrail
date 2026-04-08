@@ -5,6 +5,7 @@ import type { WorkspaceContext } from "@/lib/workspace-context";
 import {
   buildWorkspaceCollectionPath,
   proxyPathCollectionGet,
+  proxyWorkspaceContextCollectionGet,
   proxyWorkspaceContextCollectionPost,
   proxyWorkspaceScopedCollectionGet,
   proxyWorkspaceScopedCollectionPost,
@@ -40,6 +41,47 @@ test("proxyWorkspaceScopedCollectionGet resolves workspace context and delegates
           tenant_id: "tenant_123",
         },
       }) as WorkspaceContext,
+    proxy: async (path, fallback, options) => {
+      calls.push({
+        path,
+        fallback,
+        workspaceId: options?.workspaceContext?.workspace.workspace_id ?? "",
+      });
+      return Response.json({ ok: true });
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.path, "/api/v1/saas/workspaces/ws_123/invitations");
+  assert.deepEqual(calls[0]?.fallback, {
+    items: [],
+    page_info: {
+      next_cursor: null,
+    },
+  });
+  assert.equal(calls[0]?.workspaceId, "ws_123");
+  assert.equal(response.status, 200);
+});
+
+test("proxyWorkspaceContextCollectionGet delegates fallback GET with provided workspace context", async () => {
+  const calls: Array<{ path: string; fallback: unknown; workspaceId: string }> = [];
+
+  const response = await proxyWorkspaceContextCollectionGet({
+    workspaceContext: {
+      workspace: {
+        workspace_id: "ws_123",
+        slug: "preview",
+        tenant_id: "tenant_123",
+      },
+    } as WorkspaceContext,
+    suffix: "/invitations",
+    fallback: {
+      items: [],
+      page_info: {
+        next_cursor: null,
+      },
+    },
+  }, {
     proxy: async (path, fallback, options) => {
       calls.push({
         path,
