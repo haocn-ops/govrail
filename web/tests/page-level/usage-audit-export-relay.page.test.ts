@@ -24,10 +24,13 @@ test("usage dashboard keeps audit export continuity lane explicit", async () => 
   assert.match(source, /auditReceiptFromDate\?: string \| null;/);
   assert.match(source, /auditReceiptToDate\?: string \| null;/);
   assert.match(source, /auditReceiptSha256\?: string \| null;/);
+  assert.match(source, /const normalizedRecentTrackKey = normalizeRecentTrackKey\(recentTrackKey\);/);
+  assert.match(source, /const normalizedRecentUpdateKind = normalizeRecentUpdateKind\(recentUpdateKind\);/);
+  assert.match(source, /const normalizedEvidenceCount = normalizeEvidenceCount\(evidenceCount\);/);
   assert.match(source, /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0], "pathname"> = \{/);
   assert.match(
     source,
-    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0], "pathname"> = \{[\s\S]*source: normalizedSource,[\s\S]*week8Focus,[\s\S]*attentionWorkspace,[\s\S]*attentionOrganization,[\s\S]*deliveryContext: normalizeDeliveryContext\(deliveryContext\),[\s\S]*recentTrackKey: normalizeRecentTrackKey\(recentTrackKey\),[\s\S]*recentUpdateKind: normalizeRecentUpdateKind\(recentUpdateKind\),[\s\S]*evidenceCount,[\s\S]*recentOwnerLabel,[\s\S]*recentOwnerDisplayName,[\s\S]*recentOwnerEmail,[\s\S]*auditReceiptFilename,[\s\S]*auditReceiptExportedAt,[\s\S]*auditReceiptFromDate,[\s\S]*auditReceiptToDate,[\s\S]*auditReceiptSha256,[\s\S]*\};/s,
+    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0], "pathname"> = \{[\s\S]*source: normalizedSource,[\s\S]*week8Focus,[\s\S]*attentionWorkspace,[\s\S]*attentionOrganization,[\s\S]*deliveryContext: normalizeDeliveryContext\(deliveryContext\),[\s\S]*recentTrackKey: normalizedRecentTrackKey,[\s\S]*recentUpdateKind: normalizedRecentUpdateKind,[\s\S]*evidenceCount: normalizedEvidenceCount,[\s\S]*recentOwnerLabel,[\s\S]*recentOwnerDisplayName,[\s\S]*recentOwnerEmail,[\s\S]*auditReceiptFilename,[\s\S]*auditReceiptExportedAt,[\s\S]*auditReceiptFromDate,[\s\S]*auditReceiptToDate,[\s\S]*auditReceiptSha256,[\s\S]*\};/s,
   );
   assert.match(source, /const latestDemoRun = onboardingState\?\.latest_demo_run \?\? null;/);
   assert.match(source, /runId\?: string \| null;/);
@@ -49,7 +52,7 @@ test("usage dashboard keeps audit export continuity lane explicit", async () => 
   assert.match(source, /const adminHref = buildAdminReturnHref\("\/admin", \{/);
   assert.match(
     source,
-    /const adminHref = buildAdminReturnHref\("\/admin", \{[\s\S]*source: normalizedSource,[\s\S]*runId: activeRunId,[\s\S]*queueSurface: normalizeRecentTrackKey\(recentTrackKey\),[\s\S]*week8Focus,[\s\S]*attentionWorkspace: attentionWorkspace \?\? workspaceSlug,[\s\S]*attentionOrganization,[\s\S]*deliveryContext: normalizeDeliveryContext\(deliveryContext\),[\s\S]*recentTrackKey: normalizeRecentTrackKey\(recentTrackKey\),[\s\S]*recentUpdateKind: normalizeRecentUpdateKind\(recentUpdateKind\),[\s\S]*evidenceCount,[\s\S]*recentOwnerLabel,[\s\S]*recentOwnerDisplayName,[\s\S]*recentOwnerEmail,[\s\S]*auditReceiptFilename,[\s\S]*auditReceiptExportedAt,[\s\S]*auditReceiptFromDate,[\s\S]*auditReceiptToDate,[\s\S]*auditReceiptSha256,[\s\S]*\}\);/s,
+    /const adminHref = buildAdminReturnHref\("\/admin", \{[\s\S]*source: normalizedSource,[\s\S]*runId: activeRunId,[\s\S]*queueSurface: normalizedRecentTrackKey,[\s\S]*week8Focus,[\s\S]*attentionWorkspace: attentionWorkspace \?\? workspaceSlug,[\s\S]*attentionOrganization,[\s\S]*deliveryContext: normalizeDeliveryContext\(deliveryContext\),[\s\S]*recentTrackKey: normalizedRecentTrackKey,[\s\S]*recentUpdateKind: normalizedRecentUpdateKind,[\s\S]*evidenceCount: normalizedEvidenceCount,[\s\S]*recentOwnerLabel,[\s\S]*recentOwnerDisplayName,[\s\S]*recentOwnerEmail,[\s\S]*auditReceiptFilename,[\s\S]*auditReceiptExportedAt,[\s\S]*auditReceiptFromDate,[\s\S]*auditReceiptToDate,[\s\S]*auditReceiptSha256,[\s\S]*\}\);/s,
   );
   assert.match(source, /const adminReturnLabel =/);
   assert.match(

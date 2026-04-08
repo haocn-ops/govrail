@@ -16,16 +16,36 @@ async function readSource(filePath: string): Promise<string> {
 test("usage dashboard keeps current-period evidence and plan-limit follow-up contract", async () => {
   const source = await readSource(usageDashboardPath);
 
+  assert.match(source, /import \{ useState \} from "react";/);
+  assert.match(source, /import \{ useMutation, useQuery, useQueryClient \} from "@tanstack\/react-query";/);
+  assert.match(source, /import \{ Button \} from "@\/components\/ui\/button";/);
+  assert.match(source, /import \{[\s\S]*fetchWorkspaceDeliveryTrack,[\s\S]*saveWorkspaceDeliveryTrack,[\s\S]*\} from "@\/services\/control-plane";/s);
+  assert.match(source, /const deliveryTrackQueryKey = \["workspace-delivery-track", workspaceSlug\];/);
+  assert.match(source, /const \{ data: deliveryTrack \} = useQuery\(\{/);
   assert.match(source, /const usageWindowLabel = usage \? `\$\{formatDate\(usage\.period_start\)\} to \$\{formatDate\(usage\.period_end\)\}` : "-";/);
   assert.match(source, /const billingActionHref = billingSummary\?\.action\?\.href \?\? "\/settings\?intent=manage-plan";/);
+  assert.match(source, /const usagePlanGapNote =[\s\S]*buildUsagePlanGapNote\(\{/s);
+  assert.match(source, /const usagePlanGapAcknowledged =[\s\S]*verificationDelivery\.notes\.includes\(USAGE_PLAN_GAP_NOTE_PREFIX\)/s);
+  assert.match(source, /const acknowledgePlanGapMutation = useMutation\(\{/);
+  assert.match(source, /notes: mergeUsagePlanGapNote\(verificationDelivery\?\.notes, usagePlanGapNote\),/);
+  assert.match(source, /queryClient\.setQueryData\(deliveryTrackQueryKey, updated\);/);
+  assert.match(source, /setPlanGapNotice\("Usage plan gap recorded in verification delivery track\."\);/);
   assert.match(source, /Current usage window/);
   assert.match(
     source,
     /Carry this billing window into verification evidence when documenting usage pressure, upgrade follow-up,/,
   );
+  assert.match(source, /Existing follow-up/);
+  assert.match(source, /Verification sync/);
+  assert.match(source, /Record plan gap in verification track/);
+  assert.match(source, /Plan gap recorded/);
+  assert.match(source, /Recording\.\.\./);
   assert.match(source, /href=\{billingActionHref\}/);
   assert.match(source, /Resolve plan limits in settings/);
   assert.match(source, /Capture over-limit evidence/);
+  assert.match(source, /Refresh over-limit evidence/);
+  assert.match(source, /Return to admin queue/);
+  assert.match(source, /Return to admin readiness view/);
   assert.match(source, /Current billing window: \{usageWindowLabel\}/);
   assert.match(source, /const selfServeSetupNotice = formatSelfServeSetupNotice\(billingSummary\?\.self_serve_reason_code \?\? null\);/);
   assert.match(source, /Self-serve provider setup required/);
