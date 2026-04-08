@@ -12,6 +12,49 @@ const docsReadmePath = path.resolve(webDir, "../docs/README.md");
 const executionPlanPath = path.resolve(webDir, "../docs/saas_v1_execution_plan_zh.md");
 const browserSpecPath = "tests/browser/launchpad-session-onboarding.smoke.spec.ts";
 
+const smokeExpectations = [
+  {
+    path: browserSpecPath,
+    requiredPatterns: [
+      /launchpad -> session -> onboarding -> usage -> \/settings\?intent=manage-plan -> verification -> go-live -> admin keeps minimal browser continuity/,
+      /\/\?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_demo&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Owner&recent_owner_display_name=Preview%20Owner&recent_owner_email=preview\.owner%40govrail\.test/,
+      /SaaS Workspace Launch Hub/,
+      /Return to session checkpoint/,
+      /\/session\\\?/,
+      /Session and workspace access/,
+      /Open onboarding/,
+      /\/onboarding\\\?/,
+      /Launch lane context/,
+      /Confirm session context/,
+      /Trusted session reminder/,
+      /Step 5: Confirm usage window/,
+      /\/usage\\\?/,
+      /Workspace usage and plan posture/,
+      /Review plan limits in Settings/,
+      /\/settings\\\?/,
+      /intent=manage-plan/,
+      /Workspace configuration/,
+      /Enterprise evidence lane/,
+      /Capture verification evidence/,
+      /\/verification\\\?/,
+      /surface=verification/,
+      /Week 8 launch checklist/,
+      /Verification evidence lane/,
+      /Continue to go-live drill/,
+      /\/go-live\\\?/,
+      /surface=go_live/,
+      /Mock go-live drill/,
+      /Session-aware drill lane/,
+      /Return to admin readiness view/,
+      /readiness_returned=1/,
+      /Returned from Week 8 readiness/,
+      /Focus restored/,
+      /recent_owner_display_name=Preview(?:\\\+|%20)Owner/,
+      /recent_owner_email=preview\.owner(?:%40|@)govrail\.test/,
+    ],
+  },
+] as const;
+
 test("launchpad session onboarding focused browser batch stays wired into scripts and docs", async () => {
   const webPackageJson = JSON.parse(await readFile(webPackageJsonPath, "utf8")) as {
     scripts?: Record<string, string>;
@@ -48,48 +91,12 @@ test("launchpad session onboarding focused browser batch stays wired into script
   );
 });
 
-test("launchpad session onboarding focused browser batch keeps smoke continuity explicit", async () => {
-  const source = await readFile(path.resolve(webDir, browserSpecPath), "utf8");
+for (const spec of smokeExpectations) {
+  test(`launchpad session onboarding focused browser batch keeps ${spec.path} explicit without overstating coverage`, async () => {
+    const source = await readFile(path.resolve(webDir, spec.path), "utf8");
 
-  assert.match(
-    source,
-    /launchpad -> session -> onboarding -> usage -> \/settings\?intent=manage-plan -> verification -> go-live -> admin keeps minimal browser continuity/,
-  );
-  assert.match(
-    source,
-    /\/\?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_demo&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Owner&recent_owner_display_name=Preview%20Owner&recent_owner_email=preview\.owner%40govrail\.test/,
-  );
-  assert.match(source, /SaaS Workspace Launch Hub/);
-  assert.match(source, /Return to session checkpoint/);
-  assert.match(source, /\/session\\\?/);
-  assert.match(source, /Session and workspace access/);
-  assert.match(source, /Open onboarding/);
-  assert.match(source, /\/onboarding\\\?/);
-  assert.match(source, /Launch lane context/);
-  assert.match(source, /Confirm session context/);
-  assert.match(source, /Trusted session reminder/);
-  assert.match(source, /Step 5: Confirm usage window/);
-  assert.match(source, /\/usage\\\?/);
-  assert.match(source, /Workspace usage and plan posture/);
-  assert.match(source, /Review plan limits in Settings/);
-  assert.match(source, /\/settings\\\?/);
-  assert.match(source, /intent=manage-plan/);
-  assert.match(source, /Workspace configuration/);
-  assert.match(source, /Enterprise evidence lane/);
-  assert.match(source, /Capture verification evidence/);
-  assert.match(source, /\/verification\\\?/);
-  assert.match(source, /surface=verification/);
-  assert.match(source, /Week 8 launch checklist/);
-  assert.match(source, /Verification evidence lane/);
-  assert.match(source, /Continue to go-live drill/);
-  assert.match(source, /\/go-live\\\?/);
-  assert.match(source, /surface=go_live/);
-  assert.match(source, /Mock go-live drill/);
-  assert.match(source, /Session-aware drill lane/);
-  assert.match(source, /Return to admin readiness view/);
-  assert.match(source, /readiness_returned=1/);
-  assert.match(source, /Returned from Week 8 readiness/);
-  assert.match(source, /Focus restored/);
-  assert.match(source, /recent_owner_display_name=Preview(?:\\\+|%20)Owner/);
-  assert.match(source, /recent_owner_email=preview\.owner(?:%40|@)govrail\.test/);
-});
+    for (const pattern of spec.requiredPatterns) {
+      assert.match(source, pattern);
+    }
+  });
+}
