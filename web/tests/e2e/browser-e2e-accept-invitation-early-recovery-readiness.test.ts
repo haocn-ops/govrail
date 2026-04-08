@@ -50,7 +50,7 @@ test("accept-invitation early recovery batch stays wired into scripts and docs",
 
   assert.match(docsReadme, /web:test:browser:accept-invitation-early-recovery/);
   assert.match(docsReadme, /onboarding -> accept-invitation -> usage/);
-  assert.match(docsReadme, /onboarding -> accept-invitation -> usage -> settings/);
+  assert.match(docsReadme, /onboarding -> accept-invitation -> usage -> \/settings\?intent=manage-plan/);
   assert.match(docsReadme, /members -> accept-invitation -> return -> onboarding/);
   assert.match(docsReadme, /members -> accept-invitation -> onboarding -> usage/);
   assert.match(executionPlan, /accept-invitation-early-recovery/);

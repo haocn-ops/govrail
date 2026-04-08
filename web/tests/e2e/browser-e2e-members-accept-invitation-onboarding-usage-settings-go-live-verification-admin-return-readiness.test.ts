@@ -12,13 +12,13 @@ const browserSpecPath = path.resolve(
 );
 
 test(
-  "browser readiness members->accept-invitation->onboarding->usage->settings->go-live->verification->admin smoke keeps return continuity explicit",
+  "browser readiness members->accept-invitation->onboarding->usage->manage-plan-settings->go-live->verification->admin smoke keeps return continuity explicit",
   async () => {
     const browserSmokeSpec = await readFile(browserSpecPath, "utf8");
 
     assert.match(
       browserSmokeSpec,
-      /members -> accept-invitation -> onboarding -> usage -> settings -> go-live -> verification -> admin keeps readiness return continuity/,
+      /members -> accept-invitation -> onboarding -> usage -> \/settings\?intent=manage-plan -> go-live -> verification -> admin keeps readiness return continuity/,
     );
     assert.match(browserSmokeSpec, /Continue onboarding lane/);
     assert.match(browserSmokeSpec, /Step 5: Confirm usage window/);

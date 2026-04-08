@@ -17,7 +17,7 @@ const specs = [
 ] as const;
 
 test(
-  "accept-invitation usage-settings-go-live-verification return batch stays wired into scripts and docs",
+  "accept-invitation usage-manage-plan-settings-go-live-verification return batch stays wired into scripts and docs",
   async () => {
     const webPackageJson = JSON.parse(await readFile(webPackageJsonPath, "utf8")) as {
       scripts?: Record<string, string>;
@@ -57,16 +57,16 @@ test(
     );
     assert.match(
       docsReadme,
-      /onboarding -> accept-invitation -> usage -> settings -> go-live -> verification -> admin/,
+      /onboarding -> accept-invitation -> usage -> \/settings\?intent=manage-plan -> go-live -> verification -> admin/,
     );
     assert.match(
       docsReadme,
-      /members -> accept-invitation -> onboarding -> usage -> settings -> go-live -> verification -> admin/,
+      /members -> accept-invitation -> onboarding -> usage -> \/settings\?intent=manage-plan -> go-live -> verification -> admin/,
     );
     assert.match(executionPlan, /accept-invitation-usage-settings-go-live-verification-return/);
     assert.match(
       executionPlan,
-      /members -> accept-invitation -> onboarding -> usage -> settings -> go-live -> verification -> admin/,
+      /members -> accept-invitation -> onboarding -> usage -> \/settings\?intent=manage-plan -> go-live -> verification -> admin/,
     );
   },
 );

@@ -11,12 +11,12 @@ const browserSpecPath = path.resolve(
   "tests/browser/onboarding-accept-invitation-usage-settings-return.smoke.spec.ts",
 );
 
-test("browser readiness onboarding->accept-invitation->usage->settings smoke keeps continuity explicit", async () => {
+test("browser readiness onboarding->accept-invitation->usage->manage-plan-settings smoke keeps continuity explicit", async () => {
   const browserSmokeSpec = await readFile(browserSpecPath, "utf8");
 
   assert.match(
     browserSmokeSpec,
-    /onboarding -> accept-invitation -> usage -> settings keeps invite continuity/,
+    /onboarding -> accept-invitation -> usage -> \/settings\?intent=manage-plan keeps invite continuity/,
   );
   assert.match(
     browserSmokeSpec,
