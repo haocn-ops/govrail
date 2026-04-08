@@ -159,7 +159,7 @@ test("browser-e2e spike probe keeps executable readiness report aligned with cur
   assert.match(docsReadme, /PLAYWRIGHT_SERVER_READY_RETRIES|PLAYWRIGHT_SERVER_READY_RETRY_DELAY_MS/);
   assert.match(
     browserSmokeSpec,
-    /launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin keeps minimal browser continuity/,
+    /launchpad -> session -> onboarding -> usage -> \/settings\?intent=manage-plan -> verification -> go-live -> admin keeps minimal browser continuity/,
   );
   assert.match(browserSmokeSpec, /source=admin-readiness/);
   assert.match(browserSmokeSpec, /Step 5: Confirm usage window/);

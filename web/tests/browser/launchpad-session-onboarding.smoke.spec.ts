@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const adminReadinessEntry =
   "/?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_demo&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Owner&recent_owner_display_name=Preview%20Owner&recent_owner_email=preview.owner%40govrail.test";
 
-test("launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin keeps minimal browser continuity", async ({ page }) => {
+test("launchpad -> session -> onboarding -> usage -> /settings?intent=manage-plan -> verification -> go-live -> admin keeps minimal browser continuity", async ({ page }) => {
   test.slow();
 
   await page.goto(adminReadinessEntry);
