@@ -40,6 +40,28 @@ test("settings intent cards keep follow-up links mapped to evidence surfaces", a
   );
   assert.match(
     source,
+    /rollback: \{[\s\S]*?\{ label: "Retry playground run", href: playgroundHref \}/s,
+  );
+  assert.match(
+    source,
+    /rollback: \{[\s\S]*?\{ label: "Capture recovery evidence", href: verificationHref \}/s,
+  );
+  assert.match(
+    source,
+    /rollback: \{[\s\S]*?\{ label: "Confirm usage impact", href: usageHref \}/s,
+  );
+  assert.match(
+    source,
+    /rollback: \{[\s\S]*?\{ label: "Return to admin readiness view", href: adminReturnHref \}/s,
+  );
+  assert.match(source, /title: "Rollback guidance intent"/);
+  assert.match(source, /highlights:\s*\[/);
+  assert.match(source, /\{ label: "Current run", value: latestDemoRun\?\.run_id \?\? runId \?\? "No demo run linked" \}/);
+  assert.match(source, /\{ label: "Run status", value: rollbackStatusLabel \}/);
+  assert.match(source, /\{ label: "Latest hint", value: latestDemoRunHint \?\? "Record the recovery decision in verification notes\." \}/);
+  assert.match(source, /Navigation only: this rollback lane preserves run-aware handoff context across playground, verification, usage, and admin\./);
+  assert.match(
+    source,
     /"Document the billing update, audit export, or portal interaction so the verification\/go-live evidence panels can cite the same timeline and you can return to the admin readiness lane\.",/,
   );
 });
@@ -85,6 +107,7 @@ test("follow-up href builders keep verification, usage, admin, and go-live route
   assert.match(source, /recentUpdateKind: normalizedRecentUpdateKind,/);
   assert.match(source, /evidenceCount: normalizedEvidenceCount,/);
   assert.match(source, /const usageHref = buildSettingsHref\(\{ pathname: "\/usage",/s);
+  assert.match(source, /const playgroundHref = buildSettingsHref\(\{ pathname: "\/playground",/s);
   assert.match(source, /const verificationHref = buildSettingsHref\(\{ pathname: "\/verification\?surface=verification",/s);
   assert.match(source, /const goLiveHref = buildSettingsHref\(\{ pathname: "\/go-live\?surface=go_live",/s);
 });

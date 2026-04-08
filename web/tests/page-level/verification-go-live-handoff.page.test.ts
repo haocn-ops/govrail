@@ -8,6 +8,8 @@ const testDir = path.dirname(fileURLToPath(import.meta.url));
 const verificationPagePath = path.resolve(testDir, "../../app/(console)/verification/page.tsx");
 const goLivePagePath = path.resolve(testDir, "../../app/(console)/go-live/page.tsx");
 const goLivePanelPath = path.resolve(testDir, "../../components/go-live/mock-go-live-drill-panel.tsx");
+const settingsPagePath = path.resolve(testDir, "../../app/(console)/settings/page.tsx");
+const settingsPanelPath = path.resolve(testDir, "../../components/settings/workspace-settings-panel.tsx");
 const handoffHelperPath = path.resolve(testDir, "../../lib/console-handoff.ts");
 
 async function readSource(filePath: string): Promise<string> {
@@ -68,9 +70,11 @@ test("Verification page keeps console handoff helper contract and admin return c
 });
 
 test("Verification page keeps explicit go_live continuation link contract", async () => {
-  const [source, checklistSource] = await Promise.all([
+  const [source, checklistSource, settingsSource, settingsPanelSource] = await Promise.all([
     readSource(verificationPagePath),
     readSource(path.resolve(testDir, "../../components/verification/week8-verification-checklist.tsx")),
+    readSource(settingsPagePath),
+    readSource(settingsPanelPath),
   ]);
 
   assert.match(source, /import \{ buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/);
@@ -99,6 +103,11 @@ test("Verification page keeps explicit go_live continuation link contract", asyn
   assert.match(checklistSource, /href=\{buildRunAwareChecklistHref\(primarySurface\)\}/);
   assert.match(checklistSource, /href=\{buildRunAwareChecklistHref\("\/artifacts"\)\}/);
   assert.match(checklistSource, /href=\{buildRunAwareChecklistHref\("\/settings\?intent=rollback"\)\}/);
+  assert.match(settingsSource, /type SettingsIntent = "upgrade" \| "manage-plan" \| "resolve-billing" \| "rollback" \| null;/);
+  assert.match(settingsSource, /candidate === "rollback"/);
+  assert.match(settingsPanelSource, /title: "Rollback guidance intent"/);
+  assert.match(settingsPanelSource, /\{ label: "Retry playground run", href: playgroundHref \}/);
+  assert.match(settingsPanelSource, /\{ label: "Capture recovery evidence", href: verificationHref \}/);
 });
 
 test("Go-live page keeps console handoff helper contract and explicit surface query continuity", async () => {

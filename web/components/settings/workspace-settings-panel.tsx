@@ -124,7 +124,7 @@ function billingBadgeVariant(tone: "positive" | "warning" | "neutral"): "strong"
 }
 
 function intentMatchesAction(
-  highlightIntent: "upgrade" | "manage-plan" | "resolve-billing" | null,
+  highlightIntent: "upgrade" | "manage-plan" | "resolve-billing" | "rollback" | null,
   href?: string,
 ): boolean {
   if (!highlightIntent || !href) {
@@ -155,6 +155,13 @@ function formatDedicatedDeploymentModelLabel(model?: string | null): string {
     return "single tenant";
   }
   return model.replace(/_/g, " ");
+}
+
+function formatRunStatusLabel(status?: string | null): string {
+  if (!status) {
+    return "Not started";
+  }
+  return status.replace(/_/g, " ");
 }
 
 function enterpriseStatusBadgeVariant(args: {
@@ -914,7 +921,7 @@ function buildSettingsHref(args: SettingsHrefArgs): string {
 }
 
 function buildSettingsIntentHref(
-  intent: "manage-plan" | "resolve-billing" | "upgrade",
+  intent: "manage-plan" | "resolve-billing" | "upgrade" | "rollback",
   args: Omit<SettingsHrefArgs, "pathname" | "intent">,
 ): string {
   return buildSettingsHref({
@@ -964,7 +971,7 @@ export function WorkspaceSettingsPanel({
   recentOwnerEmail,
 }: {
   workspaceSlug: string;
-  highlightIntent?: "upgrade" | "manage-plan" | "resolve-billing" | null;
+  highlightIntent?: "upgrade" | "manage-plan" | "resolve-billing" | "rollback" | null;
   initialCheckoutSessionId?: string | null;
   runId?: string | null;
   source?: string | null;
@@ -1034,6 +1041,7 @@ export function WorkspaceSettingsPanel({
   );
 
   const workspace = data?.workspace;
+  const onboarding = data?.onboarding;
   const workspaceRole = workspace?.membership.role ?? null;
   const hasEnterpriseWriteAccess = hasWorkspaceManagementRole(workspaceRole);
   const plan = data?.plan;
@@ -1042,6 +1050,9 @@ export function WorkspaceSettingsPanel({
   const subscription = data?.subscription;
   const usage = data?.usage;
   const members = data?.members ?? [];
+  const latestDemoRun = onboarding?.latest_demo_run ?? null;
+  const latestDemoRunHint = onboarding?.latest_demo_run_hint ?? null;
+  const rollbackStatusLabel = formatRunStatusLabel(latestDemoRun?.status);
   const providerEntries = billingProviders?.providers ?? [];
   const sessionProviderLabel = formatBillingProviderLabel(
     checkout.session?.billing_provider ?? null,
@@ -1108,6 +1119,7 @@ export function WorkspaceSettingsPanel({
     recentOwnerEmail,
     ...buildAuditExportReceiptContinuityArgs(auditExportReceipt),
   });
+  const playgroundHref = buildSettingsHref({ pathname: "/playground", ...handoffHrefArgs });
   const usageHref = buildSettingsHref({ pathname: "/usage", ...handoffHrefArgs });
   const verificationHref = buildSettingsHref({ pathname: "/verification?surface=verification", ...handoffHrefArgs });
   const goLiveHref = buildSettingsHref({ pathname: "/go-live?surface=go_live", ...handoffHrefArgs });
@@ -1299,13 +1311,16 @@ export function WorkspaceSettingsPanel({
           body: `Finish the first demo by confirming billing, feature gating, and audit-export readiness so the Week 8 checklist can cite concrete evidence. This page captures the billing plan, the enrolled feature toggles, and the ability to download audit events before you head back to verification or the mock go-live drill.`,
         }
       : null;
+  const rollbackOwnerSummary =
+    recentOwnerDisplayName ?? recentOwnerLabel ?? recentOwnerEmail ?? "Current operator";
   const intentContextMap: Record<
-    "manage-plan" | "resolve-billing" | "upgrade",
+    "manage-plan" | "resolve-billing" | "upgrade" | "rollback",
     {
       title: string;
       body: string;
       actions: Array<{ label: string; href: string }>;
       footnote: string;
+      highlights?: Array<{ label: string; value: string }>;
     }
   > = {
     "manage-plan": {
@@ -1337,6 +1352,27 @@ export function WorkspaceSettingsPanel({
         { label: "Confirm usage evidence", href: usageHref },
       ],
       footnote: "The upgrade intent keeps the new feature gating decision in the same navigation context—no support or impersonation is happening.",
+    },
+    rollback: {
+      title: "Rollback guidance intent",
+      body:
+        latestDemoRun
+          ? "This rollback lane is for controlled recovery after a failed, cancelled, or unstable demo run. Re-check the run context, capture the recovery evidence, confirm downstream usage impact, then return to the readiness lane with the same workspace thread."
+          : "This rollback lane is for controlled recovery when the Week 8 drill needs to pause. Re-check the workspace session, capture the recovery evidence, confirm downstream usage impact, then return to the readiness lane with the same workspace thread.",
+      actions: [
+        { label: "Retry playground run", href: playgroundHref },
+        { label: "Capture recovery evidence", href: verificationHref },
+        { label: "Confirm usage impact", href: usageHref },
+        { label: "Return to admin readiness view", href: adminReturnHref },
+      ],
+      footnote:
+        "Navigation only: this rollback lane preserves run-aware handoff context across playground, verification, usage, and admin. It does not automate rollback, remediation, or role changes.",
+      highlights: [
+        { label: "Current run", value: latestDemoRun?.run_id ?? runId ?? "No demo run linked" },
+        { label: "Run status", value: rollbackStatusLabel },
+        { label: "Latest hint", value: latestDemoRunHint ?? "Record the recovery decision in verification notes." },
+        { label: "Owner", value: rollbackOwnerSummary },
+      ],
     },
   };
   const intentCard = highlightIntent ? intentContextMap[highlightIntent] : null;
@@ -3127,6 +3163,16 @@ export function WorkspaceSettingsPanel({
             <div className="rounded-2xl border border-border bg-background p-4">
               <p className="font-medium text-foreground">{intentCard.title}</p>
               <p className="mt-1 text-xs text-muted">{intentCard.body}</p>
+              {intentCard.highlights?.length ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {intentCard.highlights.map((item) => (
+                    <div key={item.label} className="rounded-xl border border-border bg-card px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">{item.label}</p>
+                      <p className="mt-1 text-xs text-foreground">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 {intentCard.actions.map((action) => (
                   <Link

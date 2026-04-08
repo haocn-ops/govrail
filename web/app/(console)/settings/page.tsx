@@ -14,7 +14,7 @@ import {
 import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
-type SettingsIntent = "upgrade" | "manage-plan" | "resolve-billing" | null;
+type SettingsIntent = "upgrade" | "manage-plan" | "resolve-billing" | "rollback" | null;
 type WorkspaceDetailResponse = {
   onboarding?: {
     latest_demo_run?: {
@@ -23,9 +23,16 @@ type WorkspaceDetailResponse = {
   };
 };
 
+export const dynamic = "force-dynamic";
+
 function normalizeIntent(value: string | string[] | undefined): SettingsIntent {
   const candidate = Array.isArray(value) ? value[0] : value;
-  if (candidate === "upgrade" || candidate === "manage-plan" || candidate === "resolve-billing") {
+  if (
+    candidate === "upgrade" ||
+    candidate === "manage-plan" ||
+    candidate === "resolve-billing" ||
+    candidate === "rollback"
+  ) {
     return candidate;
   }
   return null;

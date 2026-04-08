@@ -19,6 +19,9 @@ async function readSource(filePath: string): Promise<string> {
 test("settings page keeps self-serve billing lane framing navigation-only and evidence-linked", async () => {
   const source = await readSource(settingsPagePath);
 
+  assert.match(source, /export const dynamic = "force-dynamic";/);
+  assert.match(source, /type SettingsIntent = "upgrade" \| "manage-plan" \| "resolve-billing" \| "rollback" \| null;/);
+  assert.match(source, /candidate === "rollback"/);
   assert.match(source, /<CardTitle>Enterprise evidence lane<\/CardTitle>/);
   assert.match(source, /import \{ ConsoleAdminFollowUp \} from "@\/components\/admin\/console-admin-follow-up";/);
   assert.match(source, /import \{ WorkspaceContextSurfaceNotice \} from "@\/components\/console\/workspace-context-surface-notice";/);
