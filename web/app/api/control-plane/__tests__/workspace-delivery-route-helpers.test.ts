@@ -43,11 +43,21 @@ test("proxyWorkspaceDeliveryGet resolves workspace context and forwards includeT
           tenant_id: "tenant_123",
         },
       }) as never,
-    proxy: async ({ path, includeTenant, workspaceContext, buildFallback }) => {
-      capturedPath = path;
-      capturedIncludeTenant = includeTenant ?? false;
+    proxy: async (args, options) => {
+      const workspaceContext =
+        (await options?.resolveWorkspaceContext?.()) ??
+        ({
+          workspace: {
+            workspace_id: "ws_123",
+            slug: "acme",
+            tenant_id: "tenant_123",
+          },
+        } as never);
+      capturedPath = args.getPath(workspaceContext as never);
+      capturedIncludeTenant = args.includeTenant ?? false;
       capturedWorkspaceId = workspaceContext?.workspace.workspace_id ?? "";
-      capturedFallbackStatus = buildFallback(new Response(null, { status: 404 })).data.contract_meta?.issue?.status ?? 0;
+      capturedFallbackStatus =
+        args.buildFallback(new Response(null, { status: 404 }), workspaceContext as never).data.contract_meta?.issue?.status ?? 0;
       return new Response("{}", { status: 200 });
     },
   });

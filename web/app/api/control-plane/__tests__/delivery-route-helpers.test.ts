@@ -38,11 +38,12 @@ test("proxyWorkspaceDeliveryGet preserves includeTenant and fallback metadata se
           workspace_id: "ws_123",
         },
       }) as never,
-    proxy: async ({ path, includeTenant, workspaceContext, buildFallback }) => {
-      capturedPath = path;
-      capturedIncludeTenant = includeTenant;
+    proxy: async (args, options) => {
+      const workspaceContext = await options?.resolveWorkspaceContext?.();
+      capturedPath = args.getPath(workspaceContext as never);
+      capturedIncludeTenant = args.includeTenant;
       capturedWorkspaceId = workspaceContext?.workspace.workspace_id ?? "";
-      return Response.json(buildFallback(new Response("unavailable", { status: 503 })));
+      return Response.json(args.buildFallback(new Response("unavailable", { status: 503 }), workspaceContext as never));
     },
   });
 
