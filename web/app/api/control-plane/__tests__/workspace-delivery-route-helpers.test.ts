@@ -32,6 +32,7 @@ test("proxyWorkspaceDeliveryGet resolves workspace context and forwards includeT
   let capturedPath = "";
   let capturedIncludeTenant = false;
   let capturedFallbackStatus = 0;
+  let capturedWorkspaceId = "";
 
   const response = await proxyWorkspaceDeliveryGet({
     resolveWorkspaceContext: async () =>
@@ -42,9 +43,10 @@ test("proxyWorkspaceDeliveryGet resolves workspace context and forwards includeT
           tenant_id: "tenant_123",
         },
       }) as never,
-    proxy: async ({ path, includeTenant, buildFallback }) => {
+    proxy: async ({ path, includeTenant, workspaceContext, buildFallback }) => {
       capturedPath = path;
       capturedIncludeTenant = includeTenant ?? false;
+      capturedWorkspaceId = workspaceContext?.workspace.workspace_id ?? "";
       capturedFallbackStatus = buildFallback(new Response(null, { status: 404 })).data.contract_meta?.issue?.status ?? 0;
       return new Response("{}", { status: 200 });
     },
@@ -53,6 +55,7 @@ test("proxyWorkspaceDeliveryGet resolves workspace context and forwards includeT
   assert.equal(response.status, 200);
   assert.equal(capturedPath, "/api/v1/saas/workspaces/ws_123/delivery");
   assert.equal(capturedIncludeTenant, true);
+  assert.equal(capturedWorkspaceId, "ws_123");
   assert.equal(capturedFallbackStatus, 404);
 });
 
@@ -80,6 +83,7 @@ test("proxyWorkspaceDeliveryPost resolves workspace context and proxies POST wit
   let capturedPath = "";
   let capturedIncludeTenant = false;
   let capturedInit: RequestInit | undefined;
+  let capturedWorkspaceId = "";
   const request = new Request("https://example.com", {
     method: "POST",
     body: '{"ok":true}',
@@ -109,6 +113,7 @@ test("proxyWorkspaceDeliveryPost resolves workspace context and proxies POST wit
       capturedPath = path;
       capturedIncludeTenant = options?.includeTenant ?? false;
       capturedInit = options?.init;
+      capturedWorkspaceId = options?.workspaceContext?.workspace.workspace_id ?? "";
       return new Response("{}", { status: 202 });
     },
   });
@@ -117,6 +122,7 @@ test("proxyWorkspaceDeliveryPost resolves workspace context and proxies POST wit
   assert.equal(response.status, 202);
   assert.equal(capturedPath, "/api/v1/saas/workspaces/ws_123/delivery");
   assert.equal(capturedIncludeTenant, true);
+  assert.equal(capturedWorkspaceId, "ws_123");
   assert.equal(capturedInit?.method, "POST");
   assert.equal(headers.get("content-type"), "application/json");
   assert.equal(capturedInit?.body, '{"ok":true}');

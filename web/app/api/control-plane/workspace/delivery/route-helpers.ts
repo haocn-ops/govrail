@@ -1,7 +1,10 @@
 import type { ControlPlaneWorkspaceDeliveryTrack } from "@/lib/control-plane-types";
 import { proxyControlPlane } from "@/lib/control-plane-proxy";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
-import { buildProxyControlPlanePostInit } from "../post-route-helpers";
+import {
+  buildProxyControlPlanePostInit,
+  proxyWorkspaceScopedDetailPost,
+} from "../post-route-helpers";
 import { proxyFallbackGet } from "../../fallback-route-helpers";
 
 const DELIVERY_SUFFIX = "/delivery";
@@ -79,6 +82,7 @@ export async function proxyWorkspaceDeliveryGet(args?: {
   return proxy({
     path: buildDeliveryPath(workspaceId),
     includeTenant: true,
+    workspaceContext,
     buildFallback: (upstream) => ({
       data: buildDeliveryFallbackTrack(workspaceId, upstream.status),
       meta: buildFallbackMeta(upstream.status),
@@ -92,13 +96,13 @@ export async function proxyWorkspaceDeliveryPost(args: {
   proxy?: typeof proxyControlPlane;
   initBuilder?: typeof buildWorkspaceDeliveryPostInit;
 }): Promise<Response> {
-  const resolveContext = args.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
-  const proxy = args.proxy ?? proxyControlPlane;
   const initBuilder = args.initBuilder ?? buildWorkspaceDeliveryPostInit;
-  const workspaceContext = await resolveContext();
-
-  return proxy(buildDeliveryPath(workspaceContext.workspace.workspace_id), {
+  return proxyWorkspaceScopedDetailPost({
+    request: args.request,
+    buildPath: buildDeliveryPath,
     includeTenant: true,
-    init: await initBuilder(args.request),
+    resolveWorkspaceContext: args.resolveWorkspaceContext ?? resolveWorkspaceContextForServer,
+    proxy: args.proxy ?? proxyControlPlane,
+    initBuilder: ({ request }) => initBuilder(request),
   });
 }

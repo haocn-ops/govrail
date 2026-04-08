@@ -67,6 +67,7 @@ test("buildBillingPostProxyInit defaults to application/json when content-type i
 test("proxyWorkspaceBillingGet keeps workspace-scoped billing path and GET init wiring", async () => {
   let capturedPath = "";
   let capturedInit: RequestInit | undefined;
+  let capturedWorkspaceId = "";
 
   const response = await proxyWorkspaceBillingGet("/providers", {
     resolveWorkspaceContext: async () =>
@@ -78,6 +79,7 @@ test("proxyWorkspaceBillingGet keeps workspace-scoped billing path and GET init 
     proxy: async (path, options) => {
       capturedPath = path;
       capturedInit = options?.init;
+      capturedWorkspaceId = options?.workspaceContext?.workspace.workspace_id ?? "";
       return new Response("{}", {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -87,12 +89,14 @@ test("proxyWorkspaceBillingGet keeps workspace-scoped billing path and GET init 
 
   assert.strictEqual(capturedPath, "/api/v1/saas/workspaces/ws_123/billing/providers");
   assert.strictEqual(capturedInit?.method, "GET");
+  assert.strictEqual(capturedWorkspaceId, "ws_123");
   assert.strictEqual(response.status, 200);
 });
 
 test("proxyWorkspaceBillingPost keeps workspace-scoped billing path and injected POST init wiring", async () => {
   let capturedPath = "";
   let capturedInit: RequestInit | undefined;
+  let capturedWorkspaceId = "";
 
   const response = await proxyWorkspaceBillingPost(
     new Request("https://example.com", {
@@ -117,6 +121,7 @@ test("proxyWorkspaceBillingPost keeps workspace-scoped billing path and injected
       proxy: async (path, options) => {
         capturedPath = path;
         capturedInit = options?.init;
+        capturedWorkspaceId = options?.workspaceContext?.workspace.workspace_id ?? "";
         return new Response("{}", {
           status: 202,
           headers: { "content-type": "application/json" },
@@ -127,6 +132,7 @@ test("proxyWorkspaceBillingPost keeps workspace-scoped billing path and injected
 
   assert.strictEqual(capturedPath, "/api/v1/saas/workspaces/ws_123/billing/checkout-sessions");
   assert.strictEqual(capturedInit?.method, "POST");
+  assert.strictEqual(capturedWorkspaceId, "ws_123");
   assert.strictEqual(new Headers(capturedInit?.headers).get("content-type"), "application/json");
   assert.strictEqual(capturedInit?.body, '{"plan":"pro"}');
   assert.strictEqual(response.status, 202);

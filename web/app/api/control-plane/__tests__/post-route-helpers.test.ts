@@ -329,3 +329,38 @@ test("proxyWorkspaceScopedDetailPost resolves workspace context and posts via in
   assert.equal(new Headers(capturedInit?.headers).get("content-type"), "application/json");
   assert.equal(capturedInit?.body, '{"ok":true}');
 });
+
+test("proxyWorkspaceScopedDetailPost forwards includeTenant overrides to the shared proxy", async () => {
+  let capturedIncludeTenant: boolean | undefined;
+
+  await proxyWorkspaceScopedDetailPost({
+    request: new Request("https://example.com", {
+      method: "POST",
+      body: '{"ok":true}',
+    }),
+    buildPath: (workspaceId) => `/api/v1/saas/workspaces/${workspaceId}/delivery`,
+    includeTenant: true,
+    resolveWorkspaceContext: async () =>
+      ({
+        workspace: {
+          workspace_id: "ws_123",
+        },
+      }) as never,
+    initBuilder: async () => ({
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: '{"ok":true}',
+    }),
+    proxy: async (_path, options) => {
+      capturedIncludeTenant = options?.includeTenant;
+      return new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  assert.equal(capturedIncludeTenant, true);
+});

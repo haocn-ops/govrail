@@ -22,7 +22,7 @@ test("buildWorkspaceCollectionPath normalizes collection suffixes", () => {
 });
 
 test("proxyWorkspaceScopedCollectionGet resolves workspace context and delegates fallback GET", async () => {
-  const calls: Array<{ path: string; fallback: unknown }> = [];
+  const calls: Array<{ path: string; fallback: unknown; workspaceId: string }> = [];
 
   const response = await proxyWorkspaceScopedCollectionGet({
     suffix: "/invitations",
@@ -40,8 +40,12 @@ test("proxyWorkspaceScopedCollectionGet resolves workspace context and delegates
           tenant_id: "tenant_123",
         },
       }) as WorkspaceContext,
-    proxy: async (path, fallback) => {
-      calls.push({ path, fallback });
+    proxy: async (path, fallback, options) => {
+      calls.push({
+        path,
+        fallback,
+        workspaceId: options?.workspaceContext?.workspace.workspace_id ?? "",
+      });
       return Response.json({ ok: true });
     },
   });
@@ -54,6 +58,7 @@ test("proxyWorkspaceScopedCollectionGet resolves workspace context and delegates
       next_cursor: null,
     },
   });
+  assert.equal(calls[0]?.workspaceId, "ws_123");
   assert.equal(response.status, 200);
 });
 

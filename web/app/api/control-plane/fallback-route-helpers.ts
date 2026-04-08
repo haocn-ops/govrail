@@ -1,6 +1,9 @@
 import { proxyControlPlane } from "@/lib/control-plane-proxy";
 
 type ProxyControlPlaneFn = typeof proxyControlPlane;
+type ProxyWorkspaceContext = NonNullable<
+  Parameters<ProxyControlPlaneFn>[1]
+>["workspaceContext"];
 
 type FallbackMeta = {
   request_id: string;
@@ -10,6 +13,7 @@ type FallbackMeta = {
 type ProxyFallbackGetArgs<T> = {
   path: string;
   includeTenant?: boolean;
+  workspaceContext?: ProxyWorkspaceContext;
   proxy?: ProxyControlPlaneFn;
   buildFallback: (upstream: Response) => { data: T; meta?: Partial<FallbackMeta> };
 };
@@ -24,6 +28,7 @@ export async function proxyFallbackGet<T>(
 ): Promise<Response> {
   const upstream = await (args.proxy ?? proxyControlPlane)(args.path, {
     includeTenant: args.includeTenant,
+    workspaceContext: args.workspaceContext,
   });
 
   if (upstream.ok) {

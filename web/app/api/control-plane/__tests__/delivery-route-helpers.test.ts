@@ -29,6 +29,7 @@ test("buildDeliveryFallbackTrack keeps preview fallback issue contract", () => {
 test("proxyWorkspaceDeliveryGet preserves includeTenant and fallback metadata semantics", async () => {
   let capturedPath = "";
   let capturedIncludeTenant: boolean | undefined;
+  let capturedWorkspaceId = "";
 
   const response = await proxyWorkspaceDeliveryGet({
     resolveWorkspaceContext: async () =>
@@ -37,15 +38,17 @@ test("proxyWorkspaceDeliveryGet preserves includeTenant and fallback metadata se
           workspace_id: "ws_123",
         },
       }) as never,
-    proxy: async ({ path, includeTenant, buildFallback }) => {
+    proxy: async ({ path, includeTenant, workspaceContext, buildFallback }) => {
       capturedPath = path;
       capturedIncludeTenant = includeTenant;
+      capturedWorkspaceId = workspaceContext?.workspace.workspace_id ?? "";
       return Response.json(buildFallback(new Response("unavailable", { status: 503 })));
     },
   });
 
   assert.equal(capturedPath, "/api/v1/saas/workspaces/ws_123/delivery");
   assert.equal(capturedIncludeTenant, true);
+  assert.equal(capturedWorkspaceId, "ws_123");
   const payload = await response.json();
   assert.equal(payload.data.workspace_id, "ws_123");
   assert.equal(payload.data.contract_meta?.source, "fallback_error");
@@ -79,6 +82,7 @@ test("proxyWorkspaceDeliveryPost preserves includeTenant and JSON POST init", as
   let capturedPath = "";
   let capturedIncludeTenant: boolean | undefined;
   let capturedInit: RequestInit | undefined;
+  let capturedWorkspaceId = "";
 
   const response = await proxyWorkspaceDeliveryPost({
     request: new Request("https://example.com", {
@@ -105,6 +109,7 @@ test("proxyWorkspaceDeliveryPost preserves includeTenant and JSON POST init", as
       capturedPath = path;
       capturedIncludeTenant = options?.includeTenant;
       capturedInit = options?.init;
+      capturedWorkspaceId = options?.workspaceContext?.workspace.workspace_id ?? "";
       return new Response("{}", {
         status: 202,
         headers: { "content-type": "application/json" },
@@ -114,6 +119,7 @@ test("proxyWorkspaceDeliveryPost preserves includeTenant and JSON POST init", as
 
   assert.equal(capturedPath, "/api/v1/saas/workspaces/ws_123/delivery");
   assert.equal(capturedIncludeTenant, true);
+  assert.equal(capturedWorkspaceId, "ws_123");
   assert.equal(capturedInit?.method, "POST");
   assert.equal(new Headers(capturedInit?.headers).get("content-type"), "application/json");
   assert.equal(capturedInit?.body, '{"ok":true}');

@@ -156,6 +156,7 @@ export async function proxyAuthenticatedPostRequest(args: {
 export async function proxyWorkspaceScopedDetailPost(args: {
   request: Request;
   buildPath: (workspaceId: string) => string;
+  includeTenant?: boolean;
   resolveWorkspaceContext?: typeof resolveWorkspaceContextForServer;
   proxy?: typeof proxyControlPlane;
   initBuilder?: typeof buildProxyControlPlanePostInit;
@@ -167,6 +168,7 @@ export async function proxyWorkspaceScopedDetailPost(args: {
   const workspaceId = workspaceContext.workspace.workspace_id;
 
   return proxy(args.buildPath(workspaceId), {
+    includeTenant: args.includeTenant,
     workspaceContext,
     init: await initBuilder({ request: args.request }),
   });

@@ -31,5 +31,6 @@ export async function proxyMetadataGet(
 
   return proxy(args.getPath(workspaceContext), {
     includeTenant: args.includeTenant,
+    workspaceContext,
   });
 }

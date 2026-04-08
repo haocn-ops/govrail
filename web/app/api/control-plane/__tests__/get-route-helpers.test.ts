@@ -53,6 +53,7 @@ test("proxyMetadataGet returns injected metadata guard response before proxying"
 test("proxyMetadataGet forwards path and includeTenant through injected proxy", async () => {
   let capturedPath = "";
   let capturedIncludeTenant: boolean | undefined;
+  let capturedWorkspaceId = "";
 
   const response = await proxyMetadataGet(
     {
@@ -91,6 +92,7 @@ test("proxyMetadataGet forwards path and includeTenant through injected proxy", 
       proxy: async (path, options) => {
         capturedPath = path;
         capturedIncludeTenant = options?.includeTenant;
+        capturedWorkspaceId = options?.workspaceContext?.workspace.workspace_id ?? "";
         return new Response("{}", {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -101,5 +103,6 @@ test("proxyMetadataGet forwards path and includeTenant through injected proxy", 
 
   assert.equal(capturedPath, "/api/v1/saas/workspaces/ws_123/members");
   assert.equal(capturedIncludeTenant, true);
+  assert.equal(capturedWorkspaceId, "ws_123");
   assert.equal(response.status, 200);
 });

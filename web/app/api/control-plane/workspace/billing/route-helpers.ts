@@ -1,7 +1,10 @@
 import { proxyControlPlane } from "@/lib/control-plane-proxy";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
-import { buildProxyControlPlanePostInit } from "../post-route-helpers";
+import {
+  buildProxyControlPlanePostInit,
+  proxyWorkspaceScopedDetailPost,
+} from "../post-route-helpers";
 
 const BILLING_BASE_PATH = "/api/v1/saas/workspaces";
 
@@ -35,6 +38,7 @@ export async function proxyWorkspaceBillingGet(
   const workspaceContext = await resolveContext();
 
   return proxy(buildWorkspaceBillingPath(workspaceContext.workspace.workspace_id, suffix), {
+    workspaceContext,
     init: buildBillingGetProxyInit(),
   });
 }
@@ -48,12 +52,13 @@ export async function proxyWorkspaceBillingPost(
     initBuilder?: typeof buildBillingPostProxyInit;
   },
 ): Promise<Response> {
-  const resolveContext = options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
-  const proxy = options?.proxy ?? proxyControlPlane;
   const initBuilder = options?.initBuilder ?? buildBillingPostProxyInit;
-  const workspaceContext = await resolveContext();
-
-  return proxy(buildWorkspaceBillingPath(workspaceContext.workspace.workspace_id, suffix), {
-    init: await initBuilder(request),
+  return proxyWorkspaceScopedDetailPost({
+    request,
+    buildPath: (workspaceId) => buildWorkspaceBillingPath(workspaceId, suffix),
+    resolveWorkspaceContext:
+      options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer,
+    proxy: options?.proxy ?? proxyControlPlane,
+    initBuilder: ({ request }) => initBuilder(request),
   });
 }

@@ -72,6 +72,10 @@ const systemRouteHelperPath = path.resolve(
   testDir,
   "../app/api/control-plane/system-route-helpers.ts",
 );
+const toolProviderRouteHelperPath = path.resolve(
+  testDir,
+  "../app/api/control-plane/tool-providers/route-helpers.ts",
+);
 const runRouteHelperPath = path.resolve(
   testDir,
   "../app/api/control-plane/runs/route-helpers.ts",
@@ -362,6 +366,19 @@ test("detail mutation routes reuse shared post-init helper without direct fetch 
   }
 });
 
+test("tool provider detail helper delegates workspace-context POST wiring to the shared detail helper", async () => {
+  const source = await readRouteSource(toolProviderRouteHelperPath);
+
+  assert.match(
+    source,
+    /import \{[\s\S]*proxyWorkspaceScopedDetailPost[\s\S]*\} from "\.\.\/post-route-helpers";/s,
+  );
+  assert.match(source, /return proxyWorkspaceScopedDetailPost\(\{/);
+  assert.match(source, /buildPath:\s*\(\)\s*=>\s*buildToolProviderPath\(toolProviderId,\s*action\)/);
+  assert.match(source, /initBuilder:\s*\(\{\s*request\s*\}\)\s*=>\s*initBuilder\(request\)/);
+  assert.doesNotMatch(source, /const workspaceContext = await resolveWorkspaceContext\(\);/);
+});
+
 test("workspace create route delegates proxy wiring to route helper", async () => {
   const source = await readRouteSource(path.resolve(testDir, "../app/api/control-plane/workspaces/route.ts"));
 
@@ -646,7 +663,10 @@ test("metadata-guarded enterprise POST routes reuse shared enterprise helpers", 
 
 test("billing POST helper reuses shared POST init builder", async () => {
   const source = await readRouteSource(billingRouteHelperPath);
-  assert.match(source, /import \{ buildProxyControlPlanePostInit \} from "\.\.\/post-route-helpers";/);
+  assert.match(
+    source,
+    /import \{[\s\S]*buildProxyControlPlanePostInit[\s\S]*proxyWorkspaceScopedDetailPost[\s\S]*\} from "\.\.\/post-route-helpers";/s,
+  );
   assert.match(source, /import \{ proxyControlPlane \} from "@\/lib\/control-plane-proxy";/);
   assert.match(source, /import \{ resolveWorkspaceContextForServer \} from "@\/lib\/workspace-context";/);
   assert.match(
@@ -661,7 +681,11 @@ test("billing POST helper reuses shared POST init builder", async () => {
   assert.match(source, /const proxy = options\?\.proxy \?\? proxyControlPlane;/);
   assert.match(source, /const workspaceContext = await resolveContext\(\);/);
   assert.match(source, /return proxy\(buildWorkspaceBillingPath\(workspaceContext\.workspace\.workspace_id,\s*suffix\),\s*\{/);
+  assert.match(source, /workspaceContext,/);
   assert.match(source, /const initBuilder = options\?\.initBuilder \?\? buildBillingPostProxyInit;/);
+  assert.match(source, /return proxyWorkspaceScopedDetailPost\(\{/);
+  assert.match(source, /buildPath:\s*\(workspaceId\)\s*=>\s*buildWorkspaceBillingPath\(workspaceId,\s*suffix\)/);
+  assert.match(source, /initBuilder:\s*\(\{\s*request\s*\}\)\s*=>\s*initBuilder\(request\)/);
 });
 
 test("billing route family reuses shared workspace billing proxy helpers", async () => {
@@ -759,7 +783,10 @@ test("workspace delivery helper keeps fallback GET contract and POST passthrough
   assert.match(source, /import \{ proxyFallbackGet \} from "\.\.\/\.\.\/fallback-route-helpers";/);
   assert.match(source, /import \{ proxyControlPlane \} from "@\/lib\/control-plane-proxy";/);
   assert.match(source, /import \{ resolveWorkspaceContextForServer \} from "@\/lib\/workspace-context";/);
-  assert.match(source, /import \{ buildProxyControlPlanePostInit \} from "\.\.\/post-route-helpers";/);
+  assert.match(
+    source,
+    /import \{[\s\S]*buildProxyControlPlanePostInit[\s\S]*proxyWorkspaceScopedDetailPost[\s\S]*\} from "\.\.\/post-route-helpers";/s,
+  );
   assert.match(source, /const DELIVERY_SUFFIX = "\/delivery";/);
   assert.match(source, /export function buildDeliveryPath\(workspaceId: string\): string/);
   assert.match(source, /return `\/api\/v1\/saas\/workspaces\/\$\{workspaceId\}\$\{DELIVERY_SUFFIX\}`;/);
@@ -787,9 +814,11 @@ test("workspace delivery helper keeps fallback GET contract and POST passthrough
   assert.match(source, /export async function proxyWorkspaceDeliveryPost\(/);
   assert.match(source, /resolveWorkspaceContext\?: typeof resolveWorkspaceContextForServer/);
   assert.match(source, /initBuilder\?: typeof buildWorkspaceDeliveryPostInit/);
-  assert.match(source, /return proxy\(buildDeliveryPath\(workspaceContext\.workspace\.workspace_id\),\s*\{/);
+  assert.match(source, /workspaceContext,/);
+  assert.match(source, /return proxyWorkspaceScopedDetailPost\(\{/);
+  assert.match(source, /buildPath:\s*buildDeliveryPath/);
   assert.match(source, /includeTenant:\s*true/);
-  assert.match(source, /init: await initBuilder\(args\.request\)/);
+  assert.match(source, /initBuilder:\s*\(\{\s*request\s*\}\)\s*=>\s*initBuilder\(request\)/);
   assert.doesNotMatch(source, /const body = await request\.text\(\);/);
 });
 

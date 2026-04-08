@@ -156,7 +156,11 @@ export async function proxyControlPlane(
 export async function proxyControlPlaneOrFallback<T>(
   path: string,
   fallbackData: T,
-  options?: { includeTenant?: boolean; init?: RequestInit },
+  options?: {
+    includeTenant?: boolean;
+    init?: RequestInit;
+    workspaceContext?: Awaited<ReturnType<typeof resolveWorkspaceContextForServer>>;
+  },
 ): Promise<Response> {
   const upstream = await proxyControlPlane(path, options);
   if (upstream.ok) {

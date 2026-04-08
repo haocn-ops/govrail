@@ -1,6 +1,9 @@
 import { proxyControlPlane } from "@/lib/control-plane-proxy";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
-import { buildProxyControlPlanePostInit } from "../post-route-helpers";
+import {
+  buildProxyControlPlanePostInit,
+  proxyWorkspaceScopedDetailPost,
+} from "../post-route-helpers";
 
 export type ToolProviderAction = "disable";
 
@@ -28,14 +31,13 @@ export async function proxyToolProviderPost(
     initBuilder?: typeof buildToolProviderPostInit;
   },
 ): Promise<Response> {
-  const resolveWorkspaceContext =
-    options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
-  const proxy = options?.proxy ?? proxyControlPlane;
   const initBuilder = options?.initBuilder ?? buildToolProviderPostInit;
-  const workspaceContext = await resolveWorkspaceContext();
-
-  return proxy(buildToolProviderPath(toolProviderId, action), {
-    workspaceContext,
-    init: await initBuilder(request),
+  return proxyWorkspaceScopedDetailPost({
+    request,
+    buildPath: () => buildToolProviderPath(toolProviderId, action),
+    resolveWorkspaceContext:
+      options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer,
+    proxy: options?.proxy ?? proxyControlPlane,
+    initBuilder: ({ request }) => initBuilder(request),
   });
 }

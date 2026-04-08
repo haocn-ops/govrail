@@ -27,6 +27,9 @@ export async function proxyWorkspaceScopedCollectionGet<T>(args: {
   return proxy(
     buildWorkspaceCollectionPath(workspaceContext.workspace.workspace_id, args.suffix),
     args.fallback,
+    {
+      workspaceContext,
+    },
   );
 }
 
