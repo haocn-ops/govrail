@@ -285,6 +285,9 @@ test("metadata GET helper keeps shared resolver, guard, and proxy injection poin
     source,
     /import \{ resolveWorkspaceContextForServer, type WorkspaceContext \} from "@\/lib\/workspace-context";/,
   );
+  assert.match(source, /export async function proxyWorkspaceScopedGet\(/);
+  assert.match(source, /return proxy\(args\.getPath\(workspaceContext\),\s*\{/);
+  assert.match(source, /workspaceContext,\s*init:\s*args\.init/s);
   assert.match(source, /export async function proxyMetadataGet\(/);
   assert.match(
     source,
@@ -436,10 +439,13 @@ test("workspace enterprise route helper keeps shared resolver/proxy injection fo
 
   assert.match(source, /import \{ proxyControlPlane, requireMetadataWorkspaceContext \} from "@\/lib\/control-plane-proxy";/);
   assert.match(source, /import \{ resolveWorkspaceContextForServer \} from "@\/lib\/workspace-context";/);
+  assert.match(source, /import \{ proxyWorkspaceScopedGet \} from "\.\.\/get-route-helpers";/);
+  assert.match(source, /return proxyWorkspaceScopedGet\(/);
+  assert.match(source, /getPath:\s*\(workspaceContext\)\s*=>\s*buildWorkspaceEnterpriseGetPath\(workspaceContext\.workspace\.workspace_id,\s*suffix,\s*options\?\.request\)/s);
+  assert.match(source, /init:\s*buildWorkspaceEnterpriseGetInit\(options\)/);
   assert.match(source, /const resolveWorkspaceContext =\s*options\?\.resolveWorkspaceContext \?\? resolveWorkspaceContextForServer;/);
   assert.match(source, /const proxy = options\?\.proxy \?\? proxyControlPlane;/);
   assert.match(source, /const workspaceContext = await resolveWorkspaceContext\(\);/);
-  assert.match(source, /workspaceContext,\s*init:\s*buildWorkspaceEnterpriseGetInit\(options\)/s);
   assert.match(source, /const initBuilder = options\?\.initBuilder \?\? buildWorkspaceEnterprisePostInit;/);
   assert.match(source, /const metadataGuard = requireMetadataWorkspaceContext\(\{/);
   assert.match(source, /return proxy\(buildWorkspaceEnterprisePath\(workspaceContext\.workspace\.workspace_id,\s*args\.suffix\),\s*\{/);
@@ -669,6 +675,7 @@ test("billing POST helper reuses shared POST init builder", async () => {
   );
   assert.match(source, /import \{ proxyControlPlane \} from "@\/lib\/control-plane-proxy";/);
   assert.match(source, /import \{ resolveWorkspaceContextForServer \} from "@\/lib\/workspace-context";/);
+  assert.match(source, /import \{ proxyWorkspaceScopedGet \} from "\.\.\/\.\.\/get-route-helpers";/);
   assert.match(
     source,
     /return buildProxyControlPlanePostInit\(\{\s*request,\s*accept:\s*request\.headers\.get\("accept"\)\s*\?\?\s*undefined,\s*contentType:\s*request\.headers\.get\("content-type"\)\s*\?\?\s*undefined,\s*\}\)/s,
@@ -677,11 +684,11 @@ test("billing POST helper reuses shared POST init builder", async () => {
   assert.match(source, /return `\$\{BILLING_BASE_PATH\}\/\$\{workspaceId\}\/billing\$\{suffix\}`;/);
   assert.match(source, /export async function proxyWorkspaceBillingGet\(/);
   assert.match(source, /export async function proxyWorkspaceBillingPost\(/);
-  assert.match(source, /const resolveContext = options\?\.resolveWorkspaceContext \?\? resolveWorkspaceContextForServer;/);
-  assert.match(source, /const proxy = options\?\.proxy \?\? proxyControlPlane;/);
-  assert.match(source, /const workspaceContext = await resolveContext\(\);/);
-  assert.match(source, /return proxy\(buildWorkspaceBillingPath\(workspaceContext\.workspace\.workspace_id,\s*suffix\),\s*\{/);
-  assert.match(source, /workspaceContext,/);
+  assert.match(source, /return proxyWorkspaceScopedGet\(/);
+  assert.match(source, /getPath:\s*\(workspaceContext\)\s*=>\s*buildWorkspaceBillingPath\(workspaceContext\.workspace\.workspace_id,\s*suffix\)/s);
+  assert.match(source, /init:\s*buildBillingGetProxyInit\(\)/);
+  assert.match(source, /resolveWorkspaceContext:\s*options\?\.resolveWorkspaceContext \?\? resolveWorkspaceContextForServer/);
+  assert.match(source, /proxy:\s*options\?\.proxy \?\? proxyControlPlane/);
   assert.match(source, /const initBuilder = options\?\.initBuilder \?\? buildBillingPostProxyInit;/);
   assert.match(source, /return proxyWorkspaceScopedDetailPost\(\{/);
   assert.match(source, /buildPath:\s*\(workspaceId\)\s*=>\s*buildWorkspaceBillingPath\(workspaceId,\s*suffix\)/);

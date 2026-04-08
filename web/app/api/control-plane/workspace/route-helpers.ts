@@ -1,4 +1,5 @@
 import { buildProxyControlPlanePostInit } from "../post-route-helpers";
+import { proxyWorkspaceScopedGet } from "../get-route-helpers";
 import { proxyControlPlane, requireMetadataWorkspaceContext } from "@/lib/control-plane-proxy";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
@@ -58,16 +59,16 @@ export async function proxyWorkspaceEnterpriseGet(
     proxy?: typeof proxyControlPlane;
   },
 ): Promise<Response> {
-  const resolveWorkspaceContext =
-    options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer;
-  const proxy = options?.proxy ?? proxyControlPlane;
-  const workspaceContext = await resolveWorkspaceContext();
-
-  return proxy(
-    buildWorkspaceEnterpriseGetPath(workspaceContext.workspace.workspace_id, suffix, options?.request),
+  return proxyWorkspaceScopedGet(
     {
-      workspaceContext,
+      getPath: (workspaceContext) =>
+        buildWorkspaceEnterpriseGetPath(workspaceContext.workspace.workspace_id, suffix, options?.request),
       init: buildWorkspaceEnterpriseGetInit(options),
+    },
+    {
+      resolveWorkspaceContext:
+        options?.resolveWorkspaceContext ?? resolveWorkspaceContextForServer,
+      proxy: options?.proxy ?? proxyControlPlane,
     },
   );
 }
