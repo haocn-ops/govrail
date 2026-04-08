@@ -101,21 +101,29 @@ test("go-live drill panel reflects delivery-track status in drill summary and ha
   assert.match(source, /const goLiveDelivery = deliveryTrack\?\.go_live \?\? null;/);
   assert.match(source, /function drillStateFromDeliverySection\(/);
   assert.match(source, /function deliveryStatusLabel\(/);
+  assert.match(source, /function hasDeliverySectionNotes\(/);
+  assert.match(source, /function hasDeliverySectionEvidence\(/);
+  assert.match(source, /function goLiveEvidenceSummary\(/);
+  assert.match(source, /const hasGoLiveEvidenceLinks = \(goLiveDelivery\?\.evidence_links\.length \?\? 0\) > 0;/);
+  assert.match(source, /const hasGoLiveNotes = hasDeliverySectionNotes\(goLiveDelivery\);/);
+  assert.match(source, /const hasGoLiveEvidenceRecord = hasDeliverySectionEvidence\(goLiveDelivery\);/);
   assert.match(
     source,
     /state:\s*drillStateFromDeliverySection\(verificationDelivery\) \?\?[\s\S]*onboarding\?\.checklist\.demo_run_created \? "ready" : "attention"/s,
   );
   assert.match(
     source,
-    /state:\s*\(goLiveDelivery\?\.evidence_links\.length \?\? 0\) > 0\s*\?\s*"ready"\s*:\s*onboarding\?\.checklist\.demo_run_created/s,
+    /state:\s*goLiveDelivery\?\.status === "complete" \|\| hasGoLiveEvidenceLinks\s*\?\s*"ready"\s*:\s*hasGoLiveNotes \|\| onboarding\?\.checklist\.demo_run_created/s,
   );
   assert.match(
     source,
-    /state:\s*goLiveDelivery\?\.status === "complete"\s*\?\s*"ready"\s*:\s*goLiveDelivery\?\.status === "in_progress"/s,
+    /state:\s*goLiveDelivery\?\.status === "complete"\s*\?\s*"ready"\s*:\s*goLiveDelivery\?\.status === "in_progress"[\s\S]*hasGoLiveEvidenceRecord/s,
   );
   assert.match(source, /Verification track/);
   assert.match(source, /Go-live track/);
   assert.match(source, /Go-live evidence/);
-  assert.match(source, /No linked evidence/);
-  assert.match(source, /linked/);
+  assert.match(source, /Notes recorded, links still missing/);
+  assert.match(source, /No notes or evidence links recorded/);
+  assert.match(source, /evidenceLinkCount === 1 \? "link" : "links"/);
+  assert.match(source, /evidence \$\{evidenceLinkCount === 1 \? "link" : "links"\} recorded/);
 });

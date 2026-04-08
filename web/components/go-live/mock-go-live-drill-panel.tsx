@@ -81,6 +81,31 @@ function deliveryStatusLabel(section?: Pick<ControlPlaneDeliveryTrackSection, "s
   return "Pending";
 }
 
+function hasDeliverySectionNotes(
+  section?: Pick<ControlPlaneDeliveryTrackSection, "notes"> | null,
+): boolean {
+  return typeof section?.notes === "string" && section.notes.trim().length > 0;
+}
+
+function hasDeliverySectionEvidence(
+  section?: Pick<ControlPlaneDeliveryTrackSection, "notes" | "evidence_links"> | null,
+): boolean {
+  return (section?.evidence_links.length ?? 0) > 0 || hasDeliverySectionNotes(section);
+}
+
+function goLiveEvidenceSummary(
+  section?: Pick<ControlPlaneDeliveryTrackSection, "notes" | "evidence_links"> | null,
+): string {
+  const evidenceLinkCount = section?.evidence_links.length ?? 0;
+  if (evidenceLinkCount > 0) {
+    return `${evidenceLinkCount} evidence ${evidenceLinkCount === 1 ? "link" : "links"} recorded`;
+  }
+  if (hasDeliverySectionNotes(section)) {
+    return "Notes recorded, links still missing";
+  }
+  return "No notes or evidence links recorded";
+}
+
 function normalizeSource(value?: string | null): GoLiveSource | null {
   if (value === "admin-attention" || value === "admin-readiness" || value === "onboarding") {
     return value;
@@ -155,6 +180,9 @@ export function MockGoLiveDrillPanel({
   const metrics = usage?.metrics ?? {};
   const verificationDelivery = deliveryTrack?.verification ?? null;
   const goLiveDelivery = deliveryTrack?.go_live ?? null;
+  const hasGoLiveEvidenceLinks = (goLiveDelivery?.evidence_links.length ?? 0) > 0;
+  const hasGoLiveNotes = hasDeliverySectionNotes(goLiveDelivery);
+  const hasGoLiveEvidenceRecord = hasDeliverySectionEvidence(goLiveDelivery);
   const latestDemoRun = onboarding?.latest_demo_run ?? null;
   const activeRunId = latestDemoRun?.run_id ?? runId ?? null;
 
@@ -319,9 +347,9 @@ export function MockGoLiveDrillPanel({
           description: "Execution artifacts, logs, and resulting outputs are available for drill evidence.",
           href: buildHref("/artifacts"),
           state:
-            (goLiveDelivery?.evidence_links.length ?? 0) > 0
+            goLiveDelivery?.status === "complete" || hasGoLiveEvidenceLinks
               ? "ready"
-              : onboarding?.checklist.demo_run_created
+              : hasGoLiveNotes || onboarding?.checklist.demo_run_created
                 ? "attention"
                 : "pending",
         },
@@ -335,7 +363,7 @@ export function MockGoLiveDrillPanel({
               ? "ready"
               : goLiveDelivery?.status === "in_progress" ||
                   verificationDelivery?.status === "complete" ||
-                  (goLiveDelivery?.evidence_links.length ?? 0) > 0
+                  hasGoLiveEvidenceRecord
                 ? "attention"
                 : "pending",
         },
@@ -397,11 +425,7 @@ export function MockGoLiveDrillPanel({
             </div>
             <div className="rounded-xl border border-border bg-background px-3 py-2">
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Go-live evidence</p>
-              <p className="mt-1 text-xs text-foreground">
-                {(goLiveDelivery?.evidence_links.length ?? 0) > 0
-                  ? `${goLiveDelivery?.evidence_links.length ?? 0} linked`
-                  : "No linked evidence"}
-              </p>
+              <p className="mt-1 text-xs text-foreground">{goLiveEvidenceSummary(goLiveDelivery)}</p>
             </div>
           </div>
         </CardContent>
