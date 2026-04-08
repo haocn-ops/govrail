@@ -16,6 +16,50 @@ const specs = [
   "tests/browser/members-accept-invitation-verification-go-live-settings-verification-settings-admin-return.smoke.spec.ts",
 ] as const;
 
+const smokeExpectations = [
+  {
+    path: "tests/browser/onboarding-accept-invitation-verification-go-live-settings-verification-settings-admin-return.smoke.spec.ts",
+    requiredPatterns: [
+      /onboarding -> accept-invitation -> verification -> go-live -> settings -> verification -> settings -> admin keeps readiness return continuity/,
+      /\/onboarding\?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_demo&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Ops&recent_owner_display_name=Avery%20Ops&recent_owner_email=avery\.ops%40govrail\.test/,
+      /Launch lane context/,
+      /Invite-to-accept path/,
+      /Open accept-invitation/,
+      /Accept workspace invitation/,
+      /page\.goBack\(\)/,
+      /Step 6: Capture verification evidence/,
+      /Continue to go-live drill/,
+      /Review billing \+ settings/,
+      /intent=manage-plan/,
+      /Review settings \+ billing/,
+      /Return to admin readiness view/,
+      /readiness_returned=1/,
+      /recent_owner_display_name=Avery%20Ops/,
+      /recent_owner_email=avery\.ops%40govrail\.test/,
+    ],
+  },
+  {
+    path: "tests/browser/members-accept-invitation-verification-go-live-settings-verification-settings-admin-return.smoke.spec.ts",
+    requiredPatterns: [
+      /members -> accept-invitation -> verification -> go-live -> settings -> verification -> settings -> admin keeps readiness return continuity/,
+      /\/members\?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_demo&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Ops&recent_owner_display_name=Avery%20Ops&recent_owner_email=avery\.ops%40govrail\.test/,
+      /Workspace access/,
+      /Open accept-invitation/,
+      /Accept workspace invitation/,
+      /page\.goBack\(\)/,
+      /Capture verification evidence/,
+      /Continue to go-live drill/,
+      /Review billing \+ settings/,
+      /intent=manage-plan/,
+      /Review settings \+ billing/,
+      /Return to admin readiness view/,
+      /readiness_returned=1/,
+      /recent_owner_display_name=Avery%20Ops/,
+      /recent_owner_email=avery\.ops%40govrail\.test/,
+    ],
+  },
+] as const;
+
 test(
   "accept-invitation verification go-live-settings-verification-settings return batch stays wired into scripts and docs",
   async () => {
@@ -70,3 +114,13 @@ test(
     );
   },
 );
+
+for (const spec of smokeExpectations) {
+  test(`accept-invitation verification go-live-settings-verification-settings return smoke keeps ${spec.path} explicit without overstating coverage`, async () => {
+    const source = await readFile(path.resolve(webDir, spec.path), "utf8");
+
+    for (const pattern of spec.requiredPatterns) {
+      assert.match(source, pattern);
+    }
+  });
+}
