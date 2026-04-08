@@ -420,6 +420,12 @@ test("Settings panel keeps attention/readiness/onboarding cards linked through s
   assert.match(source, /const intentContextMap:[\s\S]*\{ label: "Continue to go-live drill", href: goLiveHref \}/);
   assert.match(source, /const billingFollowUpCard =[\s\S]*\{ label: "Return to Week 8 checklist", href: verificationHref \}/);
   assert.match(source, /const billingFollowUpCard =[\s\S]*\{ label: "Continue to go-live drill", href: goLiveHref \}/);
+  assert.match(source, /const ssoAdminReturnActionsHref = "#settings-sso-admin-return";/);
+  assert.match(source, /const dedicatedAdminReturnActionsHref = "#settings-dedicated-admin-return";/);
+  assert.match(source, /<Link href=\{ssoAdminReturnActionsHref\}>admin readiness return action below<\/Link>/);
+  assert.match(source, /<div id="settings-sso-admin-return" className="flex flex-wrap gap-2">/);
+  assert.match(source, /<Link href=\{dedicatedAdminReturnActionsHref\}>admin readiness return action below<\/Link>/);
+  assert.match(source, /<div id="settings-dedicated-admin-return" className="flex flex-wrap gap-2">/);
 });
 
 test("Settings panel keeps Stripe-focused billing action messaging and resolve-billing intent semantics", async () => {

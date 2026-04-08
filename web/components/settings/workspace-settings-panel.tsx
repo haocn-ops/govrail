@@ -1458,6 +1458,8 @@ export function WorkspaceSettingsPanel({
       }
     : null;
   const billingEvidenceAdminReturnActionsHref = "#settings-billing-evidence-admin-return";
+  const ssoAdminReturnActionsHref = "#settings-sso-admin-return";
+  const dedicatedAdminReturnActionsHref = "#settings-dedicated-admin-return";
 
   useEffect(() => {
     if (!initialCheckoutSessionId || checkout.session?.session_id === initialCheckoutSessionId) {
@@ -2577,7 +2579,11 @@ export function WorkspaceSettingsPanel({
           ? "SSO is already included in this plan, so keep the verification details and linked artifacts stitched into the Week 7/8 governance trail."
           : "SSO remains plan gated; keep this lane ready with the recorded run notes so the supported upgrade can reference them once it is unlocked."}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <p className="text-xs text-muted">
+        Use the <Link href={ssoAdminReturnActionsHref}>admin readiness return action below</Link> once the SSO evidence
+        is ready to hand back.
+      </p>
+      <div id="settings-sso-admin-return" className="flex flex-wrap gap-2">
         <Link
           href={verificationHref}
           className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
@@ -2975,7 +2981,11 @@ export function WorkspaceSettingsPanel({
           ? "The plan already gates the dedicated deployment, so keep delivery notes, compliance context, and artifacts together as the environment provisions."
           : "Dedicated environment is still plan gated; once the workspace upgrade unlocks it, keep this lane ready with the recorded readiness notes before returning to admin readiness."}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <p className="text-xs text-muted">
+        Use the <Link href={dedicatedAdminReturnActionsHref}>admin readiness return action below</Link> once the
+        dedicated-environment evidence is ready to hand back.
+      </p>
+      <div id="settings-dedicated-admin-return" className="flex flex-wrap gap-2">
         <Link
           href={verificationHref}
           className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
