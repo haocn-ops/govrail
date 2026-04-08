@@ -6,9 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { AuditExportReceiptCallout } from "@/components/audit-export-receipt-callout";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ControlPlaneDeliveryTrackSection } from "@/lib/control-plane-types";
 import { resolveAuditExportReceiptSummary } from "@/lib/audit-export-receipt";
 import { buildAdminReturnHref, buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
-import { fetchCurrentWorkspace } from "@/services/control-plane";
+import { fetchCurrentWorkspace, fetchWorkspaceDeliveryTrack } from "@/services/control-plane";
 
 type DrillState = "ready" | "attention" | "pending";
 
@@ -50,6 +51,34 @@ function progressLabel(steps: DrillStep[]): string {
   }
   const ready = steps.filter((step) => step.state === "ready").length;
   return `${ready}/${steps.length}`;
+}
+
+function drillStateFromDeliverySection(
+  section?: Pick<ControlPlaneDeliveryTrackSection, "status"> | null,
+): DrillState | null {
+  if (!section) {
+    return null;
+  }
+  if (section.status === "complete") {
+    return "ready";
+  }
+  if (section.status === "in_progress") {
+    return "attention";
+  }
+  return "pending";
+}
+
+function deliveryStatusLabel(section?: Pick<ControlPlaneDeliveryTrackSection, "status"> | null): string {
+  if (!section) {
+    return "Not tracked";
+  }
+  if (section.status === "in_progress") {
+    return "In progress";
+  }
+  if (section.status === "complete") {
+    return "Complete";
+  }
+  return "Pending";
 }
 
 function normalizeSource(value?: string | null): GoLiveSource | null {
@@ -113,12 +142,19 @@ export function MockGoLiveDrillPanel({
     queryKey: ["mock-go-live-drill", workspaceSlug],
     queryFn: fetchCurrentWorkspace,
   });
+  const deliveryTrackQueryKey = ["workspace-delivery-track", workspaceSlug];
+  const { data: deliveryTrack } = useQuery({
+    queryKey: deliveryTrackQueryKey,
+    queryFn: fetchWorkspaceDeliveryTrack,
+  });
 
   const onboarding = data?.onboarding;
   const billing = data?.billing_summary;
   const usage = data?.usage;
   const plan = data?.plan;
   const metrics = usage?.metrics ?? {};
+  const verificationDelivery = deliveryTrack?.verification ?? null;
+  const goLiveDelivery = deliveryTrack?.go_live ?? null;
   const latestDemoRun = onboarding?.latest_demo_run ?? null;
   const activeRunId = latestDemoRun?.run_id ?? runId ?? null;
 
@@ -246,7 +282,9 @@ export function MockGoLiveDrillPanel({
           title: "Week 8 verification checklist reviewed",
           description: "The structured onboarding, billing, run, and evidence checks have been walked through.",
           href: buildHref("/verification?surface=verification"),
-          state: onboarding?.checklist.demo_run_created ? "ready" : "attention",
+          state:
+            drillStateFromDeliverySection(verificationDelivery) ??
+            (onboarding?.checklist.demo_run_created ? "ready" : "attention"),
         },
         {
           id: "demo-run-success",
@@ -280,14 +318,26 @@ export function MockGoLiveDrillPanel({
           title: "Artifacts and logs reviewed",
           description: "Execution artifacts, logs, and resulting outputs are available for drill evidence.",
           href: buildHref("/artifacts"),
-          state: onboarding?.checklist.demo_run_created ? "attention" : "pending",
+          state:
+            (goLiveDelivery?.evidence_links.length ?? 0) > 0
+              ? "ready"
+              : onboarding?.checklist.demo_run_created
+                ? "attention"
+                : "pending",
         },
         {
           id: "admin-handoff",
           title: "Admin return path reviewed",
           description: "Platform snapshot and drill trace are ready to be handed back through the matching admin follow-up lane.",
           href: adminReturnHref,
-          state: "attention",
+          state:
+            goLiveDelivery?.status === "complete"
+              ? "ready"
+              : goLiveDelivery?.status === "in_progress" ||
+                  verificationDelivery?.status === "complete" ||
+                  (goLiveDelivery?.evidence_links.length ?? 0) > 0
+                ? "attention"
+                : "pending",
         },
       ],
     },
@@ -336,6 +386,24 @@ export function MockGoLiveDrillPanel({
             Treat this as an evidence relay: verification establishes readiness, artifacts preserve outputs, usage
             confirms pressure, and the admin view closes the governance loop.
           </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-background px-3 py-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Verification track</p>
+              <p className="mt-1 text-xs text-foreground">{deliveryStatusLabel(verificationDelivery)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-background px-3 py-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Go-live track</p>
+              <p className="mt-1 text-xs text-foreground">{deliveryStatusLabel(goLiveDelivery)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-background px-3 py-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Go-live evidence</p>
+              <p className="mt-1 text-xs text-foreground">
+                {(goLiveDelivery?.evidence_links.length ?? 0) > 0
+                  ? `${goLiveDelivery?.evidence_links.length ?? 0} linked`
+                  : "No linked evidence"}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

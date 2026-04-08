@@ -64,6 +64,7 @@ test("go-live page keeps explicit admin-return, drill, and delivery-panel handof
   assert.match(source, /const upgradeSettingsHref = buildConsoleRunAwareHandoffHref\("\/settings\?intent=upgrade", handoff, activeRunId\);/);
   assert.match(source, /const playgroundHref = buildConsoleRunAwareHandoffHref\("\/playground", handoff, activeRunId\);/);
   assert.match(source, /const artifactsHref = buildConsoleRunAwareHandoffHref\("\/artifacts", handoff, activeRunId\);/);
+  assert.match(source, /const deliveryTrackHref = "#go-live-delivery-track";/);
   assert.match(source, /href=\{verificationHref\}[\s\S]*Reopen verification evidence/s);
   assert.match(source, /href=\{usageHref\}[\s\S]*Confirm usage posture/s);
   assert.match(source, /href=\{billingSettingsHref\}[\s\S]*Review billing \+ settings/s);
@@ -73,6 +74,7 @@ test("go-live page keeps explicit admin-return, drill, and delivery-panel handof
   assert.match(source, /<CardTitle>Governance recap<\/CardTitle>/);
   assert.match(source, /href=\{upgradeSettingsHref\}[\s\S]*Settings upgrade intent/s);
   assert.match(source, /copy that note into Verification's evidence lane/);
+  assert.match(source, /<Link href=\{deliveryTrackHref\}>delivery tracker here<\/Link>/);
   assert.match(source, /<Link href=\{adminHref\}>\{adminLinkLabel\}<\/Link>/);
 
   assert.match(
@@ -81,6 +83,39 @@ test("go-live page keeps explicit admin-return, drill, and delivery-panel handof
   );
   assert.match(
     source,
-    /<WorkspaceDeliveryTrackPanel[\s\S]*sectionKey="go_live"[\s\S]*title="Go-live delivery notes"[\s\S]*source=\{handoff\.source\}[\s\S]*surface="go_live"[\s\S]*runId=\{activeRunId\}[\s\S]*week8Focus=\{handoff\.week8Focus\}[\s\S]*attentionWorkspace=\{handoff\.attentionWorkspace\}[\s\S]*attentionOrganization=\{handoff\.attentionOrganization\}[\s\S]*deliveryContext=\{handoff\.deliveryContext\}[\s\S]*recentTrackKey=\{recentTrackKey\}[\s\S]*recentUpdateKind=\{recentUpdateKind\}[\s\S]*evidenceCount=\{recentEvidenceCount\}[\s\S]*recentOwnerLabel=\{recentOwnerLabel\}[\s\S]*recentOwnerDisplayName=\{recentOwnerDisplayName\}[\s\S]*recentOwnerEmail=\{recentOwnerEmail\}/,
+    /<div id="go-live-delivery-track">[\s\S]*<WorkspaceDeliveryTrackPanel[\s\S]*sectionKey="go_live"[\s\S]*title="Go-live delivery notes"[\s\S]*source=\{handoff\.source\}[\s\S]*surface="go_live"[\s\S]*runId=\{activeRunId\}[\s\S]*week8Focus=\{handoff\.week8Focus\}[\s\S]*attentionWorkspace=\{handoff\.attentionWorkspace\}[\s\S]*attentionOrganization=\{handoff\.attentionOrganization\}[\s\S]*deliveryContext=\{handoff\.deliveryContext\}[\s\S]*recentTrackKey=\{recentTrackKey\}[\s\S]*recentUpdateKind=\{recentUpdateKind\}[\s\S]*evidenceCount=\{recentEvidenceCount\}[\s\S]*recentOwnerLabel=\{recentOwnerLabel\}[\s\S]*recentOwnerDisplayName=\{recentOwnerDisplayName\}[\s\S]*recentOwnerEmail=\{recentOwnerEmail\}/,
   );
+});
+
+test("go-live drill panel reflects delivery-track status in drill summary and handoff steps", async () => {
+  const panelPath = path.resolve(testDir, "../../components/go-live/mock-go-live-drill-panel.tsx");
+  const source = await readSource(panelPath);
+
+  assert.match(source, /import type \{ ControlPlaneDeliveryTrackSection \} from "@\/lib\/control-plane-types";/);
+  assert.match(source, /import \{ fetchCurrentWorkspace, fetchWorkspaceDeliveryTrack \} from "@\/services\/control-plane";/);
+  assert.match(source, /const deliveryTrackQueryKey = \["workspace-delivery-track", workspaceSlug\];/);
+  assert.match(source, /const \{ data: deliveryTrack \} = useQuery\(\{/);
+  assert.match(source, /queryKey: deliveryTrackQueryKey,/);
+  assert.match(source, /queryFn: fetchWorkspaceDeliveryTrack,/);
+  assert.match(source, /const verificationDelivery = deliveryTrack\?\.verification \?\? null;/);
+  assert.match(source, /const goLiveDelivery = deliveryTrack\?\.go_live \?\? null;/);
+  assert.match(source, /function drillStateFromDeliverySection\(/);
+  assert.match(source, /function deliveryStatusLabel\(/);
+  assert.match(
+    source,
+    /state:\s*drillStateFromDeliverySection\(verificationDelivery\) \?\?[\s\S]*onboarding\?\.checklist\.demo_run_created \? "ready" : "attention"/s,
+  );
+  assert.match(
+    source,
+    /state:\s*\(goLiveDelivery\?\.evidence_links\.length \?\? 0\) > 0\s*\?\s*"ready"\s*:\s*onboarding\?\.checklist\.demo_run_created/s,
+  );
+  assert.match(
+    source,
+    /state:\s*goLiveDelivery\?\.status === "complete"\s*\?\s*"ready"\s*:\s*goLiveDelivery\?\.status === "in_progress"/s,
+  );
+  assert.match(source, /Verification track/);
+  assert.match(source, /Go-live track/);
+  assert.match(source, /Go-live evidence/);
+  assert.match(source, /No linked evidence/);
+  assert.match(source, /linked/);
 });
