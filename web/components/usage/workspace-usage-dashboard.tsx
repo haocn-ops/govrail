@@ -568,6 +568,7 @@ export function WorkspaceUsageDashboard({
       : normalizedSource === "admin-readiness"
         ? "Return to admin readiness view"
         : "Return to admin overview";
+  const adminReturnActionsHref = "#usage-admin-return-actions";
   const selfServeSetupNotice = formatSelfServeSetupNotice(billingSummary?.self_serve_reason_code ?? null);
   const [planGapNotice, setPlanGapNotice] = useState<string | null>(null);
   const [planGapError, setPlanGapError] = useState<string | null>(null);
@@ -648,10 +649,10 @@ export function WorkspaceUsageDashboard({
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted">
             Once usage confirms the first-run signal, carry the same workspace context into verification, artifacts,
-            and then back into settings or admin review as needed. This relay stays manual so the evidence trail is
-            explicit and reusable during Week 8 readiness review.
+            and then back into settings or <Link href={adminReturnActionsHref}>admin review as needed</Link>. This
+            relay stays manual so the evidence trail is explicit and reusable during Week 8 readiness review.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div id="usage-admin-return-actions" className="flex flex-wrap gap-2">
             <Link
               href={verificationHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"

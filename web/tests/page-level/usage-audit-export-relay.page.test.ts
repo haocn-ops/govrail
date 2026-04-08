@@ -59,6 +59,7 @@ test("usage dashboard keeps audit export continuity lane explicit", async () => 
     source,
     /const adminReturnLabel =[\s\S]*normalizedSource === "admin-attention"[\s\S]*"Return to admin queue"[\s\S]*normalizedSource === "admin-readiness"[\s\S]*"Return to admin readiness view"[\s\S]*"Return to admin overview";/s,
   );
+  assert.match(source, /const adminReturnActionsHref = "#usage-admin-return-actions";/);
   assert.match(source, /const ownerSummary = metadata\.ownerDisplayName \?\? metadata\.ownerEmail \?\? metadata\.ownerLabel \?\? null;/);
   assert.match(source, /lines\.push\(`Latest handoff owner: \$\{ownerSummary\}`\);/);
   assert.match(source, /title: "Admin queue usage follow-up"/);
@@ -76,6 +77,8 @@ test("usage dashboard keeps audit export continuity lane explicit", async () => 
     /Carry the same receipt through usage, verification, go-live, and admin follow-up so every surface cites one shared evidence thread\./,
   );
   assert.match(source, /<CardTitle>Evidence relay<\/CardTitle>/);
+  assert.match(source, /<Link href=\{adminReturnActionsHref\}>admin review as needed<\/Link>/);
+  assert.match(source, /<div id="usage-admin-return-actions" className="flex flex-wrap gap-2">/);
   assert.match(source, /href=\{verificationHref\}[\s\S]*Capture verification evidence/s);
   assert.match(source, /href=\{artifactsHref\}[\s\S]*Review artifacts/s);
   assert.match(source, /href=\{settingsHref\}[\s\S]*Review settings posture/s);
