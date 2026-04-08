@@ -17,6 +17,66 @@ const specs = [
   "tests/browser/admin-readiness-chip-toggle.smoke.spec.ts",
 ] as const;
 
+const smokeExpectations = [
+  {
+    path: "tests/browser/admin-focus-chip-clear.smoke.spec.ts",
+    requiredPatterns: [
+      /admin focus chips clear one dimension at a time without dropping broader governance continuity/,
+      /\/admin\?queue_surface=verification&attention_organization=org_preview&attention_workspace=preview&queue_returned=1/,
+      /SaaS admin overview/,
+      /Governance focus/,
+      /Preview Organization/,
+      /Preview Workspace/,
+      /Returned from follow-up/,
+      /Clear all focus/,
+      /Clear/,
+      /queue_surface=verification/,
+      /attention_organization=org_preview/,
+      /queue_returned=1/,
+      /Follow-up return/,
+    ],
+  },
+  {
+    path: "tests/browser/admin-organization-focus-return.smoke.spec.ts",
+    requiredPatterns: [
+      /admin organization focus branch -> verification -> admin keeps governance focus continuity/,
+      /\/admin\?queue_surface=verification&attention_organization=org_preview/,
+      /Attention by organization/,
+      /Open verification checklist/,
+      /\/verification\?/,
+      /source=admin-attention/,
+      /surface=verification/,
+      /attention_organization=org_preview/,
+      /Week 8 launch checklist/,
+      /Admin follow-up context/,
+      /Admin queue focus restored/,
+      /Organization focus is preserved for this return path so the same governance cluster stays in view\./,
+      /Clear all focus/,
+      /\/admin$/,
+    ],
+  },
+  {
+    path: "tests/browser/admin-readiness-chip-toggle.smoke.spec.ts",
+    requiredPatterns: [
+      /admin readiness chip clear\/toggle keeps broader governance focus continuity/,
+      /\/admin\?week8_focus=baseline&attention_organization=org_preview&attention_workspace=preview/,
+      /SaaS admin overview/,
+      /Governance focus/,
+      /Week 8 readiness summary/,
+      /Baseline gaps/,
+      /Drill-down active: Baseline gaps/,
+      /Clear readiness focus/,
+      /attention_organization=org_preview/,
+      /attention_workspace=preview/,
+      /No drill-down active/,
+      /week8_focus=credentials/,
+      /Credentials ready/,
+      /Drill-down active: Credentials/,
+      /Credentials/,
+    ],
+  },
+] as const;
+
 test("admin governance focus controls batch stays wired into scripts and docs", async () => {
   const webPackageJson = JSON.parse(await readFile(webPackageJsonPath, "utf8")) as {
     scripts?: Record<string, string>;
@@ -56,3 +116,13 @@ test("admin governance focus controls batch stays wired into scripts and docs", 
   assert.match(executionPlan, /organization focus branch -> verification -> admin/);
   assert.match(executionPlan, /focus chips clear one dimension at a time/);
 });
+
+for (const spec of smokeExpectations) {
+  test(`admin governance focus controls smoke keeps ${spec.path} explicit`, async () => {
+    const source = await readFile(path.resolve(webDir, spec.path), "utf8");
+
+    for (const pattern of spec.requiredPatterns) {
+      assert.match(source, pattern);
+    }
+  });
+}
