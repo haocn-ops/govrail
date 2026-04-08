@@ -1460,6 +1460,7 @@ export function WorkspaceSettingsPanel({
   const billingEvidenceAdminReturnActionsHref = "#settings-billing-evidence-admin-return";
   const ssoAdminReturnActionsHref = "#settings-sso-admin-return";
   const dedicatedAdminReturnActionsHref = "#settings-dedicated-admin-return";
+  const auditExportAdminReturnActionsHref = "#settings-audit-export-admin-return";
 
   useEffect(() => {
     if (!initialCheckoutSessionId || checkout.session?.session_id === initialCheckoutSessionId) {
@@ -3553,7 +3554,11 @@ export function WorkspaceSettingsPanel({
             ? "Audit export is available for this plan, so catalog the filters and download details alongside verification, go-live, and admin readiness."
             : "Audit export is still plan gated; once the upgrade unlocks it, return here to note the intended download parameters before continuing the Week 7/8 trail."}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <p className="text-xs text-muted">
+          Use the <Link href={auditExportAdminReturnActionsHref}>admin readiness return action below</Link> once the
+          export evidence is ready to hand back.
+        </p>
+        <div id="settings-audit-export-admin-return" className="flex flex-wrap gap-2">
           <Link
             href={verificationHref}
             className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
