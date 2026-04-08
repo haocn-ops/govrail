@@ -173,10 +173,13 @@ test("Settings panel keeps enterprise evidence continuity navigation-only with e
   );
   assert.match(source, /const governanceClosureCard = \{/);
   assert.match(source, /title: "Billing and readiness closure lane"/);
+  assert.match(source, /const settingsAdminReturnActionsHref = "#settings-admin-return-actions";/);
   assert.match(
     source,
     /governanceClosureCard = \{[\s\S]*?\{ label: "Capture verification evidence", href: verificationHref \}[\s\S]*?footnote:\s*"Navigation only: these links preserve governance context across settings, verification, go-live, and admin readiness without automation, support tooling, or impersonation\."[\s\S]*?\};/s,
   );
+  assert.match(source, /<Link href=\{settingsAdminReturnActionsHref\}>admin readiness return actions below<\/Link>/);
+  assert.match(source, /<div id="settings-admin-return-actions" className="flex flex-wrap gap-2">/);
   assert.match(source, /const usagePressureCard = \{/);
   assert.match(
     source,

@@ -1399,6 +1399,7 @@ export function WorkspaceSettingsPanel({
     footnote:
       "Navigation only: these links preserve governance context across settings, verification, go-live, and admin readiness without automation, support tooling, or impersonation.",
   };
+  const settingsAdminReturnActionsHref = "#settings-admin-return-actions";
   const usagePressureCard = {
     title: "Plan limit and usage pressure",
     body:
@@ -2128,7 +2129,11 @@ export function WorkspaceSettingsPanel({
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted">{governanceClosureCard.body}</p>
-          <div className="flex flex-wrap gap-2">
+          <p className="text-xs text-muted">
+            Use the <Link href={settingsAdminReturnActionsHref}>admin readiness return actions below</Link> once the
+            settings evidence is ready to hand back.
+          </p>
+          <div id="settings-admin-return-actions" className="flex flex-wrap gap-2">
             {governanceClosureCard.actions.map((action) => (
               <Link
                 key={action.href}
