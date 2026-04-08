@@ -59,8 +59,11 @@ test("Admin overview keeps direct admin-attention go-live queue entry and return
 
   assert.match(source, /const targetSurface = workspace\.next_action_surface \?\? "verification";/);
   assert.match(source, /adminAttentionActionLabel\(targetSurface\)/);
+  assert.match(source, /const returnLinksHref = "#admin-return-links";/);
   assert.match(source, /<p className="font-medium">Admin queue focus restored<\/p>/);
   assert.match(source, /Continue the governance review from the filtered queue/);
+  assert.match(source, /<Link href=\{returnLinksHref\}>return links below<\/Link>/);
+  assert.match(source, /<div id="admin-return-links" className="flex flex-wrap gap-2">/);
   assert.match(source, /<Link[\s\S]*?>\s*Clear follow-up return\s*<\/Link>/s);
 });
 

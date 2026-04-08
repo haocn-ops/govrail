@@ -928,6 +928,7 @@ export function AdminOverviewPanel({
     attentionWorkspaceSlug,
     attentionOrganizationId,
   );
+  const returnLinksHref = "#admin-return-links";
 
   return (
     <div className="space-y-6">
@@ -970,9 +971,10 @@ export function AdminOverviewPanel({
           <p className="text-muted">
             The attention queue lists workspaces that still need manual review. Open a workspace from the list, perform
             the governance work on verification/go-live/etc., capture evidence or operator notes on that surface, then
-            close the loop by using the return links below to restore the admin overview.
+            close the loop by using the <Link href={returnLinksHref}>return links below</Link> to restore the admin
+            overview.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div id="admin-return-links" className="flex flex-wrap gap-2">
             {clearReadinessHref ? (
               <Link
                 href={clearReadinessHref}
