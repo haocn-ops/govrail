@@ -20,6 +20,27 @@ const executionPlanPath = path.resolve(webDir, "../docs/saas_v1_execution_plan_z
 const browserSmokeSpecPath = path.resolve(webDir, "tests/browser/launchpad-session-onboarding.smoke.spec.ts");
 const docsReadmePath = path.resolve(webDir, "../docs/README.md");
 
+const smokeExpectations = [
+  {
+    path: browserSmokeSpecPath,
+    requiredPatterns: [
+      /launchpad -> session -> onboarding -> usage -> \/settings\?intent=manage-plan -> verification -> go-live -> admin keeps minimal browser continuity/,
+      /source=admin-readiness/,
+      /Step 5: Confirm usage window/,
+      /Review plan limits in Settings/,
+      /Capture verification evidence/,
+      /Week 8 launch checklist/,
+      /Continue to go-live drill/,
+      /surface=go_live/,
+      /Mock go-live drill/,
+      /Session-aware drill lane/,
+      /Return to admin readiness view/,
+      /readiness_returned=1/,
+      /Returned from Week 8 readiness/,
+    ],
+  },
+] as const;
+
 test("browser-e2e spike probe keeps executable readiness report aligned with current repo boundary", async () => {
   const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
     scripts?: Record<string, string>;
@@ -157,22 +178,13 @@ test("browser-e2e spike probe keeps executable readiness report aligned with cur
   assert.match(docsReadme, /PLAYWRIGHT_REUSE_EXISTING_SERVER/);
   assert.match(docsReadme, /PLAYWRIGHT_SERVER_READY_PATH|PLAYWRIGHT_SKIP_SERVER_PROBE/);
   assert.match(docsReadme, /PLAYWRIGHT_SERVER_READY_RETRIES|PLAYWRIGHT_SERVER_READY_RETRY_DELAY_MS/);
-  assert.match(
-    browserSmokeSpec,
-    /launchpad -> session -> onboarding -> usage -> \/settings\?intent=manage-plan -> verification -> go-live -> admin keeps minimal browser continuity/,
-  );
-  assert.match(browserSmokeSpec, /source=admin-readiness/);
-  assert.match(browserSmokeSpec, /Step 5: Confirm usage window/);
-  assert.match(browserSmokeSpec, /Review plan limits in Settings/);
-  assert.match(browserSmokeSpec, /Capture verification evidence/);
-  assert.match(browserSmokeSpec, /Week 8 launch checklist/);
-  assert.match(browserSmokeSpec, /Continue to go-live drill/);
-  assert.match(browserSmokeSpec, /surface=go_live/);
-  assert.match(browserSmokeSpec, /Mock go-live drill/);
-  assert.match(browserSmokeSpec, /Session-aware drill lane/);
-  assert.match(browserSmokeSpec, /Return to admin readiness view/);
-  assert.match(browserSmokeSpec, /readiness_returned=1/);
-  assert.match(browserSmokeSpec, /Returned from Week 8 readiness/);
+  for (const spec of smokeExpectations) {
+    assert.equal(spec.path, browserSmokeSpecPath);
+
+    for (const pattern of spec.requiredPatterns) {
+      assert.match(browserSmokeSpec, pattern);
+    }
+  }
 
   const { stdout } = await execFileAsync("node", [probeScriptPath, "--json"], {
     cwd: webDir,
