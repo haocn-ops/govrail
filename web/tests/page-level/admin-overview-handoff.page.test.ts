@@ -70,8 +70,12 @@ test("Admin overview keeps direct admin-attention go-live queue entry and return
 test("Admin overview surfaces contract source and 404/503 fallback guidance in the platform snapshot", async () => {
   const source = await readSource(adminOverviewPath);
 
-  assert.match(source, /const adminContractMeta = data\?\.contract_meta \?\? null;/);
-  assert.match(source, /const adminContractSource = adminContractMeta\?\.source \?\? \(data \? "live" : null\);/);
+  assert.match(source, /const normalizedData = useMemo\(\(\) => \{/);
+  assert.match(source, /if \(!preferPreviewScaffolding\) \{\s*return data;\s*\}/s);
+  assert.match(source, /const previewData = buildAdminOverviewPreviewData\(data\?\.updated_at\);/);
+  assert.match(source, /if \(!data\) \{\s*return \{\s*\.\.\.previewData,/s);
+  assert.match(source, /const adminContractMeta = normalizedData\?\.contract_meta \?\? null;/);
+  assert.match(source, /const adminContractSource = adminContractMeta\?\.source \?\? \(normalizedData \? "live" : null\);/);
   assert.match(
     source,
     /function adminContractLabel\(\s*source\?: ControlPlaneContractMeta\["source"\] \| null,\s*issue\?: AdminContractIssue \| null,\s*\): string \{/s,

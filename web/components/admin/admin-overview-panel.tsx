@@ -18,6 +18,7 @@ import {
   buildWorkspaceNavigationHref,
   performWorkspaceSwitch,
 } from "@/lib/client-workspace-navigation";
+import { buildAdminOverviewPreviewData } from "@/lib/admin-overview-preview";
 import {
   adminAttentionActionLabel,
   buildAdminAttentionNavigationTarget,
@@ -411,6 +412,7 @@ export function AdminOverviewPanel({
   attentionOrganizationId,
   queueReturned,
   readinessReturned,
+  preferPreviewScaffolding = false,
 }: {
   initialSurfaceFilter?: SurfaceFilter;
   initialReadinessFocus?: ControlPlaneAdminWeek8ReadinessFocus;
@@ -418,33 +420,84 @@ export function AdminOverviewPanel({
   attentionOrganizationId?: string | null;
   queueReturned?: boolean;
   readinessReturned?: boolean;
+  preferPreviewScaffolding?: boolean;
 }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-overview"],
     queryFn: fetchAdminOverview,
   });
 
-  const summary = data?.summary;
-  const adminContractMeta = data?.contract_meta ?? null;
-  const adminContractSource = adminContractMeta?.source ?? (data ? "live" : null);
-  const planDistribution = data?.plan_distribution ?? [];
-  const recentWorkspaces = data?.recent_workspaces ?? [];
-  const featureRollout = data?.feature_rollout;
-  const deliveryGovernance = data?.delivery_governance;
-  const week8Readiness = data?.week8_readiness;
-  const week8ReadinessWorkspaces = data?.week8_readiness_workspaces ?? [];
-  const recentDeliveryWorkspaces = data?.recent_delivery_workspaces ?? [];
+  const normalizedData = useMemo(() => {
+    if (!preferPreviewScaffolding) {
+      return data;
+    }
+
+    const previewData = buildAdminOverviewPreviewData(data?.updated_at);
+    if (!data) {
+      return {
+        ...previewData,
+        contract_meta: {
+          source: "fallback_error" as const,
+          normalized_at: previewData.updated_at,
+          issue: {
+            code: "admin_overview_preview_fallback",
+            message: "Admin overview is showing preview fallback data until the live control-plane summary is available.",
+            status: null,
+            retryable: true,
+            details: {
+              path: "/api/v1/saas/admin/overview",
+            },
+          },
+        },
+      };
+    }
+
+    return {
+      ...data,
+      recent_workspaces: data.recent_workspaces.length > 0 ? data.recent_workspaces : previewData.recent_workspaces,
+      delivery_governance: data.delivery_governance ?? previewData.delivery_governance,
+      recent_delivery_workspaces:
+        data.recent_delivery_workspaces && data.recent_delivery_workspaces.length > 0
+          ? data.recent_delivery_workspaces
+          : previewData.recent_delivery_workspaces,
+      attention_workspaces:
+        data.attention_workspaces && data.attention_workspaces.length > 0
+          ? data.attention_workspaces
+          : previewData.attention_workspaces,
+      attention_summary: data.attention_summary ?? previewData.attention_summary,
+      attention_organizations:
+        data.attention_organizations && data.attention_organizations.length > 0
+          ? data.attention_organizations
+          : previewData.attention_organizations,
+      week8_readiness: data.week8_readiness ?? previewData.week8_readiness,
+      week8_readiness_workspaces:
+        data.week8_readiness_workspaces && data.week8_readiness_workspaces.length > 0
+          ? data.week8_readiness_workspaces
+          : previewData.week8_readiness_workspaces,
+    };
+  }, [data, preferPreviewScaffolding]);
+
+  const summary = normalizedData?.summary;
+  const adminContractMeta = normalizedData?.contract_meta ?? null;
+  const adminContractSource = adminContractMeta?.source ?? (normalizedData ? "live" : null);
+  const planDistribution = normalizedData?.plan_distribution ?? [];
+  const recentWorkspaces = normalizedData?.recent_workspaces ?? [];
+  const featureRollout = normalizedData?.feature_rollout;
+  const deliveryGovernance = normalizedData?.delivery_governance;
+  const week8Readiness = normalizedData?.week8_readiness;
+  const week8ReadinessWorkspaces = normalizedData?.week8_readiness_workspaces ?? [];
+  const recentDeliveryWorkspaces = normalizedData?.recent_delivery_workspaces ?? [];
   const recentDeliveryWorkspacesWithMetadata: RecentDeliveryDetail[] = recentDeliveryWorkspaces.map(
     (workspace) => ({
       ...workspace,
       organization_display_name: workspace.organization_display_name ?? workspace.slug,
     }),
   );
-  const attentionSummary = data?.attention_summary;
-  const attentionOrganizations = data?.attention_organizations ?? [];
+  const attentionSummary = normalizedData?.attention_summary;
+  const attentionOrganizations = normalizedData?.attention_organizations ?? [];
   const totalWorkspaces = summary?.workspaces_total ?? 0;
   const showRecentDeliveryWorkspaces = recentDeliveryWorkspacesWithMetadata.length > 0;
-  const attentionWorkspaces = data?.attention_workspaces ?? [];
+  const attentionWorkspaces = normalizedData?.attention_workspaces ?? [];
   const readinessFocus = initialReadinessFocus ?? null;
   const organizationMatchesFocus = (workspace: {
     organization_id: string;

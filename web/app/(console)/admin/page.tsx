@@ -46,6 +46,9 @@ export default async function AdminPage({
         attentionOrganizationId={handoff.attentionOrganization}
         queueReturned={queueReturned}
         readinessReturned={readinessReturned}
+        preferPreviewScaffolding={
+          workspaceContext.source_detail.is_fallback || workspaceContext.source_detail.local_only
+        }
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import { previewPolicies, previewToolProviders } from "@/lib/control-plane-preview";
+import { buildAdminOverviewPreviewData } from "@/lib/admin-overview-preview";
 import type {
   ControlPlaneAdminOverview,
   ControlPlaneApiKey,
@@ -637,6 +638,17 @@ export async function fetchAdminOverview(): Promise<ControlPlaneAdminOverview> {
       issue: null,
     },
   });
+  const buildAdminOverviewFallback = (
+    source: ControlPlaneContractMeta["source"],
+    error: unknown,
+  ): ControlPlaneAdminOverview => ({
+    ...buildAdminOverviewPreviewData(),
+    contract_meta: buildEnterpriseFallbackMeta(
+      source,
+      error,
+      "Admin overview is showing preview fallback data until the live control-plane summary is available.",
+    ),
+  });
 
   try {
     return normalizeAdminOverviewContract(
@@ -654,67 +666,8 @@ export async function fetchAdminOverview(): Promise<ControlPlaneAdminOverview> {
           ? "fallback_control_plane_unavailable"
           : "fallback_error";
       return {
-        summary: {
-          organizations_total: 1,
-          workspaces_total: 1,
-          active_workspaces_total: 1,
-          users_total: 1,
-          paid_subscriptions_total: 0,
-          past_due_subscriptions_total: 0,
-        },
-        plan_distribution: [
-          {
-            plan_code: "free",
-            workspace_count: 1,
-          },
-        ],
-        feature_rollout: {
-          sso_enabled_workspaces: 0,
-          audit_export_enabled_workspaces: 0,
-          dedicated_environment_enabled_workspaces: 0,
-        },
-        recent_workspaces: [
-          {
-            workspace_id: "ws_preview",
-            slug: "preview",
-            display_name: "Preview Workspace",
-            organization_display_name: "Preview Organization",
-            plan_code: "free",
-            status: "active",
-            created_at: now,
-          },
-        ],
-        week8_readiness: {
-          total: 1,
-          baseline_ready_total: 0,
-          credentials_ready_total: 0,
-          demo_run_succeeded_total: 0,
-          billing_warning_total: 0,
-          mock_go_live_ready_total: 0,
-        },
-        week8_readiness_workspaces: [
-          {
-            workspace_id: "ws_preview",
-            slug: "preview",
-            display_name: "Preview Workspace",
-            organization_id: "org_preview",
-            organization_display_name: "Preview Organization",
-            latest_demo_run_id: null,
-            baseline_ready: false,
-            credentials_ready: false,
-            demo_run_succeeded: false,
-            billing_warning: false,
-            mock_go_live_ready: false,
-            next_action_surface: "onboarding",
-            updated_at: now,
-          },
-        ],
+        ...buildAdminOverviewFallback(source, error),
         updated_at: now,
-        contract_meta: buildEnterpriseFallbackMeta(
-          source,
-          error,
-          "Admin overview is showing preview fallback data until the live control-plane summary is available.",
-        ),
       };
     }
 

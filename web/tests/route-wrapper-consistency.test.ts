@@ -898,13 +898,12 @@ test("admin overview helper keeps includeTenant=false fallback summary contract"
   );
 
   assert.match(source, /import \{ proxyPathFallbackGet \} from "\.\.\/fallback-route-helpers";/);
+  assert.match(source, /import \{ buildAdminOverviewPreviewData \} from "@\/lib\/admin-overview-preview";/);
   assert.match(source, /export function buildAdminOverviewPath\(\): string/);
   assert.match(source, /return "\/api\/v1\/saas\/admin\/overview";/);
   assert.match(source, /export function buildAdminOverviewFallback\(\)/);
-  assert.match(source, /paid_subscriptions_total:\s*0/);
-  assert.match(source, /past_due_subscriptions_total:\s*0/);
-  assert.match(source, /next_action_surface:\s*"verification"/);
-  assert.match(source, /next_action_surface:\s*"onboarding"/);
+  assert.match(source, /const previewData = buildAdminOverviewPreviewData\(now\);/);
+  assert.match(source, /\.\.\.previewData,/);
   assert.match(source, /code: "admin_overview_preview_fallback"/);
   assert.match(source, /path: buildAdminOverviewPath\(\)/);
   assert.match(source, /export async function proxyAdminOverviewGet\(args\?: \{/);
