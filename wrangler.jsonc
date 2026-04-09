@@ -93,6 +93,8 @@
   "env": {
     "staging": {
       "name": "agent-control-plane-staging",
+      "workers_dev": true,
+      "routes": [],
       "durable_objects": {
         "bindings": [
           {
