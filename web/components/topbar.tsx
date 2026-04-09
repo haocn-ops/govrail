@@ -51,15 +51,15 @@ export async function Topbar() {
   const nextLane = nextLaneFromRole(workspaceContext.workspace.subject_roles);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-background px-6 py-4">
+    <header className="pointer-events-none sticky top-0 z-20 border-b border-border bg-background px-6 py-4">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-            <div className="relative w-full lg:max-w-sm">
+            <div className="pointer-events-auto relative w-full lg:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <Input className="pl-10" placeholder="Search workspace or run" />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="pointer-events-auto min-w-0 flex-1">
               <WorkspaceSwitcher
                 currentWorkspaceSlug={workspaceContext.workspace.slug}
                 workspaces={workspaceContext.available_workspaces}
@@ -97,7 +97,7 @@ export async function Topbar() {
                 </div>
                 <a
                   href="/session"
-                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-card"
+                  className="pointer-events-auto inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-card"
                 >
                   review context details on /session
                 </a>
@@ -110,7 +110,7 @@ export async function Topbar() {
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 xl:max-w-md xl:justify-end">
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2 xl:max-w-md xl:justify-end">
           <a
             href="/session"
             className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground transition hover:bg-background"
