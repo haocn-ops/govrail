@@ -16,6 +16,13 @@
 
 html {
   color-scheme: dark;
+  scroll-padding-top: 11rem;
+}
+
+@media (min-width: 1024px) {
+  html {
+    scroll-padding-top: 13rem;
+  }
 }
 
 body {
