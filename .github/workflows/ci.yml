@@ -35,6 +35,26 @@ jobs:
       - name: Validate observability examples
         run: npm run validate:observability
 
+  validate-provisioning-contract:
+    name: validate:provisioning-contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate provisioning request example
+        run: npm run provisioning:validate -- --request docs/tenant_provisioning_request.example.json
+
   verify-local:
     name: verify:local
     runs-on: ubuntu-latest
@@ -72,3 +92,28 @@ jobs:
 
       - name: Run build verification
         run: npm run verify:build
+
+  web-test:
+    name: web:test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install web dependencies
+        run: npm ci --prefix web
+
+      - name: Run web test baseline
+        run: npm run web:test

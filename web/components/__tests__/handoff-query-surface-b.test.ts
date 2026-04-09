@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertOrderedSnippets } from "./source-contract-helpers";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const apiKeysPanelPath = path.resolve(testDir, "../api-keys/api-keys-panel.tsx");
@@ -114,7 +115,25 @@ test("Usage dashboard keeps explicit verification surface links coupled to share
   assert.match(source, /import \{ buildAdminReturnHref, buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/);
   assert.match(
     source,
-    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext: normalizeDeliveryContext\(deliveryContext\),\s*recentTrackKey: normalizeRecentTrackKey\(recentTrackKey\),\s*recentUpdateKind: normalizeRecentUpdateKind\(recentUpdateKind\),\s*evidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\};/s,
+    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{/,
+  );
+  assertOrderedSnippets(
+    source,
+    [
+      'const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {',
+      "source: normalizedSource,",
+      "week8Focus,",
+      "attentionWorkspace,",
+      "attentionOrganization,",
+      "deliveryContext: normalizeDeliveryContext(deliveryContext),",
+      "recentTrackKey: normalizedRecentTrackKey,",
+      "recentUpdateKind: normalizedRecentUpdateKind,",
+      "evidenceCount: normalizedEvidenceCount,",
+      "recentOwnerLabel,",
+      "recentOwnerDisplayName,",
+      "recentOwnerEmail,",
+    ],
+    "usage dashboard handoff href args",
   );
   assert.match(source, /\{ label: "Capture verification evidence", path: "\/verification\?surface=verification" \}/);
   assert.match(source, /const latestDemoRun = onboardingState\?\.latest_demo_run \?\? null;/);

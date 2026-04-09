@@ -202,6 +202,14 @@ jobs:
 
           cat staging-deploy/staging-deploy-summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Validate staging artifact contract
+        if: always()
+        run: |
+          set -euo pipefail
+          node scripts/validate_release_artifact_manifest.mjs \
+            --manifest staging-deploy/staging-deploy-manifest.json \
+            --artifact-dir staging-deploy
+
       - name: Upload staging deploy artifact
         if: always()
         uses: actions/upload-artifact@v4

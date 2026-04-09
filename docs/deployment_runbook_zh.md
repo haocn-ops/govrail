@@ -30,7 +30,7 @@
 
 倉庫另外提供三條 GitHub Actions 輔助流程：
 
-- `CI`：對 `push` / `pull_request` 跑 `verify:local` 與 `verify:build`
+- `CI`：對 `push` / `pull_request` 跑 `verify:local`、`verify:build`、`web:test`、`validate:observability`，以及 `provisioning:validate -- --request docs/tenant_provisioning_request.example.json`
 - `Manual Release Gate`：不部署，只做人工 gate 與遠端驗收 artifact 收集
 - `Deploy Staging` / `Production Readonly Verify`：把 staging deploy 與 production readonly 驗收包裝成可重跑 workflow
 
@@ -58,6 +58,31 @@ npm run github:actions:inventory -- --format markdown
 - `CLOUDFLARE_API_TOKEN`
 
 若本機只有 Wrangler OAuth 登入，仍不足以餵給 GitHub Actions deploy workflow；你還是需要一個真正的 Cloudflare API token。
+
+## 2.1 建議的單一路徑
+
+若沒有緊急 fallback 需求，建議固定走這條交付路徑：
+
+1. `CI`
+2. `Manual Release Gate`
+3. `Deploy Staging`
+4. `Deploy Production`
+5. `Production Readonly Verify`
+6. `Synthetic Runtime Checks`
+
+對應 artifact 目錄也固定如下，避免交接時每次重講：
+
+- `release-gate/`
+- `staging-deploy/`
+- `production-deploy/`
+- `production-readonly-verify/`
+- `synthetic-runtime-checks/`
+
+其中 `CI` 的用途固定為「代碼與交付契約基線」，不承擔 deploy 或人工 gate 判斷。也就是說：
+
+- `CI` 通過代表倉庫基線、自動化測試與 frozen provisioning contract 沒有明顯退化
+- 是否可部署，仍以 `Manual Release Gate -> Deploy Staging -> Deploy Production -> Production Readonly Verify -> Synthetic Runtime Checks` 這條路徑為準
+- `Manual Release Gate`、`Deploy Staging`、`Deploy Production`、`Production Readonly Verify` 這四條主路徑現在也都會在 workflow 內用 `release:artifact:validate` 檢查 manifest 與 artifact 目錄命名是否仍符合固定契約
 
 ## 3. 部署前提
 
@@ -497,10 +522,14 @@ npm run github:actions:bootstrap -- --dry-run --include-synthetic
 artifact 內會包含：
 
 - `synthetic-summary.json`
+- `synthetic-health-summary.md`
+- `synthetic-runtime-health-manifest.json`
 - `production-readonly.log`
 - `production-readonly-summary.json`
+- `production-readonly-summary.md`
+- `synthetic-runtime-production-manifest.json`
 
-`synthetic-summary.json` 會在 workflow 內先做一次結構自檢再落盤；若 summary schema 漂移或關鍵欄位缺失，workflow 會直接失敗，避免排程看起來成功但 artifact 已失真。
+`synthetic-summary.json` 會在 workflow 內先做一次結構自檢再落盤；之後 `synthetic-runtime-health-manifest.json` 與 `synthetic-runtime-production-manifest.json` 也會再各自跑一次 artifact contract 驗證。若 summary schema、manifest 欄位或固定檔名漂移，workflow 會直接失敗，避免排程看起來成功但 artifact 已失真。
 
 適合用在：
 

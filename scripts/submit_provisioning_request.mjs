@@ -2,6 +2,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { validateProvisioningRequestContract } from "./lib/provisioning_request_contract.mjs";
 
 function printUsage() {
   console.log([
@@ -206,6 +207,10 @@ async function main() {
   if (requestJson === null || typeof requestJson !== "object" || Array.isArray(requestJson)) {
     throw new Error(`Request file must contain a JSON object: ${requestPath}`);
   }
+  const contractValidation = validateProvisioningRequestContract(requestJson);
+  if (!contractValidation.ok) {
+    throw new Error(`Provisioning request contract validation failed:\n- ${contractValidation.errors.join("\n- ")}`);
+  }
 
   const requestMetadata = pickRequestMetadata(requestJson);
 
@@ -326,6 +331,10 @@ async function main() {
       path: requestPath,
       sha256: sha256(rawRequest),
       metadata: requestMetadata,
+      contract_validation: {
+        ok: contractValidation.ok,
+        warnings: contractValidation.warnings,
+      },
       body: requestJson,
     },
     endpoint: {

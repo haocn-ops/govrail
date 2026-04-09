@@ -164,6 +164,24 @@ npm run access:ingress:plan -- \
   --output-dir /tmp/access-ingress-plan
 ```
 
+若要把這份 plan 當成真正可交接的變更契約，建議改用 strict 模式：
+
+```bash
+npm run access:ingress:plan:strict -- \
+  --plan-file docs/access_ingress_plan.example.json \
+  --output-dir /tmp/access-ingress-plan
+```
+
+`--strict` 會在以下關鍵欄位缺失時直接失敗，而不是只產出一份看似完整、實際上交接資訊不足的 bundle：
+
+- `handoff_owner`
+- `change_reference`
+- `readonly_run_id_source`
+- `service_token_audience`
+- `access_group_names`
+
+若 write / readonly 驗證輸出路徑相同，或 production plan 仍使用 `permissive`，strict 也會拒絕生成。
+
 如果不想先準備模板，也可以直接用命令列參數：
 
 ```bash
@@ -216,6 +234,11 @@ bash /tmp/access-ingress-plan/access-ingress-fold-evidence.sh readonly /tmp/prod
 2. 再跑 `access-ingress-verify.sh`
 3. 跑 `access-ingress-self-check.sh` 先確認 trusted_edge 行為沒有被入口層或 header 注入方式破壞
 4. 最後用 `access-ingress-fold-evidence.sh` 把結果折疊回 `access-ingress-evidence-template.json`
+
+建議團隊約定：
+
+- 本地探索或草稿可先用 `npm run access:ingress:plan`
+- 真正要進入 handoff、release gate 或 production 變更資料時，固定使用 `npm run access:ingress:plan:strict`
 
 ## 9. 常見故障
 

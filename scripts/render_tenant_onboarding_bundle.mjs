@@ -5,6 +5,7 @@ import {
   buildDefaultToolProviders,
   renderDefaultSeedSql,
 } from "./lib/seed_bundle_data.mjs";
+import { assertProvisioningRequestContract } from "./lib/provisioning_request_contract.mjs";
 
 function readArg(flag) {
   const index = process.argv.indexOf(flag);
@@ -843,6 +844,7 @@ async function main() {
   });
   const handoffMarkdown = renderHandoffMarkdown(summary);
   const provisioningRequest = buildProvisioningRequest(summary);
+  assertProvisioningRequestContract(provisioningRequest);
   const rollbackRequest = buildRollbackRequest(summary, provisioningRequest);
   const initialHandoffState = buildInitialHandoffState(summary, provisioningRequest);
   const provisionScript = renderProvisionScript(summary);

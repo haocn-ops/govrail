@@ -228,3 +228,48 @@ node scripts/validate_observability_examples.mjs
 - incident checklist 至少包含 evidence contract 需要的關鍵欄位名稱
 
 如果你要在 CI 或 release gate 裡跑這個檢查，建議把它當作「文檔契約 lint」，避免接入時才發現 refs 漂了。
+
+### 11.3 交接 bundle（倉庫內可執行）
+
+若要把 manifest、dashboard refs、runtime inputs 與 evidence templates 一次整理給下一位操作者，可直接生成 observability bundle：
+
+```bash
+npm run observability:bundle -- \
+  --output-dir .observability-bundles/production \
+  --environment production \
+  --base-url https://api.govrail.net \
+  --tenant-id tenant_verify_prod_20260401 \
+  --run-id run_example
+```
+
+bundle 會包含：
+
+- `runtime-inputs.env.example`
+- `observability-manifest.json`
+- `synthetic-checks.json`
+- `alert-rules.json`
+- `alert-routes.json`
+- `dashboard-panel-refs.json`
+- `run-production-readonly-verify.sh`
+- `evidence/*.template.json`
+
+這一步仍然不會直接改你的監控平台，但它把接入所需的最小契約和交接材料收斂到單一目錄，減少不同系統之間的人肉抄寫。
+
+### 11.4 Synthetic Runtime artifact contract
+
+倉庫內的 [.github/workflows/synthetic-runtime-checks.yml](/Users/zh/Documents/codeX/govrail/.github/workflows/synthetic-runtime-checks.yml) 現在不只會產出 `synthetic-summary.json` 與 `production-readonly-summary.json`，也會固定產出：
+
+- `synthetic-health-summary.md`
+- `synthetic-runtime-health-manifest.json`
+- `production-readonly-summary.md`
+- `synthetic-runtime-production-manifest.json`
+
+若你在本地重放或複核 workflow artifact，可直接跑：
+
+```bash
+npm run synthetic:artifact:validate -- \
+  --manifest <manifest.json> \
+  --artifact-dir <synthetic-runtime-checks-dir>
+```
+
+這能避免 synthetic summary、readonly summary 或固定檔名在後續改動中悄悄漂移，讓 oncall 以為排程有證據、實際 artifact 卻已不再可交接。

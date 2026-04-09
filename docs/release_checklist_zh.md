@@ -8,6 +8,8 @@
 
 這份清單不是要取代完整 runbook，而是把發版時最容易漏掉的動作壓成一份可勾選的 checklist。
 
+目前建議固定以 GitHub Actions workflow artifact 作為交付證據來源，不再依賴口頭描述或臨時路徑。
+
 適合用在：
 
 - staging 發版
@@ -39,8 +41,9 @@
 ### 2.3 CI 先行確認
 
 - [ ] 對應 PR / push 的 GitHub Actions 已通過
-- [ ] CI 只負責 `verify:local` 與 `verify:build`
+- [ ] CI 已通過 `verify:local`、`verify:build`、`web:test`、`validate:observability` 與 `provisioning:validate -- --request docs/tenant_provisioning_request.example.json`
 - [ ] 如需人工 release gate，已手動觸發 `Manual Release Gate` workflow
+- [ ] 已確認推薦路徑為 `Manual Release Gate -> Deploy Staging -> Deploy Production -> Production Readonly Verify`
 - [ ] 如需 GitHub Actions 直接部署 staging，已確認 `Deploy Staging` workflow 的 `base_url` / `tenant_id` 正確
 - [ ] 如需 GitHub Actions 跑 production 唯讀驗收，已確認 `Production Readonly Verify` workflow 的 `base_url` / `tenant_id` / `run_id` 正確
 - [ ] 如需 GitHub Actions 直接部署 production，已確認 `Deploy Production` workflow 的 `change_ref` / `base_url` / `tenant_id` / `run_id` / `apply_migrations`
@@ -51,13 +54,15 @@
 - [ ] 如需交接，已保留遠端驗收輸出的 JSON summary，或明確記錄 `VERIFY_OUTPUT_PATH`
 - [ ] 已確認 summary 內含 `started_at`、`completed_at`、`duration_ms`、`check_count` 與 `checks`
 - [ ] 已確認 workflow artifact 內有 `release-gate-manifest.json`，可直接讀取 inputs / outcomes / artifact 路徑
+- [ ] 如需在本地複核 workflow artifact，已執行 `npm run release:artifact:validate -- --manifest <manifest.json> --artifact-dir <artifact-dir>`
 - [ ] 若走 `Deploy Staging`，已確認 repository secrets 中存在 `CLOUDFLARE_API_TOKEN`
 - [ ] 若走 `Deploy Staging` / `Deploy Production`，已確認 `CLOUDFLARE_ACCOUNT_ID` 由 repository variable 或 secret 提供
 - [ ] 如有使用 `Deploy Staging`，已確認 artifact 內有 `staging-deploy-manifest.json`
 - [ ] 如有使用 `Production Readonly Verify`，已確認 artifact 內有 `production-readonly-manifest.json`
 - [ ] 如有使用 `Deploy Production`，已確認 GitHub `production` environment protection 已啟用
 - [ ] 如有使用 `Deploy Production`，已確認 artifact 內有 `production-deploy-manifest.json`
-- [ ] 如有使用 `Synthetic Runtime Checks`，已確認 artifact 內有 `health-summary.json` 或 `production-readonly-summary.json`
+- [ ] 如有使用 `Synthetic Runtime Checks`，已確認 artifact 內有 `synthetic-summary.json` / `synthetic-runtime-health-manifest.json`，或 `production-readonly-summary.json` / `synthetic-runtime-production-manifest.json`
+- [ ] 已確認 artifact 目錄命名固定為 `release-gate/`、`staging-deploy/`、`production-deploy/`、`production-readonly-verify/`、`synthetic-runtime-checks/`
 - [ ] 已確認 production deploy 雖可由 workflow 執行，但仍需受控人審與變更窗口
 
 ### 2.4 資源與資料
@@ -76,6 +81,7 @@
 - [ ] 已確認 staging / production 的 `NORTHBOUND_AUTH_MODE=trusted_edge`
 - [ ] 已確認 production 不會只依賴 `X-Subject-Id` / `X-Subject-Roles`
 - [ ] 已確認 staging 與 production 的 Access 群組或 token 範圍隔離
+- [ ] 若本次涉及 trusted-edge / Access 入口治理，已用 `npm run access:ingress:plan:strict -- --plan-file <plan.json> --output-dir <dir>` 生成可交接 bundle
 
 ## 3. 發版執行
 

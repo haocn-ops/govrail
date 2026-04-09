@@ -119,6 +119,14 @@ npm run tenant:onboarding:bundle -- --tenant-id tenant_acme --deploy-env staging
 - `handoff-state.json` 是把 request / verify / 交接狀態折疊成單一證據檔的狀態入口
 - `rollback-request.json` 是保守型回滾時停用 provider / policy 的固定輸入
 
+`provisioning-request.json` 現在視為一份凍結的外部 handoff contract。若你修改了 bundle 生成邏輯，建議先跑：
+
+```bash
+npm run provisioning:validate -- --request docs/tenant_provisioning_request.example.json
+```
+
+若要驗證實際 bundle 產物，也可直接對生成的 request 執行相同命令。
+
 若只需要 SQL，仍可單獨使用：
 
 ```bash
@@ -404,6 +412,25 @@ npm run tenant:handoff:update -- \
 ```
 
 預設會在 bundle 目錄下生成 `handoff-state.json`，讓接手方直接看到目前狀態、證據檔案與下一步建議。
+
+若要把這份 `handoff-state.json` 當成正式交接輸出，而不是只看起來像是整理過的 JSON，建議最後再跑一次：
+
+```bash
+npm run tenant:handoff:validate -- \
+  --bundle .onboarding-bundles/tenant_acme/bundle.json \
+  --state .onboarding-bundles/tenant_acme/handoff-state.json \
+  --request .onboarding-bundles/tenant_acme/provisioning-request.json \
+  --submission .onboarding-bundles/tenant_acme/provisioning-submit-evidence.json \
+  --apply-evidence .onboarding-bundles/tenant_acme/apply-request-evidence.json \
+  --verify .onboarding-bundles/tenant_acme/verify-write-summary.json
+```
+
+它會檢查：
+
+- `bundle.json` 的摘要欄位是否和 `handoff-state.json` 一致
+- `provisioning-request.json` 是否仍符合 frozen contract
+- `provisioning-submit-evidence.json`、apply evidence、verify summary 的 path / sha256 / 摘要欄位是否被正確折疊進 handoff-state
+- `handoff_state.updated_from`、`evidence.*`、`next_actions` 是否和輸入證據鏈對得上
 
 若要把 external submission evidence 與 apply evidence 一起折疊（推薦，交接時可以形成完整證據鏈），可加上：
 

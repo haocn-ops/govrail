@@ -134,12 +134,19 @@
 | [access_ingress_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_runbook_zh.md) | Access / service token / trusted-edge 部署方式與入口治理檢查點 |
 | [access_ingress_plan.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/access_ingress_plan.example.json) | Access / service token 部署計劃模板，供生成 checklist 與驗證命令 |
 | [access:ingress:plan](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_access_ingress_plan.mjs) | 根據 ingress plan 模板生成 access-ingress-plan 與 checklist |
+| `npm run access:ingress:plan:strict -- --plan-file <plan.json>` | 在生成 access-ingress bundle 前，先強制檢查 handoff owner、change reference、readonly run-id source、token audience 與證據路徑是否齊備 |
 | [observability_alerting_baseline_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_alerting_baseline_zh.md) | 可觀測性、SLI、告警門檻與 oncall 排障順序 |
 | [monitoring_dashboard_template.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/monitoring_dashboard_template.example.json) | 可直接對接監控系統的 dashboard 模板 |
 | [observability_integration_manifest.example.json](/Users/zh/Documents/codeX/agent_control_plane/docs/observability_integration_manifest.example.json) | synthetic checks、alert routes、evidence contract 的跨平台接入契約 |
+| [observability:bundle](/Users/zh/Documents/codeX/govrail/scripts/render_observability_bundle.mjs) | 依 manifest 與 dashboard template 生成可交接的 observability bundle、runtime inputs 與 evidence templates |
 | [incident_response_checklist_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/incident_response_checklist_zh.md) | oncall 事故處置與升級清單 |
+| [release:artifact:validate](/Users/zh/Documents/codeX/govrail/scripts/validate_release_artifact_manifest.mjs) | 驗證 release-gate / staging-deploy / production-deploy / production-readonly-verify artifact manifest 與目錄命名是否仍符合固定契約 |
 | [secret_rotation_runbook_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/secret_rotation_runbook_zh.md) | `auth_ref` 對應 Worker secret 的輪替、回滾與交接流程 |
+| [secret:rotation:validate](/Users/zh/Documents/codeX/govrail/scripts/validate_secret_rotation_bundle.mjs) | 驗證 secret rotation bundle 的 manifest、evidence templates、`rotate.sh` 與固定檔名是否仍符合契約 |
+| [synthetic:artifact:validate](/Users/zh/Documents/codeX/govrail/scripts/validate_synthetic_runtime_artifact.mjs) | 驗證 `synthetic-runtime-checks/` artifact 內的 health / production-readonly manifest、summary 與固定檔名契約 |
+| [tenant:handoff:validate](/Users/zh/Documents/codeX/govrail/scripts/validate_tenant_handoff_evidence.mjs) | 驗證 onboarding bundle、provisioning request、submission/apply/verify evidence 與 `handoff-state.json` 是否仍是一致的證據鏈 |
 | [secret:rotation:bundle](/Users/zh/Documents/codeX/agent_control_plane/scripts/render_secret_rotation_bundle.mjs) | 根據 rotation plan 生成 rotation-plan、checklist 與 rotate.sh |
+| [provisioning:validate](/Users/zh/Documents/codeX/govrail/scripts/validate_tenant_provisioning_request.mjs) | 驗證 `provisioning-request.json` 是否仍符合凍結的外部對接契約 |
 | [ops_handoff_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/ops_handoff_summary_zh.md) | 目前已落地環境、verify 證據與接手入口摘要 |
 | [final_delivery_summary_zh.md](/Users/zh/Documents/codeX/agent_control_plane/docs/final_delivery_summary_zh.md) | 本輪交付的完成項、部署結果、驗收證據與下一步建議 |
 | [enterprise_surface_runbook_zh.md](./enterprise_surface_runbook_zh.md) | enterprise 能力（audit export / SSO / dedicated environment）啟用前提、入口、失敗回退與驗收手冊 |
@@ -160,6 +167,8 @@
 
 - `npm run verify:local`
 - `npm run verify:build`
+- `npm run provisioning:validate -- --request docs/tenant_provisioning_request.example.json`
+- `npm run web:test`
 - web non-browser e2e 入口：
   - `npm run web:test:e2e` 會跑完整的 `web/tests/e2e/*.test.ts`
   - `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts` 只跑指定檔案，適合 targeted smoke
@@ -170,6 +179,7 @@
 - `BASE_URL="https://<worker>" TENANT_ID="tenant_verify" npm run post-deploy:verify`
 - 會驗證 health、agent card、graph、replay metadata、A2A SSE snapshot 與 MCP SSE ready stream
 - 另外會建立一筆暫時的 provider / policy，最後確認兩者已停用並可在 `status=disabled` 清單中查到
+- 若要把 observability handoff 一起整理給下一位操作者，接著跑 `npm run observability:bundle -- --output-dir .observability-bundles/staging --environment staging --base-url https://<worker> --tenant-id tenant_verify`
 - 若是要驗 web console staging，而不是 root API Worker，先從 repo root 執行 `npm run web:deploy:staging:dry-run` 或 `npm run web:deploy:staging`
 - web staging 上線後，可用 `PLAYWRIGHT_BASE_URL="https://<web-staging>.workers.dev" npm run web:test:browser:session-checkpoint:existing-server` 或 `npm run web:test:browser:mainline-console-verification:existing-server` 做 focused browser smoke
 
