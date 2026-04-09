@@ -87,7 +87,7 @@ export function AdminFocusBar({
   }
 
   return (
-    <Card className="rounded-2xl border border-border bg-background shadow-sm">
+    <Card className="scroll-mt-36 rounded-2xl border border-border bg-background shadow-sm lg:scroll-mt-44">
       <CardHeader>
         <CardTitle className="text-sm font-semibold">Governance focus</CardTitle>
       </CardHeader>
