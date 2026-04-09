@@ -63,21 +63,29 @@ export function WorkspaceContextSurfaceNotice({
   const isFallback = sourceDetail.is_fallback || sourceDetail.local_only;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Workspace session checkpoint</CardTitle>
+    <Card className="bg-card/90">
+      <CardHeader className="gap-4 pb-4 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <CardTitle>Workspace session checkpoint</CardTitle>
+          <p className="text-sm text-muted">
+            <span className="font-medium text-foreground">{surfaceLabel}</span> is running against workspace{" "}
+            <span className="font-medium text-foreground">{workspaceSlug}</span>. Reconfirm the active session before
+            you treat any billing, evidence, readiness, or governance detail on this surface as authoritative.
+          </p>
+        </div>
+        <Link
+          href={sessionHref}
+          className="inline-flex h-9 shrink-0 items-center rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-card"
+        >
+          Re-check session context
+        </Link>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm text-muted">
+      <CardContent className="space-y-3 pt-0 text-sm text-muted">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="strong">{workspaceSlug}</Badge>
           <Badge variant={isFallback ? "default" : "subtle"}>{sourceDetail.label}</Badge>
           {sourceDetail.local_only ? <Badge variant="default">Local-only context</Badge> : null}
         </div>
-        <p>
-          <span className="font-medium text-foreground">{surfaceLabel}</span> is running against workspace{" "}
-          <span className="font-medium text-foreground">{workspaceSlug}</span>. Reconfirm the active session before
-          you treat any billing, evidence, readiness, or governance detail on this surface as authoritative.
-        </p>
         {isFallback ? (
           <p>
             This surface is using fallback or local-preview workspace context. Treat the current state as preview-only
@@ -90,14 +98,6 @@ export function WorkspaceContextSurfaceNotice({
           </p>
         )}
         {sourceDetail.warning ? <p className="text-xs text-muted">{sourceDetail.warning}</p> : null}
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={sessionHref}
-            className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
-          >
-            Re-check session context
-          </Link>
-        </div>
       </CardContent>
     </Card>
   );

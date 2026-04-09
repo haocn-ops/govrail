@@ -32,6 +32,7 @@ export function WorkspaceSwitcher({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [viewState, setViewState] = useState(() => createWorkspaceSwitcherViewState(currentWorkspaceSlug));
+  const [showGuidance, setShowGuidance] = useState(false);
   const { selected, isSaving, errorMessage, warningMessage } = viewState;
 
   useEffect(() => {
@@ -60,62 +61,77 @@ export function WorkspaceSwitcher({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs text-muted">
-        <span className="uppercase tracking-[0.15em]">Workspace</span>
-        <select
-          className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground outline-none disabled:opacity-70"
-          value={selected}
-          disabled={isSaving}
-          onChange={(event) => {
-            const nextSlug = event.currentTarget.value;
-            const nextState = beginWorkspaceSwitcherSelection(viewState, nextSlug);
-            if (!nextState) {
-              return;
-            }
-            const previousSlug = selected;
-            setViewState(nextState);
-            startTransition(() => {
-              void switchWorkspace(nextSlug, previousSlug);
-            });
-          }}
-          aria-label="Select workspace"
-        >
-        {workspaces.map((workspace) => (
-          <option key={workspace.workspace_id} value={workspace.slug}>
-            {workspace.display_name}
-          </option>
-        ))}
-      </select>
-      {isSaving ? <span className="text-[10px] text-muted">syncing...</span> : null}
-    </label>
-      <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
-        <span>{workspaceCountLabel(workspaces.length)}</span>
-        <span>·</span>
-        <span>current: {currentWorkspaceSlug}</span>
+    <div className="rounded-2xl border border-border bg-card px-3 py-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+            <span className="uppercase tracking-[0.15em]">Workspace</span>
+            <span>{workspaceCountLabel(workspaces.length)}</span>
+            <span>·</span>
+            <span>current: {currentWorkspaceSlug}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="min-w-[190px] rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:opacity-70"
+              value={selected}
+              disabled={isSaving}
+              onChange={(event) => {
+                const nextSlug = event.currentTarget.value;
+                const nextState = beginWorkspaceSwitcherSelection(viewState, nextSlug);
+                if (!nextState) {
+                  return;
+                }
+                const previousSlug = selected;
+                setViewState(nextState);
+                startTransition(() => {
+                  void switchWorkspace(nextSlug, previousSlug);
+                });
+              }}
+              aria-label="Select workspace"
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.workspace_id} value={workspace.slug}>
+                  {workspace.display_name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-background px-3 text-xs font-medium text-foreground transition hover:bg-card"
+              onClick={() => setShowGuidance((value) => !value)}
+              aria-expanded={showGuidance}
+            >
+              {showGuidance ? "Hide context guidance" : "Workspace guidance"}
+            </button>
+            {isSaving ? <span className="text-[11px] text-muted">syncing...</span> : null}
+          </div>
+        </div>
+        <p className="max-w-sm text-[11px] leading-5 text-muted">
+          Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
+          verification, or go-live with the correct context.
+        </p>
       </div>
-      <p className="text-[10px] text-muted">
-        Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
-        verification, or go-live with the correct context.
-      </p>
-      <p className="text-[10px] text-muted">
-        This control only updates the console's manual workspace context. Keep an eye on the topbar badges: if they
-        show fallback or local-only context, it means metadata-backed session data isn't available yet, so revisit
-        <code className="font-mono">/session</code> before trusting the next lane.
-      </p>
-      <p className="text-[10px] text-muted">
-        This switcher only changes the manual workspace context for the console. It does not impersonate another member,
-        edit roles, or trigger support-side automation.
-      </p>
       {errorMessage ? (
-        <p className="text-[10px] text-amber-700" role="status">
+        <p className="mt-3 text-[11px] text-amber-700" role="status">
           {errorMessage}
         </p>
       ) : null}
       {warningMessage ? (
-        <p className="text-[10px] text-amber-700" role="status">
+        <p className="mt-3 text-[11px] text-amber-700" role="status">
           {warningMessage}
         </p>
+      ) : null}
+      {showGuidance ? (
+        <div className="mt-3 grid gap-2 rounded-xl border border-border bg-background px-3 py-3 text-[11px] leading-5 text-muted">
+          <p>
+            This control only updates the console's manual workspace context. Keep an eye on the topbar badges: if
+            they show fallback or local-only context, it means metadata-backed session data isn't available yet, so revisit <code className="font-mono">/session</code> before trusting the next lane.
+          </p>
+          <p>
+            This switcher only changes the manual workspace context for the console. It does not impersonate another
+            member, edit roles, or trigger support-side automation.
+          </p>
+        </div>
       ) : null}
     </div>
   );

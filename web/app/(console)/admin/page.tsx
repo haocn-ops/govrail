@@ -28,16 +28,16 @@ export default async function AdminPage({
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Admin"
+        title="SaaS admin overview"
+        description="Platform snapshot for organizations, workspace growth, plan posture, and Week 8 readiness, with attention queue follow-up and return-state governance kept visible."
+      />
       <WorkspaceContextSurfaceNotice
         workspaceSlug={workspaceContext.workspace.slug}
         sourceDetail={workspaceContext.source_detail}
         surfaceLabel="Admin overview"
-      />
-      <PageHeader
-        eyebrow="Admin"
-        title="SaaS admin overview"
-        description="Platform-level snapshot for organizations, workspace growth, plan distribution, and enterprise feature rollout posture, with Week 8 readiness focus, attention queue navigation, and return-state governance surfaced."
       />
       <AdminOverviewPanel
         initialSurfaceFilter={normalizedSurface}
