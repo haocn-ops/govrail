@@ -63,11 +63,11 @@ export function WorkspaceContextSurfaceNotice({
   const isFallback = sourceDetail.is_fallback || sourceDetail.local_only;
 
   return (
-    <Card className="bg-card/90">
-      <CardHeader className="gap-4 pb-4 md:flex-row md:items-start md:justify-between">
+    <Card className="bg-card/80 shadow-sm">
+      <CardHeader className="gap-3 pb-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
           <CardTitle>Workspace session checkpoint</CardTitle>
-          <p className="text-sm text-muted">
+          <p className="text-xs leading-5 text-muted">
             <span className="font-medium text-foreground">{surfaceLabel}</span> is running against workspace{" "}
             <span className="font-medium text-foreground">{workspaceSlug}</span>. Reconfirm the active session before
             you treat any billing, evidence, readiness, or governance detail on this surface as authoritative.
@@ -75,16 +75,24 @@ export function WorkspaceContextSurfaceNotice({
         </div>
         <Link
           href={sessionHref}
-          className="inline-flex h-9 shrink-0 items-center rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-card"
+          className="inline-flex h-8 shrink-0 items-center rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition hover:bg-card"
         >
           Re-check session context
         </Link>
       </CardHeader>
-      <CardContent className="space-y-3 pt-0 text-sm text-muted">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="strong">{workspaceSlug}</Badge>
-          <Badge variant={isFallback ? "default" : "subtle"}>{sourceDetail.label}</Badge>
-          {sourceDetail.local_only ? <Badge variant="default">Local-only context</Badge> : null}
+      <CardContent className="space-y-2.5 pt-0 text-xs text-muted">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="strong" className="px-2.5 py-0.5 text-[11px]">
+            {workspaceSlug}
+          </Badge>
+          <Badge variant={isFallback ? "default" : "subtle"} className="px-2 py-0.5 text-[11px]">
+            {sourceDetail.label}
+          </Badge>
+          {sourceDetail.local_only ? (
+            <Badge variant="default" className="px-2 py-0.5 text-[11px]">
+              Local-only context
+            </Badge>
+          ) : null}
         </div>
         {isFallback ? (
           <p>

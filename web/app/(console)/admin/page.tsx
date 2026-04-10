@@ -28,17 +28,19 @@ export default async function AdminPage({
   );
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Admin"
-        title="SaaS admin overview"
-        description="Platform snapshot for organizations, workspace growth, plan posture, and Week 8 readiness, with attention queue follow-up and return-state governance kept visible."
-      />
-      <WorkspaceContextSurfaceNotice
-        workspaceSlug={workspaceContext.workspace.slug}
-        sourceDetail={workspaceContext.source_detail}
-        surfaceLabel="Admin overview"
-      />
+    <div className="space-y-5">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.95fr)] xl:items-start">
+        <PageHeader
+          eyebrow="Admin"
+          title="SaaS admin overview"
+          description="Platform snapshot for organizations, workspace growth, plan posture, and Week 8 readiness, with attention queue follow-up and return-state governance kept visible."
+        />
+        <WorkspaceContextSurfaceNotice
+          workspaceSlug={workspaceContext.workspace.slug}
+          sourceDetail={workspaceContext.source_detail}
+          surfaceLabel="Admin overview"
+        />
+      </div>
       <AdminOverviewPanel
         initialSurfaceFilter={normalizedSurface}
         initialReadinessFocus={normalizedReadinessFocus}

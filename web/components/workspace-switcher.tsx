@@ -61,10 +61,10 @@ export function WorkspaceSwitcher({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card px-3 py-3">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+    <div className="rounded-xl border border-border/80 bg-card/70 px-3 py-2.5">
+      <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted">
             <span className="uppercase tracking-[0.15em]">Workspace</span>
             <span>{workspaceCountLabel(workspaces.length)}</span>
             <span>·</span>
@@ -72,7 +72,7 @@ export function WorkspaceSwitcher({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
-              className="min-w-[190px] rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:opacity-70"
+              className="min-w-[190px] rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:opacity-70"
               value={selected}
               disabled={isSaving}
               onChange={(event) => {
@@ -97,7 +97,7 @@ export function WorkspaceSwitcher({
             </select>
             <button
               type="button"
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-background px-3 text-xs font-medium text-foreground transition hover:bg-card"
+              className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-3 text-[11px] font-medium text-foreground transition hover:bg-card"
               onClick={() => setShowGuidance((value) => !value)}
               aria-expanded={showGuidance}
             >
@@ -106,7 +106,7 @@ export function WorkspaceSwitcher({
             {isSaving ? <span className="text-[11px] text-muted">syncing...</span> : null}
           </div>
         </div>
-        <p className="max-w-sm text-[11px] leading-5 text-muted">
+        <p className="max-w-xs text-[10px] leading-4 text-muted">
           Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
           verification, or go-live with the correct context.
         </p>
@@ -122,7 +122,7 @@ export function WorkspaceSwitcher({
         </p>
       ) : null}
       {showGuidance ? (
-        <div className="mt-3 grid gap-2 rounded-xl border border-border bg-background px-3 py-3 text-[11px] leading-5 text-muted">
+        <div className="mt-2 grid gap-2 rounded-lg border border-border bg-background px-3 py-3 text-[11px] leading-5 text-muted">
           <p>
             This control only updates the console's manual workspace context. Keep an eye on the topbar badges: if
             they show fallback or local-only context, it means metadata-backed session data isn't available yet, so revisit <code className="font-mono">/session</code> before trusting the next lane.
