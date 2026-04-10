@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { linkByHrefFragments } from "./support/navigation";
+
 test("admin readiness billing warning branch -> settings -> admin keeps readiness browser continuity", async ({
   page,
 }) => {
@@ -10,21 +12,19 @@ test("admin readiness billing warning branch -> settings -> admin keeps readines
   );
 
   await expect(page.getByRole("heading", { name: "SaaS admin overview" })).toBeVisible();
-  const governanceFocusSection = page
-    .getByRole("heading", { name: "Governance focus" })
-    .locator("xpath=ancestor::div[contains(@class, 'rounded-2xl')][1]");
-  const readinessSummarySection = page
-    .getByRole("heading", { name: "Week 8 readiness summary" })
-    .locator("xpath=ancestor::div[contains(@class, 'rounded-2xl')][1]");
+  await expect(page.getByRole("heading", { name: "Governance focus" })).toBeVisible();
+  await expect(page.getByText("Billing warning", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Preview Organization").first()).toBeVisible();
+  await expect(page.getByText("Preview Workspace").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Week 8 readiness summary" })).toBeVisible();
+  await expect(page.getByText("Drill-down active: Billing warning")).toBeVisible();
 
-  await expect(governanceFocusSection).toBeVisible();
-  await expect(governanceFocusSection.getByText("Billing warning", { exact: true })).toBeVisible();
-  await expect(governanceFocusSection.getByText("Preview Organization").first()).toBeVisible();
-  await expect(governanceFocusSection.getByText("Preview Workspace").first()).toBeVisible();
-  await expect(readinessSummarySection).toBeVisible();
-  await expect(readinessSummarySection.getByText("Drill-down active: Billing warning")).toBeVisible();
-
-  const billingWarningFlowLink = readinessSummarySection.getByRole("link", { name: "Open billing warning flow" });
+  const billingWarningFlowLink = linkByHrefFragments(
+    page,
+    "Open billing warning flow",
+    "/settings?intent=resolve-billing",
+    "week8_focus=billing_warning",
+  );
   await expect(billingWarningFlowLink).toBeVisible();
   await billingWarningFlowLink.click();
 
@@ -39,7 +39,12 @@ test("admin readiness billing warning branch -> settings -> admin keeps readines
   await expect(page.getByText("Focus Billing warning")).toBeVisible();
   await expect(page.getByText("Enterprise evidence lane")).toBeVisible();
 
-  const adminReadinessReturnLink = page.getByRole("link", { name: "Return to admin readiness view" }).first();
+  const adminReadinessReturnLink = linkByHrefFragments(
+    page,
+    "Return to admin readiness view",
+    "/admin?",
+    "readiness_returned=1",
+  );
   await expect(adminReadinessReturnLink).toBeVisible();
   await adminReadinessReturnLink.click();
 

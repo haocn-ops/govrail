@@ -8,8 +8,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { buildVerificationChecklistHandoffHref } from "@/components/verification/week8-verification-checklist";
 import type { ControlPlaneRunCreateRequest } from "@/lib/control-plane-types";
+import { buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
 import {
   ControlPlaneRequestError,
   createRun,
@@ -25,7 +25,7 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
 });
 
 type PlaygroundSource = "onboarding" | "admin-readiness" | "admin-attention";
-type DeliveryContext = "recent_activity";
+type DeliveryContext = "recent_activity" | "week8";
 type OnboardingSurface =
   | "onboarding"
   | "members"
@@ -48,7 +48,7 @@ function normalizeSource(source: string | null | undefined): PlaygroundSource | 
 }
 
 function normalizeDeliveryContext(value?: string | null): DeliveryContext | null {
-  return value === "recent_activity" ? "recent_activity" : null;
+  return value === "recent_activity" || value === "week8" ? value : null;
 }
 
 function normalizeRecentTrackKey(value?: string | null): "verification" | "go_live" | null {
@@ -217,6 +217,8 @@ function describeRecentDeliverySummary(args: {
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 }): string {
   const parts = [
     args.recentTrackKey ? `${args.recentTrackKey} track` : null,
@@ -224,7 +226,10 @@ function describeRecentDeliverySummary(args: {
     typeof args.evidenceCount === "number"
       ? `${args.evidenceCount} evidence ${args.evidenceCount === 1 ? "item" : "items"}`
       : null,
-    args.recentOwnerLabel ? `owner ${args.recentOwnerLabel}` : null,
+    (args.recentOwnerDisplayName ?? args.recentOwnerLabel)
+      ? `owner ${args.recentOwnerDisplayName ?? args.recentOwnerLabel}`
+      : null,
+    args.recentOwnerEmail ? `email ${args.recentOwnerEmail}` : null,
   ].filter(Boolean);
   return parts.length ? ` Latest admin context: ${parts.join(" · ")}.` : "";
 }
@@ -235,6 +240,8 @@ function getContextCardContent(args: {
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
   latestDemoRunHint?: {
     status_label: string;
     is_terminal: boolean;
@@ -393,6 +400,8 @@ export function PlaygroundPanel({
   recentUpdateKind,
   evidenceCount,
   recentOwnerLabel,
+  recentOwnerDisplayName,
+  recentOwnerEmail,
 }: {
   workspaceSlug: string;
   source?: string | null;
@@ -404,6 +413,8 @@ export function PlaygroundPanel({
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 }) {
   const normalizedSource = normalizeSource(source);
   const normalizedDeliveryContext = normalizeDeliveryContext(deliveryContext);
@@ -415,15 +426,17 @@ export function PlaygroundPanel({
   const onboardingState = workspaceQuery.data?.onboarding ?? null;
   const latestDemoRunHint = onboardingState?.latest_demo_run_hint ?? null;
   const deliveryGuidance = onboardingState?.delivery_guidance ?? null;
-  const contextCard = getContextCardContent({
-    source: normalizedSource,
-    recentTrackKey,
-    recentUpdateKind,
-    evidenceCount,
-    recentOwnerLabel,
-    latestDemoRunHint,
-    deliveryGuidance,
-  });
+    const contextCard = getContextCardContent({
+      source: normalizedSource,
+      recentTrackKey,
+      recentUpdateKind,
+      evidenceCount,
+      recentOwnerLabel,
+      recentOwnerDisplayName,
+      recentOwnerEmail,
+      latestDemoRunHint,
+      deliveryGuidance,
+    });
   const onboardingGuide = getPlaygroundGuide({
     onboarding: onboardingState,
     latestDemoRunHint,
@@ -451,21 +464,9 @@ export function PlaygroundPanel({
     recentUpdateKind,
     evidenceCount,
     recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
   };
-  const usageHref = buildVerificationChecklistHandoffHref({ pathname: "/usage", ...handoffHrefArgs });
-  const settingsHref = buildVerificationChecklistHandoffHref({
-    pathname: "/settings?intent=manage-plan",
-    ...handoffHrefArgs,
-  });
-  const serviceAccountsHref = buildVerificationChecklistHandoffHref({
-    pathname: "/service-accounts",
-    ...handoffHrefArgs,
-  });
-  const apiKeysHref = buildVerificationChecklistHandoffHref({ pathname: "/api-keys", ...handoffHrefArgs });
-  const verificationHref = buildVerificationChecklistHandoffHref({
-    pathname: "/verification?surface=verification",
-    ...handoffHrefArgs,
-  });
   const demoFailedStatuses = new Set([
     "failed",
     "error",
@@ -521,6 +522,15 @@ export function PlaygroundPanel({
       );
     },
   });
+  const activeRunId = invokeMutation.data?.run_id ?? latestDemoRun?.run_id ?? null;
+  const buildRunAwarePlaygroundHref = (pathname: string): string =>
+    buildVerificationChecklistHandoffHref({ pathname, ...handoffHrefArgs, runId: activeRunId });
+  const usageHref = buildRunAwarePlaygroundHref("/usage");
+  const settingsHref = buildRunAwarePlaygroundHref("/settings?intent=manage-plan");
+  const settingsUpgradeHref = buildRunAwarePlaygroundHref("/settings?intent=upgrade");
+  const serviceAccountsHref = buildRunAwarePlaygroundHref("/service-accounts");
+  const apiKeysHref = buildRunAwarePlaygroundHref("/api-keys");
+  const verificationHref = buildRunAwarePlaygroundHref("/verification?surface=verification");
 
   async function invokeRun(): Promise<void> {
     let parsed: ControlPlaneRunCreateRequest;
@@ -670,7 +680,7 @@ export function PlaygroundPanel({
             <p className="mt-1">{onboardingGuide.body}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Link
-                href={buildVerificationChecklistHandoffHref({ pathname: toSurfacePath(onboardingGuide.actionSurface), ...handoffHrefArgs })}
+                href={buildRunAwarePlaygroundHref(toSurfacePath(onboardingGuide.actionSurface))}
                 className="inline-flex items-center justify-center rounded-xl border border-border px-3 py-2 font-medium text-foreground transition hover:bg-muted/60"
               >
                 {onboardingGuide.actionLabel}
@@ -725,7 +735,7 @@ export function PlaygroundPanel({
               </Button>
             ) : (
               <Link
-                href={buildVerificationChecklistHandoffHref({ pathname: "/playground", ...handoffHrefArgs })}
+                href={buildRunAwarePlaygroundHref("/playground")}
                 className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
               >
                 {demoRunInProgress
@@ -738,22 +748,19 @@ export function PlaygroundPanel({
             {demoRunFailed ? (
               <>
                 <Link
-                  href={buildVerificationChecklistHandoffHref({
-                    pathname: "/verification?surface=verification",
-                    ...handoffHrefArgs,
-                  })}
+                  href={buildRunAwarePlaygroundHref("/verification?surface=verification")}
                   className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
                 >
                   Capture verification evidence
                 </Link>
                 <Link
-                  href={buildVerificationChecklistHandoffHref({ pathname: "/usage", ...handoffHrefArgs })}
+                  href={buildRunAwarePlaygroundHref("/usage")}
                   className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
                 >
                   Review usage trace
                 </Link>
                 <Link
-                  href={buildVerificationChecklistHandoffHref({ pathname: "/settings?intent=rollback", ...handoffHrefArgs })}
+                  href={buildRunAwarePlaygroundHref("/settings?intent=rollback")}
                   className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
                 >
                   Review rollback prep
@@ -762,10 +769,7 @@ export function PlaygroundPanel({
             ) : null}
             {demoRunInProgress ? (
               <Link
-                href={buildVerificationChecklistHandoffHref({
-                  pathname: "/verification?surface=verification",
-                  ...handoffHrefArgs,
-                })}
+                href={buildRunAwarePlaygroundHref("/verification?surface=verification")}
                 className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
               >
                 Review verification checklist
@@ -774,25 +778,51 @@ export function PlaygroundPanel({
             {demoRunSucceeded ? (
               <>
                 <Link
-                  href={buildVerificationChecklistHandoffHref({
-                    pathname: "/verification?surface=verification",
-                    ...handoffHrefArgs,
-                  })}
+                  href={buildRunAwarePlaygroundHref("/verification?surface=verification")}
                   className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
                 >
                   Continue verification
                 </Link>
                 <Link
-                  href={buildVerificationChecklistHandoffHref({
-                    pathname: "/go-live?surface=go_live",
-                    ...handoffHrefArgs,
-                  })}
+                  href={buildRunAwarePlaygroundHref("/go-live?surface=go_live")}
                   className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
                 >
                   Start go-live rehearsal
                 </Link>
               </>
             ) : null}
+          </div>
+          <div className="rounded-xl border border-border bg-background p-3 text-xs text-muted">
+            <p className="font-medium text-foreground">Audit export continuity</p>
+            <p className="mt-1">
+              After the first demo run, reopen the Latest export receipt from{' '}
+              <code className="font-mono">/settings?intent=upgrade</code> so the filename, filters, and SHA-256 stay
+              chained through verification and go-live notes before you return to the admin or alerts lane.
+            </p>
+            <p className="mt-2">
+              Navigation-only manual relay: these actions preserve workspace context but do not automatically attach the
+              audit export or resolve rollout steps for you.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={settingsUpgradeHref}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Reopen audit export receipt
+              </Link>
+              <Link
+                href={buildRunAwarePlaygroundHref("/verification?surface=verification")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Continue verification evidence
+              </Link>
+              <Link
+                href={buildRunAwarePlaygroundHref("/go-live?surface=go_live")}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/60"
+              >
+                Reopen go-live lane
+              </Link>
+            </div>
           </div>
           {deliveryGuidance ? (
             <div className="rounded-xl border border-border/70 bg-background p-3 text-xs text-muted">

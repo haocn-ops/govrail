@@ -17,7 +17,7 @@ const candidateRouteChain = [
   "/session",
   "/onboarding",
   "/usage",
-  "/settings",
+  "/settings?intent=manage-plan",
   "/verification?surface=verification",
   "/go-live?surface=go_live",
   "/admin?readiness_returned=1",
@@ -32,21 +32,31 @@ function resolveOptional(specifier) {
 }
 
 function hasProductionBackedPlaywrightServer(playwrightConfig) {
-  return (
-    playwrightConfig.includes('const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3005"') &&
-    playwrightConfig.includes('const webServerCommand =') &&
-    playwrightConfig.includes('process.env.PLAYWRIGHT_WEB_SERVER_COMMAND ??') &&
-    playwrightConfig.includes('"npm run build && npm run start -- --hostname 127.0.0.1 --port 3005"') &&
-    playwrightConfig.includes('const webServerTimeout = Number(process.env.PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS ?? "240000")') &&
-    playwrightConfig.includes('const reuseExistingServer =') &&
-    playwrightConfig.includes('process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER == null') &&
-    playwrightConfig.includes("? false") &&
-    playwrightConfig.includes('process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"') &&
-    playwrightConfig.includes("command: webServerCommand") &&
-    playwrightConfig.includes("url: baseURL") &&
-    playwrightConfig.includes("timeout: webServerTimeout") &&
-    playwrightConfig.includes("reuseExistingServer")
-  );
+  const basePatterns = [
+    /const host = process\.env\.PLAYWRIGHT_HOST \?\? "127\.0\.0\.1";/,
+    /const port = Number\(process\.env\.PLAYWRIGHT_PORT \?\? "3005"\);/,
+    /const defaultBaseURL = `http:\/\/\$\{host\}:\$\{port\}`;/,
+    /const baseURL = process\.env\.PLAYWRIGHT_BASE_URL \?\? defaultBaseURL;/,
+    /const defaultWebServerCommand = `npm run build && npm run start -- --hostname \$\{host\} --port \$\{port\}`;/,
+    /const webServerCommand =[\s\S]*process\.env\.PLAYWRIGHT_WEB_SERVER_COMMAND \?\?[\s\S]*defaultWebServerCommand;/,
+    /const webServerTimeout = Number\(process\.env\.PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS \?\? "240000"\)/,
+    /const reuseExistingServer =[\s\S]*process\.env\.PLAYWRIGHT_REUSE_EXISTING_SERVER == null[\s\S]*\? true[\s\S]*process\.env\.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1";/,
+    /const manageWebServer =[\s\S]*process\.env\.PLAYWRIGHT_MANAGE_WEB_SERVER == null[\s\S]*process\.env\.PLAYWRIGHT_BASE_URL == null[\s\S]*process\.env\.PLAYWRIGHT_MANAGE_WEB_SERVER === "1";/,
+  ];
+
+  const webServerPatterns = [
+    /webServer:\s*manageWebServer/,
+    /command:\s*webServerCommand/,
+    /url:\s*baseURL/,
+    /timeout:\s*webServerTimeout/,
+    /reuseExistingServer,/,
+  ];
+
+  const baseMatches = basePatterns.every((pattern) => pattern.test(playwrightConfig));
+  const serverMatches = webServerPatterns.every((pattern) => pattern.test(playwrightConfig));
+  const explicitBaseURLProvided = Boolean(process.env.PLAYWRIGHT_BASE_URL);
+
+  return baseMatches && (explicitBaseURLProvided || serverMatches);
 }
 
 function printHumanReport(report) {
@@ -100,7 +110,7 @@ async function main() {
   const report = {
     status: browserSmokeReady ? "ready" : "pending",
     boundary:
-      "Current repo coverage is still centered on unit + contract + page + non-browser smoke, with one minimal true browser smoke added for launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin. This report does not claim full browser e2e is complete.",
+      "Current repo coverage is still centered on unit + contract + page + non-browser smoke, with one minimal true browser smoke added for launchpad -> session -> onboarding -> usage -> /settings?intent=manage-plan -> verification -> go-live -> admin. This report does not claim full browser e2e is complete.",
     candidateRouteChain,
     playwright: {
       directDependency: playwrightDirectDependency,
@@ -120,8 +130,8 @@ async function main() {
     },
     recommendedNextStep:
       browserSmokeReady
-        ? "Run `npm run test:browser:smoke` against the production-backed local server and keep the browser scope limited to launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin until the next continuity slice is stable."
-        : "Install a direct browser test dependency/config and wire one minimal launchpad -> session -> onboarding -> usage -> settings -> verification -> go-live -> admin smoke on a production-backed local server without overstating coverage.",
+        ? "Run `npm run test:browser:smoke` against the production-backed local server and keep the browser scope limited to launchpad -> session -> onboarding -> usage -> /settings?intent=manage-plan -> verification -> go-live -> admin until the next continuity slice is stable."
+        : "Install a direct browser test dependency/config and wire one minimal launchpad -> session -> onboarding -> usage -> /settings?intent=manage-plan -> verification -> go-live -> admin smoke on a production-backed local server without overstating coverage.",
   };
 
   if (process.argv.includes("--json")) {

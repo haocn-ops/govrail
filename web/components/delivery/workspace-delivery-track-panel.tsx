@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { AuditExportReceiptCallout } from "@/components/audit-export-receipt-callout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { AuditExportReceiptContinuityArgs } from "@/lib/audit-export-receipt";
+import { resolveAuditExportReceiptSummary } from "@/lib/audit-export-receipt";
 import type {
   ControlPlaneAdminDeliveryUpdateKind,
   ControlPlaneContractMeta,
@@ -17,13 +20,17 @@ import type {
   ControlPlaneWorkspaceDeliveryTrack,
   ControlPlaneWorkspaceDeliveryTrackUpsert,
 } from "@/lib/control-plane-types";
-import { buildAdminReturnHref, buildHandoffHref } from "@/lib/handoff-query";
+import {
+  buildConsoleHandoffHref,
+  buildConsoleAdminReturnHref,
+  type ConsoleHandoffState,
+} from "@/lib/console-handoff";
 import { fetchWorkspaceDeliveryTrack, saveWorkspaceDeliveryTrack } from "@/services/control-plane";
 
 type DeliveryPanelSource = "onboarding" | "admin-readiness" | "admin-attention";
 type DeliveryPanelSurface = "verification" | "go_live";
 type SectionKey = "verification" | "go_live";
-type DeliveryContext = "recent_activity";
+type DeliveryContext = "recent_activity" | "week8";
 
 type ContextCard = {
   title: string;
@@ -37,7 +44,34 @@ type RecentDeliveryMetadata = {
   recentTrackKey?: "verification" | "go_live" | null;
   recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null;
   evidenceCount?: number | null;
+  recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 };
+
+type BuildContextHrefArgs = AuditExportReceiptContinuityArgs & {
+  source?: DeliveryPanelSource | null;
+  surface?: DeliveryPanelSurface | SectionKey | null;
+  runId?: string | null;
+  week8Focus?: string | null;
+  attentionWorkspace?: string | null;
+  attentionOrganization?: string | null;
+  deliveryContext?: DeliveryContext | null;
+  recentTrackKey?: "verification" | "go_live" | null;
+  recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null;
+  evidenceCount?: number | null;
+  recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
+};
+
+function formatRecentOwner(
+  label?: string | null,
+  displayName?: string | null,
+  email?: string | null,
+): string | null {
+  return displayName ?? email ?? label ?? null;
+}
 
 function normalizeSource(source?: string | null): DeliveryPanelSource | null {
   if (source === "onboarding" || source === "admin-readiness" || source === "admin-attention") {
@@ -47,7 +81,7 @@ function normalizeSource(source?: string | null): DeliveryPanelSource | null {
 }
 
 function normalizeDeliveryContext(value?: string | null): DeliveryContext | null {
-  return value === "recent_activity" ? "recent_activity" : null;
+  return value === "recent_activity" || value === "week8" ? value : null;
 }
 
 function normalizeRecentTrackKey(value?: string | null): "verification" | "go_live" | null {
@@ -101,6 +135,14 @@ function describeRecentUpdateKind(
 
 function buildMetadataLines(metadata: RecentDeliveryMetadata): string[] {
   const lines: string[] = [];
+  const ownerLabel = formatRecentOwner(
+    metadata.recentOwnerLabel,
+    metadata.recentOwnerDisplayName,
+    metadata.recentOwnerEmail,
+  );
+  if (ownerLabel) {
+    lines.push(`Recent admin handoff owner: ${ownerLabel}.`);
+  }
   const updateSummary = describeRecentUpdateKind(metadata.recentUpdateKind, metadata.recentTrackKey);
   if (updateSummary) {
     lines.push(updateSummary);
@@ -117,10 +159,61 @@ function buildMetadataLines(metadata: RecentDeliveryMetadata): string[] {
   return lines;
 }
 
+function auditExportEvidenceReminder(sectionKey: SectionKey): string {
+  const surfaceLabel = sectionKey === "verification" ? "verification" : "go-live";
+  return `Attach the audit export receipt/evidence note (filename, filters, SHA-256) to this ${surfaceLabel} entry so verification, go-live, and delivery tracking stay tied to the same file and later delivery notes can reference that shared evidence thread.`;
+}
+
+function buildDeliveryHandoffState(args: {
+  source?: DeliveryPanelSource | null;
+  surface?: DeliveryPanelSurface | null;
+  runId?: string | null;
+  week8Focus?: string | null;
+  attentionWorkspace?: string | null;
+  attentionOrganization?: string | null;
+  deliveryContext?: DeliveryContext | null;
+  recentTrackKey?: "verification" | "go_live" | null;
+  recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null;
+  evidenceCount?: number | null;
+  recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
+}): ConsoleHandoffState {
+  return {
+    source: args.source ?? null,
+    surface: args.surface ?? null,
+    runId: args.runId ?? null,
+    attentionWorkspace: args.attentionWorkspace ?? null,
+    attentionOrganization: args.attentionOrganization ?? null,
+    week8Focus: args.week8Focus ?? null,
+    deliveryContext: args.deliveryContext ?? null,
+    recentTrackKey: args.recentTrackKey ?? null,
+    recentUpdateKind: args.recentUpdateKind ?? null,
+    evidenceCount: args.evidenceCount ?? null,
+    recentOwnerLabel: args.recentOwnerLabel ?? null,
+    recentOwnerDisplayName: args.recentOwnerDisplayName ?? null,
+    recentOwnerEmail: args.recentOwnerEmail ?? null,
+    auditReceiptFilename: args.auditReceiptFilename ?? null,
+    auditReceiptExportedAt: args.auditReceiptExportedAt ?? null,
+    auditReceiptFromDate: args.auditReceiptFromDate ?? null,
+    auditReceiptToDate: args.auditReceiptToDate ?? null,
+    auditReceiptSha256: args.auditReceiptSha256 ?? null,
+  };
+}
+
 function buildContextHref(
   pathname: string,
-  source?: DeliveryPanelSource | null,
-  surface?: DeliveryPanelSurface | null,
+  args: BuildContextHrefArgs,
+): string;
+function buildContextHref(
+  pathname: string,
+  argsOrSource?: BuildContextHrefArgs | DeliveryPanelSource | null,
+  surface?: DeliveryPanelSurface | SectionKey | null,
   week8Focus?: string | null,
   attentionWorkspace?: string | null,
   attentionOrganization?: string | null,
@@ -128,33 +221,101 @@ function buildContextHref(
   recentTrackKey?: "verification" | "go_live" | null,
   recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null,
   evidenceCount?: number | null,
+  recentOwnerLabel?: string | null,
+  recentOwnerDisplayName?: string | null,
+  recentOwnerEmail?: string | null,
 ): string {
-  return buildHandoffHref(pathname, {
-    source,
-    surface,
-    week8Focus,
-    attentionWorkspace,
-    attentionOrganization,
-    deliveryContext,
-    recentTrackKey,
-    recentUpdateKind,
-    evidenceCount,
+  const normalizedArgs: BuildContextHrefArgs =
+    typeof argsOrSource === "object" && argsOrSource !== null
+      ? argsOrSource
+      : {
+          source: argsOrSource,
+          surface: surface === "verification" || surface === "go_live" ? surface : null,
+          runId: null,
+          week8Focus,
+          attentionWorkspace,
+          attentionOrganization,
+          deliveryContext,
+          recentTrackKey,
+          recentUpdateKind,
+          evidenceCount,
+          recentOwnerLabel,
+          recentOwnerDisplayName,
+          recentOwnerEmail,
+          auditReceiptFilename: null,
+          auditReceiptExportedAt: null,
+          auditReceiptFromDate: null,
+          auditReceiptToDate: null,
+          auditReceiptSha256: null,
+        };
+  const handoff = buildDeliveryHandoffState({
+    source: normalizedArgs.source,
+    surface: normalizedArgs.surface,
+    runId: normalizedArgs.runId,
+    week8Focus: normalizedArgs.week8Focus,
+    attentionWorkspace: normalizedArgs.attentionWorkspace,
+    attentionOrganization: normalizedArgs.attentionOrganization,
+    deliveryContext: normalizedArgs.deliveryContext,
+    recentTrackKey: normalizedArgs.recentTrackKey,
+    recentUpdateKind: normalizedArgs.recentUpdateKind,
+    evidenceCount: normalizedArgs.evidenceCount,
+    recentOwnerLabel: normalizedArgs.recentOwnerLabel,
+    recentOwnerDisplayName: normalizedArgs.recentOwnerDisplayName,
+    recentOwnerEmail: normalizedArgs.recentOwnerEmail,
+    auditReceiptFilename: normalizedArgs.auditReceiptFilename,
+    auditReceiptExportedAt: normalizedArgs.auditReceiptExportedAt,
+    auditReceiptFromDate: normalizedArgs.auditReceiptFromDate,
+    auditReceiptToDate: normalizedArgs.auditReceiptToDate,
+    auditReceiptSha256: normalizedArgs.auditReceiptSha256,
   });
+  return buildConsoleHandoffHref(pathname, handoff);
 }
 
 function buildAdminReturnUrl(
   source: DeliveryPanelSource | undefined,
   surface: DeliveryPanelSurface | undefined,
   workspaceSlug: string,
+  runId?: string | null,
   week8Focus?: string | null,
+  attentionWorkspace?: string | null,
   attentionOrganization?: string | null,
+  deliveryContext?: DeliveryContext | null,
+  recentTrackKey?: "verification" | "go_live" | null,
+  recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null,
+  evidenceCount?: number | null,
+  recentOwnerLabel?: string | null,
+  recentOwnerDisplayName?: string | null,
+  recentOwnerEmail?: string | null,
+  auditReceiptFilename?: string | null,
+  auditReceiptExportedAt?: string | null,
+  auditReceiptFromDate?: string | null,
+  auditReceiptToDate?: string | null,
+  auditReceiptSha256?: string | null,
 ): string {
-  return buildAdminReturnHref("/admin", {
-    source,
+  return buildConsoleAdminReturnHref({
+    pathname: "/admin",
+    handoff: buildDeliveryHandoffState({
+      source,
+      surface,
+      runId,
+      week8Focus,
+      attentionWorkspace: attentionWorkspace ?? workspaceSlug,
+      attentionOrganization,
+      deliveryContext,
+      recentTrackKey,
+      recentUpdateKind,
+      evidenceCount,
+      recentOwnerLabel,
+      recentOwnerDisplayName,
+      recentOwnerEmail,
+      auditReceiptFilename,
+      auditReceiptExportedAt,
+      auditReceiptFromDate,
+      auditReceiptToDate,
+      auditReceiptSha256,
+    }),
+    workspaceSlug,
     queueSurface: surface,
-    week8Focus,
-    attentionWorkspace: workspaceSlug,
-    attentionOrganization,
   });
 }
 
@@ -261,115 +422,165 @@ function deliveryStatusHint(sectionKey: SectionKey, status: ControlPlaneDelivery
 function getContextCard(args: {
   source: DeliveryPanelSource | null;
   sectionKey: SectionKey;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
   workspaceSlug: string;
   deliveryContext?: DeliveryContext | null;
   metadata: RecentDeliveryMetadata;
+  auditReceipt: AuditExportReceiptContinuityArgs;
 }): ContextCard | null {
   const {
     source,
     sectionKey,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
     workspaceSlug,
     deliveryContext,
     metadata,
+    auditReceipt,
   } = args;
   if (!source) {
     return null;
   }
 
   const targetWorkspace = attentionWorkspace ?? workspaceSlug;
-  const verificationHref = buildContextHref(
-    "/verification",
+  const verificationHref = buildContextHref("/verification", {
     source,
-    "verification",
+    surface: "verification",
+    runId,
     week8Focus,
-    targetWorkspace,
+    attentionWorkspace: targetWorkspace,
     attentionOrganization,
     deliveryContext,
-    metadata.recentTrackKey,
-    metadata.recentUpdateKind,
-    metadata.evidenceCount,
-  );
-  const goLiveHref = buildContextHref(
-    "/go-live",
+    recentTrackKey: metadata.recentTrackKey,
+    recentUpdateKind: metadata.recentUpdateKind,
+    evidenceCount: metadata.evidenceCount,
+    recentOwnerLabel: metadata.recentOwnerLabel,
+    recentOwnerDisplayName: metadata.recentOwnerDisplayName,
+    recentOwnerEmail: metadata.recentOwnerEmail,
+    auditReceiptFilename: auditReceipt.auditReceiptFilename,
+    auditReceiptExportedAt: auditReceipt.auditReceiptExportedAt,
+    auditReceiptFromDate: auditReceipt.auditReceiptFromDate,
+    auditReceiptToDate: auditReceipt.auditReceiptToDate,
+    auditReceiptSha256: auditReceipt.auditReceiptSha256,
+  });
+  const goLiveHref = buildContextHref("/go-live", {
     source,
-    "go_live",
+    surface: "go_live",
+    runId,
     week8Focus,
-    targetWorkspace,
+    attentionWorkspace: targetWorkspace,
     attentionOrganization,
     deliveryContext,
-    metadata.recentTrackKey,
-    metadata.recentUpdateKind,
-    metadata.evidenceCount,
-  );
-  const usageHref = buildContextHref(
-    "/usage",
+    recentTrackKey: metadata.recentTrackKey,
+    recentUpdateKind: metadata.recentUpdateKind,
+    evidenceCount: metadata.evidenceCount,
+    recentOwnerLabel: metadata.recentOwnerLabel,
+    recentOwnerDisplayName: metadata.recentOwnerDisplayName,
+    recentOwnerEmail: metadata.recentOwnerEmail,
+    auditReceiptFilename: auditReceipt.auditReceiptFilename,
+    auditReceiptExportedAt: auditReceipt.auditReceiptExportedAt,
+    auditReceiptFromDate: auditReceipt.auditReceiptFromDate,
+    auditReceiptToDate: auditReceipt.auditReceiptToDate,
+    auditReceiptSha256: auditReceipt.auditReceiptSha256,
+  });
+  const usageHref = buildContextHref("/usage", {
     source,
-    sectionKey,
+    surface: sectionKey,
+    runId,
     week8Focus,
-    targetWorkspace,
+    attentionWorkspace: targetWorkspace,
     attentionOrganization,
     deliveryContext,
-    metadata.recentTrackKey,
-    metadata.recentUpdateKind,
-    metadata.evidenceCount,
-  );
-  const settingsHref = buildContextHref(
-    "/settings",
+    recentTrackKey: metadata.recentTrackKey,
+    recentUpdateKind: metadata.recentUpdateKind,
+    evidenceCount: metadata.evidenceCount,
+    recentOwnerLabel: metadata.recentOwnerLabel,
+    recentOwnerDisplayName: metadata.recentOwnerDisplayName,
+    recentOwnerEmail: metadata.recentOwnerEmail,
+    auditReceiptFilename: auditReceipt.auditReceiptFilename,
+    auditReceiptExportedAt: auditReceipt.auditReceiptExportedAt,
+    auditReceiptFromDate: auditReceipt.auditReceiptFromDate,
+    auditReceiptToDate: auditReceipt.auditReceiptToDate,
+    auditReceiptSha256: auditReceipt.auditReceiptSha256,
+  });
+  const settingsHref = buildContextHref("/settings?intent=manage-plan", {
     source,
-    sectionKey,
+    surface: sectionKey,
+    runId,
     week8Focus,
-    targetWorkspace,
+    attentionWorkspace: targetWorkspace,
     attentionOrganization,
     deliveryContext,
-    metadata.recentTrackKey,
-    metadata.recentUpdateKind,
-    metadata.evidenceCount,
-  );
+    recentTrackKey: metadata.recentTrackKey,
+    recentUpdateKind: metadata.recentUpdateKind,
+    evidenceCount: metadata.evidenceCount,
+    recentOwnerLabel: metadata.recentOwnerLabel,
+    recentOwnerDisplayName: metadata.recentOwnerDisplayName,
+    recentOwnerEmail: metadata.recentOwnerEmail,
+    auditReceiptFilename: auditReceipt.auditReceiptFilename,
+    auditReceiptExportedAt: auditReceipt.auditReceiptExportedAt,
+    auditReceiptFromDate: auditReceipt.auditReceiptFromDate,
+    auditReceiptToDate: auditReceipt.auditReceiptToDate,
+    auditReceiptSha256: auditReceipt.auditReceiptSha256,
+  });
 
   const metadataLines = deliveryContext === "recent_activity" ? buildMetadataLines(metadata) : [];
 
-  if (source === "onboarding") {
-    if (sectionKey === "verification") {
-      return {
-        title: "Onboarding evidence capture",
-        body:
-          "Save the owner, notes, and first-demo evidence links here so the verification checklist, usage snapshot, and trace references stay attached to the same workspace before you move into the mock go-live drill.",
-        actions: [
-          { label: "Review usage evidence", href: usageHref },
-          { label: "Continue to go-live drill", href: goLiveHref },
-        ],
-        footnote:
-          "These links only preserve onboarding navigation context. They do not automate evidence capture or change workspace permissions.",
-        metaLines: metadataLines.length > 0 ? metadataLines : undefined,
-      };
-    }
+    if (source === "onboarding") {
+      if (sectionKey === "verification") {
+        return {
+          title: "Onboarding evidence capture",
+          body:
+            "Save the owner, notes, and first-demo evidence links here so the verification checklist, usage snapshot, and trace references stay attached to the same workspace before you move into the mock go-live drill.",
+          actions: [
+            { label: "Review usage evidence", href: usageHref },
+            { label: "Continue to go-live drill", href: goLiveHref },
+          ],
+          footnote:
+            "These links only preserve onboarding navigation context. They do not automate evidence capture or change workspace permissions.",
+          metaLines: metadataLines.length > 0 ? metadataLines : undefined,
+        };
+      }
 
-    return {
-      title: "Onboarding drill handoff",
-      body:
-        "Record what happened in the mock drill, including evidence links and follow-up notes, then return to verification if the first-demo checklist still needs another pass.",
-      actions: [
-        { label: "Return to verification", href: verificationHref },
-        { label: "Inspect billing and features", href: settingsHref },
-      ],
-      footnote:
-        "This remains a navigation-only walkthrough. Saving notes here does not trigger remediation, support, or impersonation.",
-      metaLines: metadataLines.length > 0 ? metadataLines : undefined,
-    };
-  }
+      return {
+          title: "Onboarding drill handoff",
+          body:
+            "Record what happened in the mock drill, including evidence links and follow-up notes, then return to verification if the first-demo checklist still needs another pass.",
+          actions: [
+            { label: "Return to verification", href: verificationHref },
+            { label: "Inspect billing and features", href: settingsHref },
+          ],
+          footnote:
+            "This remains a navigation-only walkthrough. Saving notes here does not trigger remediation, support, or impersonation.",
+          metaLines: metadataLines.length > 0 ? metadataLines : undefined,
+        };
+      }
 
   const adminReturnHref = buildAdminReturnUrl(
     source,
     sectionKey,
     targetWorkspace,
+    runId,
     week8Focus,
+    targetWorkspace,
     attentionOrganization,
+    deliveryContext,
+    metadata.recentTrackKey ?? null,
+    metadata.recentUpdateKind ?? null,
+    metadata.evidenceCount ?? null,
+    metadata.recentOwnerLabel ?? null,
+    metadata.recentOwnerDisplayName ?? null,
+    metadata.recentOwnerEmail ?? null,
+    auditReceipt.auditReceiptFilename ?? null,
+    auditReceipt.auditReceiptExportedAt ?? null,
+    auditReceipt.auditReceiptFromDate ?? null,
+    auditReceipt.auditReceiptToDate ?? null,
+    auditReceipt.auditReceiptSha256 ?? null,
   );
 
   if (source === "admin-readiness") {
@@ -388,17 +599,19 @@ function getContextCard(args: {
               { label: "Return to admin readiness view", href: adminReturnHref },
             ],
       footnote:
-        "The return link restores navigation focus only. It does not mark the workspace complete automatically.",
+        `The return link restores navigation focus only. It does not mark the workspace complete automatically. ${auditExportEvidenceReminder(
+          sectionKey,
+        )}`,
       metaLines: metadataLines.length > 0 ? metadataLines : undefined,
     };
   }
 
-  return {
-    title: "Admin queue evidence handoff",
-    body:
-      deliveryContext === "recent_activity"
-        ? "You arrived here from the admin recent delivery activity snapshot. Review the latest workspace notes, add any missing evidence manually, then return to the queue when the follow-up is documented."
-        : "You arrived from the admin attention queue. Save the current verification or go-live notes here, then return to the queue once the follow-up is documented.",
+    return {
+      title: "Admin queue evidence handoff",
+      body:
+        deliveryContext === "recent_activity"
+          ? "You arrived here from the admin recent delivery activity snapshot. Review the latest workspace notes, add any missing evidence manually, then return to the queue when the follow-up is documented."
+          : "You arrived from the admin attention queue. Save the current verification or go-live notes here, then return to the queue once the follow-up is documented.",
     actions:
       sectionKey === "verification"
         ? [
@@ -410,7 +623,9 @@ function getContextCard(args: {
             { label: "Return to admin queue", href: adminReturnHref },
           ],
     footnote:
-      "This handoff is still manual. Queue and recent-activity views change only when people review and update the workspace surfaces.",
+      `This handoff is still manual. Queue and recent-activity views change only when people review and update the workspace surfaces. ${auditExportEvidenceReminder(
+        sectionKey,
+      )}`,
     metaLines: metadataLines.length > 0 ? metadataLines : undefined,
   };
 }
@@ -418,6 +633,7 @@ function getContextCard(args: {
 function getDeliveryStatusGuidance(args: {
   status: ControlPlaneDeliveryTrackStatus;
   sectionKey: SectionKey;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -426,10 +642,19 @@ function getDeliveryStatusGuidance(args: {
   recentTrackKey?: "verification" | "go_live" | null;
   recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null;
   evidenceCount?: number | null;
+  recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
 }): { title: string; body: string; actionLabel: string; actionHref: string } {
   const {
     status,
     sectionKey,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -438,6 +663,14 @@ function getDeliveryStatusGuidance(args: {
     recentTrackKey,
     recentUpdateKind,
     evidenceCount,
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
   } = args;
   const navSource = normalizeSource(source);
   const targetWorkspace = attentionWorkspace ?? "";
@@ -445,13 +678,26 @@ function getDeliveryStatusGuidance(args: {
     navSource ?? undefined,
     sectionKey,
     targetWorkspace,
+    runId,
     week8Focus,
+    targetWorkspace,
     attentionOrganization,
+    deliveryContext,
+    recentTrackKey,
+    recentUpdateKind,
+    evidenceCount,
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
   );
-  const verificationHref = buildContextHref(
-    "/verification",
-    navSource,
-    "verification",
+  const handoffContextArgs: Omit<BuildContextHrefArgs, "surface"> = {
+    source: navSource,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -459,19 +705,23 @@ function getDeliveryStatusGuidance(args: {
     recentTrackKey,
     recentUpdateKind,
     evidenceCount,
-  );
-  const goLiveHref = buildContextHref(
-    "/go-live",
-    navSource,
-    "go_live",
-    week8Focus,
-    attentionWorkspace,
-    attentionOrganization,
-    deliveryContext,
-    recentTrackKey,
-    recentUpdateKind,
-    evidenceCount,
-  );
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
+  };
+  const verificationHref = buildContextHref("/verification", {
+    ...handoffContextArgs,
+    surface: "verification",
+  });
+  const goLiveHref = buildContextHref("/go-live", {
+    ...handoffContextArgs,
+    surface: "go_live",
+  });
 
   const recentSummary =
     deliveryContext === "recent_activity"
@@ -517,6 +767,7 @@ export function WorkspaceDeliveryTrackPanel({
   description,
   source,
   surface,
+  runId,
   week8Focus,
   attentionWorkspace,
   attentionOrganization,
@@ -524,6 +775,14 @@ export function WorkspaceDeliveryTrackPanel({
   recentTrackKey,
   recentUpdateKind,
   evidenceCount,
+  recentOwnerLabel,
+  recentOwnerDisplayName,
+  recentOwnerEmail,
+  auditReceiptFilename,
+  auditReceiptExportedAt,
+  auditReceiptFromDate,
+  auditReceiptToDate,
+  auditReceiptSha256,
 }: {
   workspaceSlug: string;
   sectionKey: SectionKey;
@@ -531,6 +790,7 @@ export function WorkspaceDeliveryTrackPanel({
   description: string;
   source?: string | null;
   surface?: DeliveryPanelSurface | null;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -538,6 +798,14 @@ export function WorkspaceDeliveryTrackPanel({
   recentTrackKey?: string | null;
   recentUpdateKind?: string | null;
   evidenceCount?: number | string | null;
+  recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
 }) {
   const queryClient = useQueryClient();
   const deliveryTrackQueryKey = ["workspace-delivery-track", workspaceSlug];
@@ -592,9 +860,17 @@ export function WorkspaceDeliveryTrackPanel({
         ? Number(evidenceCount)
         : null;
   const currentSurface = surface ?? sectionKey;
+  const auditExportReceipt = resolveAuditExportReceiptSummary({
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
+  });
   const statusGuidance = getDeliveryStatusGuidance({
     status: currentStatus,
     sectionKey,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -603,6 +879,14 @@ export function WorkspaceDeliveryTrackPanel({
     recentTrackKey: normalizedRecentTrackKey,
     recentUpdateKind: normalizedRecentUpdateKind,
     evidenceCount: normalizedEvidenceCount,
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
   });
   const formattedUpdatedAt = useMemo(() => {
     if (!sectionData?.updated_at) {
@@ -633,17 +917,28 @@ export function WorkspaceDeliveryTrackPanel({
   const contextCard = getContextCard({
     source: normalizedSource,
     sectionKey: currentSurface,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
     workspaceSlug,
     deliveryContext: normalizedDeliveryContext,
-    metadata: {
-      recentTrackKey: normalizedRecentTrackKey,
-      recentUpdateKind: normalizedRecentUpdateKind,
-      evidenceCount: normalizedEvidenceCount,
-    },
-  });
+      metadata: {
+        recentTrackKey: normalizedRecentTrackKey,
+        recentUpdateKind: normalizedRecentUpdateKind,
+        evidenceCount: normalizedEvidenceCount,
+        recentOwnerLabel,
+        recentOwnerDisplayName,
+        recentOwnerEmail,
+      },
+      auditReceipt: {
+        auditReceiptFilename,
+        auditReceiptExportedAt,
+        auditReceiptFromDate,
+        auditReceiptToDate,
+        auditReceiptSha256,
+      },
+    });
 
   const handleEvidenceChange = (
     index: number,
@@ -756,6 +1051,13 @@ export function WorkspaceDeliveryTrackPanel({
               </Link>
             </div>
           </div>
+        ) : null}
+        {auditExportReceipt ? (
+          <AuditExportReceiptCallout
+            receipt={auditExportReceipt}
+            title="Audit export continuity"
+            description={`Reference this receipt in the ${sectionKey === "verification" ? "verification" : "go-live"} delivery notes so later admin review points to the same exported file.`}
+          />
         ) : null}
         <div className="space-y-3">
           <div>

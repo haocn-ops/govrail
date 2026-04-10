@@ -10,10 +10,18 @@ import type {
   ControlPlaneWorkspaceDedicatedEnvironmentSaveRequest,
   ControlPlaneWorkspaceSsoSaveRequest,
 } from "@/lib/control-plane-types";
+import type {
+  AuditExportReceiptContinuityArgs,
+  AuditExportReceiptSummary,
+} from "@/lib/audit-export-receipt";
 import { buildAdminReturnHref, buildHandoffHref } from "@/lib/handoff-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildDedicatedHydrationConfigKey,
+  buildSsoHydrationConfigKey,
+} from "@/components/settings/enterprise-hydration";
 import {
   completeBillingCheckoutSession,
   cancelBillingSubscription,
@@ -55,6 +63,22 @@ function formatMetricValue(key: string, value: number): string {
   return String(value);
 }
 
+function formatFileSize(bytes?: number | null): string {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) {
+    return "-";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 function formatMetricLabel(key: string): string {
   switch (key) {
     case "runs_created":
@@ -75,6 +99,13 @@ function formatDate(value?: string | null): string {
   return new Date(value).toLocaleDateString();
 }
 
+function formatDateTime(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  return new Date(value).toLocaleString();
+}
+
 function formatUsageFraction(metric: { used: number; limit: number | null }): number {
   if (!metric.limit || metric.limit <= 0) {
     return 0;
@@ -92,8 +123,10 @@ function billingBadgeVariant(tone: "positive" | "warning" | "neutral"): "strong"
   return "subtle";
 }
 
+type SettingsPanelIntent = "upgrade" | "manage-plan" | "resolve-billing" | "rollback";
+
 function intentMatchesAction(
-  highlightIntent: "upgrade" | "manage-plan" | "resolve-billing" | null,
+  highlightIntent: SettingsPanelIntent | null,
   href?: string,
 ): boolean {
   if (!highlightIntent || !href) {
@@ -124,6 +157,13 @@ function formatDedicatedDeploymentModelLabel(model?: string | null): string {
     return "single tenant";
   }
   return model.replace(/_/g, " ");
+}
+
+function formatRunStatusLabel(status?: string | null): string {
+  if (!status) {
+    return "Not started";
+  }
+  return status.replace(/_/g, " ");
 }
 
 function enterpriseStatusBadgeVariant(args: {
@@ -183,6 +223,15 @@ function toIsoDateBoundary(value: string, mode: "start" | "end"): string | null 
     return null;
   }
   return date.toISOString();
+}
+
+async function computeBlobSha256(blob: Blob): Promise<string | null> {
+  if (!globalThis.crypto?.subtle) {
+    return null;
+  }
+
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 type ContractMetaSource =
@@ -257,6 +306,80 @@ function contractSourceDescription(source?: ContractMetaSource | null, issue?: C
   return "Contract source information is unavailable.";
 }
 
+type EnterpriseRecoveryCard = {
+  title: string;
+  body: string;
+  actions: Array<{
+    label: string;
+    href: string;
+  }>;
+  footnote: string;
+} | null;
+
+function buildEnterpriseRecoveryCard(args: {
+  feature: "sso" | "dedicated_environment";
+  contractSource?: ContractMetaSource | null;
+  contractIssue?: ContractMetaIssue;
+  writeResponseCode?: string | null;
+  sessionHref: string;
+  verificationHref: string;
+  upgradeHref: string;
+}): EnterpriseRecoveryCard {
+  const featureLabel = args.feature === "sso" ? "SSO" : "Dedicated environment";
+  if (args.writeResponseCode === "workspace_context_not_metadata") {
+    return {
+      title: `${featureLabel} context checkpoint`,
+      body: `${featureLabel} live write needs a metadata-backed workspace context before another submit. Re-open /session, confirm the active workspace identity, then keep any partial rollout notes tied to the same verification lane.`,
+      actions: [
+        { label: "Review workspace context on /session", href: args.sessionHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "Navigation only: re-check session context first, then retry from this workspace once the metadata-backed lane is restored.",
+    };
+  }
+  if (args.writeResponseCode === "workspace_feature_unavailable" || args.contractSource === "fallback_feature_gate") {
+    return {
+      title: `${featureLabel} upgrade lane`,
+      body: `${featureLabel} is still plan gated for this workspace. Use the upgrade path, then return here to re-check readiness before treating the controlled write surface as available.`,
+      actions: [
+        { label: "Upgrade plan", href: args.upgradeHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "This lane preserves workspace context and evidence links, but it does not unlock the feature automatically.",
+    };
+  }
+  if (
+    args.writeResponseCode === "control_plane_base_missing" ||
+    args.contractSource === "fallback_control_plane_unavailable"
+  ) {
+    return {
+      title: `${featureLabel} recovery lane`,
+      body: `${featureLabel} readiness is currently fallback-derived because the control plane is unavailable. Re-check session context, keep manual evidence notes, and retry after control-plane recovery.`,
+      actions: [
+        { label: "Review workspace context on /session", href: args.sessionHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "Use verification to capture what was attempted while live readiness remains unavailable; return here after recovery to retry.",
+    };
+  }
+  if (args.contractSource === "fallback_error") {
+    return {
+      title: `${featureLabel} fallback continuity lane`,
+      body: `${featureLabel} readiness could not be loaded from the live contract. Keep the verification notes current, confirm workspace context, and retry once the control-plane route is healthy again.`,
+      actions: [
+        { label: "Review workspace context on /session", href: args.sessionHref },
+        { label: "Capture verification evidence", href: args.verificationHref },
+      ],
+      footnote:
+        "Fallback continuity keeps the workspace lane auditable, but it does not replace the live readiness check.",
+    };
+  }
+  return null;
+}
+
 type EnterpriseAdditiveState = {
   configured: boolean | null;
   configurationState: string | null;
@@ -295,6 +418,10 @@ function formatTokenLabel(value?: string | null): string {
     return "-";
   }
   return value.replace(/[_-]/g, " ");
+}
+
+function hasWorkspaceManagementRole(role?: string | null): boolean {
+  return role === "workspace_owner" || role === "workspace_admin";
 }
 
 function isLikelyHttpsUrl(value: string): boolean {
@@ -434,6 +561,21 @@ type AuditExportState = {
   contractIssueCode: string | null;
 };
 
+type AuditExportReceipt = AuditExportReceiptSummary & {
+  format: "json" | "jsonl";
+  contentType: string | null;
+  sizeBytes: number;
+};
+
+function formatAuditExportEvidenceNote(receipt: AuditExportReceipt): string {
+  const filters =
+    receipt.fromDate || receipt.toDate
+      ? `${receipt.fromDate ?? "start"} -> ${receipt.toDate ?? "end"}`
+      : "full workspace history";
+  const hash = receipt.sha256 ?? "hash unavailable";
+  return `Audit export ${receipt.filename} (${receipt.format.toUpperCase()}, ${filters}, SHA-256: ${hash}).`;
+}
+
 function defaultAuditExportState(): AuditExportState {
   return {
     exporting: false,
@@ -493,7 +635,11 @@ function formatBillingActionAvailabilityText(args: {
   providerCode?: string | null;
   selfServeEnabled?: boolean;
   providerSupportsCheckout?: boolean;
+  selfServeReasonCode?: string | null;
 }): string {
+  if (args.selfServeReasonCode === "billing_self_serve_not_configured") {
+    return "Contract: billing_self_serve_not_configured. Configure Stripe-backed self-serve before operators rely on in-product upgrade or portal flows.";
+  }
   if (isMockBillingProvider(args.providerCode)) {
     return "Mock checkout is kept as a test-only fallback; production self-serve flows rely on Stripe when enabled.";
   }
@@ -507,6 +653,13 @@ function formatBillingActionAvailabilityText(args: {
     return "Provider checkout is configured but not currently ready. Refresh provider state and retry.";
   }
   return "Self-serve checkout is not live for this workspace yet. Continue with the workspace-managed fallback flow.";
+}
+
+function formatSelfServeSetupNotice(reasonCode?: string | null): string | null {
+  if (reasonCode !== "billing_self_serve_not_configured") {
+    return null;
+  }
+  return "Stripe-backed production self-serve is not configured for this workspace yet. Operators can review billing posture here, but upgrade, portal, and renewal recovery stay in the workspace-managed fallback lane until Stripe is enabled.";
 }
 
 function formatCheckoutActionError(
@@ -633,6 +786,9 @@ function formatEnterpriseWriteError(
     if (normalizedCode === "idempotency_conflict") {
       return `${featureLabel} write was already submitted with a different payload. Refresh the form and retry once the desktop service confirms the previous save.`;
     }
+    if (normalizedCode === "workspace_admin_required") {
+      return `${featureLabel} configuration requires workspace owner or admin access. Confirm your role and retry once the proper permissions are granted.`;
+    }
     if (error.status === 401 || error.status === 403) {
       return `${featureLabel} configuration requires workspace owner or admin access. Confirm your role and retry once the proper permissions are granted.`;
     }
@@ -646,8 +802,27 @@ function formatEnterpriseWriteError(
   return `Unable to submit ${featureLabel.toLowerCase()} configuration.`;
 }
 
+function formatAuditExportActionError(error: unknown): string {
+  if (isControlPlaneRequestError(error)) {
+    const normalizedCode = error.code.toLowerCase();
+    if (normalizedCode === "workspace_feature_unavailable") {
+      return "Audit export is gated by current plan entitlements. Upgrade to unlock export.";
+    }
+    if (normalizedCode === "control_plane_base_missing") {
+      return "Control plane is unavailable; audit export cannot be generated right now.";
+    }
+    if (error.message) {
+      return `Audit export request failed. Retry after checking workspace/control-plane health. (${error.message})`;
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return `Audit export request failed. Retry after checking workspace/control-plane health. (${error.message})`;
+  }
+  return "Audit export request failed. Retry after checking workspace/control-plane health.";
+}
+
 type SettingsSource = "admin-attention" | "admin-readiness" | "onboarding";
-type DeliveryContext = "recent_activity";
+type DeliveryContext = "recent_activity" | "week8";
 
 function normalizeSettingsSource(source?: string | null): SettingsSource | null {
   if (source === "admin-attention" || source === "admin-readiness" || source === "onboarding") {
@@ -657,7 +832,7 @@ function normalizeSettingsSource(source?: string | null): SettingsSource | null 
 }
 
 function normalizeDeliveryContext(value?: string | null): DeliveryContext | null {
-  return value === "recent_activity" ? "recent_activity" : null;
+  return value === "recent_activity" || value === "week8" ? value : null;
 }
 
 function normalizeRecentTrackKey(value?: string | null): "verification" | "go_live" | null {
@@ -683,6 +858,7 @@ function normalizeRecentUpdateKind(value?: string | null): ControlPlaneAdminDeli
 type SettingsHrefArgs = {
   pathname: string;
   source?: SettingsSource | null;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -691,14 +867,34 @@ type SettingsHrefArgs = {
   recentUpdateKind?: ControlPlaneAdminDeliveryUpdateKind | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
-  intent?: "manage-plan" | "resolve-billing" | "upgrade";
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
+  auditReceiptFilename?: string | null;
+  auditReceiptExportedAt?: string | null;
+  auditReceiptFromDate?: string | null;
+  auditReceiptToDate?: string | null;
+  auditReceiptSha256?: string | null;
+  intent?: SettingsPanelIntent;
 };
+
+function buildAuditExportReceiptContinuityArgs(
+  receipt?: AuditExportReceipt | null,
+): AuditExportReceiptContinuityArgs {
+  return {
+    auditReceiptFilename: receipt?.filename ?? null,
+    auditReceiptExportedAt: receipt?.exportedAt ?? null,
+    auditReceiptFromDate: receipt?.fromDate ?? null,
+    auditReceiptToDate: receipt?.toDate ?? null,
+    auditReceiptSha256: receipt?.sha256 ?? null,
+  };
+}
 
 function buildSettingsHref(args: SettingsHrefArgs): string {
   const href = buildHandoffHref(
     args.pathname,
     {
       source: args.source,
+      runId: args.runId,
       week8Focus: args.week8Focus,
       attentionWorkspace: args.attentionWorkspace,
       attentionOrganization: args.attentionOrganization,
@@ -707,6 +903,13 @@ function buildSettingsHref(args: SettingsHrefArgs): string {
       recentUpdateKind: args.recentUpdateKind,
       evidenceCount: args.evidenceCount,
       recentOwnerLabel: args.recentOwnerLabel,
+      recentOwnerDisplayName: args.recentOwnerDisplayName,
+      recentOwnerEmail: args.recentOwnerEmail,
+      auditReceiptFilename: args.auditReceiptFilename,
+      auditReceiptExportedAt: args.auditReceiptExportedAt,
+      auditReceiptFromDate: args.auditReceiptFromDate,
+      auditReceiptToDate: args.auditReceiptToDate,
+      auditReceiptSha256: args.auditReceiptSha256,
     },
     { preserveExistingQuery: true },
   );
@@ -720,7 +923,7 @@ function buildSettingsHref(args: SettingsHrefArgs): string {
 }
 
 function buildSettingsIntentHref(
-  intent: "manage-plan" | "resolve-billing" | "upgrade",
+  intent: SettingsPanelIntent,
   args: Omit<SettingsHrefArgs, "pathname" | "intent">,
 ): string {
   return buildSettingsHref({
@@ -756,6 +959,7 @@ export function WorkspaceSettingsPanel({
   workspaceSlug,
   highlightIntent = null,
   initialCheckoutSessionId = null,
+  runId,
   source,
   week8Focus,
   attentionWorkspace,
@@ -765,10 +969,13 @@ export function WorkspaceSettingsPanel({
   recentUpdateKind,
   evidenceCount,
   recentOwnerLabel,
+  recentOwnerDisplayName,
+  recentOwnerEmail,
 }: {
   workspaceSlug: string;
-  highlightIntent?: "upgrade" | "manage-plan" | "resolve-billing" | null;
+  highlightIntent?: SettingsPanelIntent | null;
   initialCheckoutSessionId?: string | null;
+  runId?: string | null;
   source?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
@@ -778,6 +985,8 @@ export function WorkspaceSettingsPanel({
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 }) {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
@@ -806,6 +1015,7 @@ export function WorkspaceSettingsPanel({
     defaultSubscriptionActionState,
   );
   const [auditExport, setAuditExport] = useState<AuditExportState>(defaultAuditExportState);
+  const [auditExportReceipt, setAuditExportReceipt] = useState<AuditExportReceipt | null>(null);
   const [auditExportFormat, setAuditExportFormat] = useState<"json" | "jsonl">("jsonl");
   const [auditFromDate, setAuditFromDate] = useState("");
   const [auditToDate, setAuditToDate] = useState("");
@@ -833,12 +1043,18 @@ export function WorkspaceSettingsPanel({
   );
 
   const workspace = data?.workspace;
+  const onboarding = data?.onboarding;
+  const workspaceRole = workspace?.membership.role ?? null;
+  const hasEnterpriseWriteAccess = hasWorkspaceManagementRole(workspaceRole);
   const plan = data?.plan;
   const billingSummary = data?.billing_summary;
   const billingProviders = data?.billing_providers;
   const subscription = data?.subscription;
   const usage = data?.usage;
   const members = data?.members ?? [];
+  const latestDemoRun = onboarding?.latest_demo_run ?? null;
+  const latestDemoRunHint = onboarding?.latest_demo_run_hint ?? null;
+  const rollbackStatusLabel = formatRunStatusLabel(latestDemoRun?.status);
   const providerEntries = billingProviders?.providers ?? [];
   const sessionProviderLabel = formatBillingProviderLabel(
     checkout.session?.billing_provider ?? null,
@@ -862,6 +1078,7 @@ export function WorkspaceSettingsPanel({
   const resolvedBillingProviderCode =
     subscription?.billing_provider ?? billingSummary?.provider ?? currentBillingProvider?.code ?? null;
   const isStripeWorkspace = isStripeBillingProvider(resolvedBillingProviderCode);
+  const selfServeSetupNotice = formatSelfServeSetupNotice(billingSummary?.self_serve_reason_code ?? null);
   const canOpenBillingPortal =
     Boolean(subscription) && Boolean(currentBillingProvider?.supports_customer_portal);
   const showLocalSubscriptionControls = !isStripeWorkspace && (canScheduleCancellation || canResumeRenewal);
@@ -874,6 +1091,7 @@ export function WorkspaceSettingsPanel({
     typeof evidenceCount === "number" && Number.isFinite(evidenceCount) ? evidenceCount : null;
   const handoffHrefArgs = {
     source: normalizedSource,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -882,14 +1100,28 @@ export function WorkspaceSettingsPanel({
     recentUpdateKind: normalizedRecentUpdateKind,
     evidenceCount: normalizedEvidenceCount,
     recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    ...buildAuditExportReceiptContinuityArgs(auditExportReceipt),
   } satisfies Omit<SettingsHrefArgs, "pathname" | "intent">;
+  const sessionHref = buildSettingsHref({ pathname: "/session", ...handoffHrefArgs });
   const adminReturnHref = buildAdminReturnHref("/admin", {
     source: normalizedSource,
+    runId,
     queueSurface: normalizedRecentTrackKey,
     week8Focus,
     attentionWorkspace: attentionWorkspace ?? workspaceSlug,
     attentionOrganization,
+    deliveryContext: normalizedDeliveryContext,
+    recentTrackKey: normalizedRecentTrackKey,
+    recentUpdateKind: normalizedRecentUpdateKind,
+    evidenceCount: normalizedEvidenceCount,
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    ...buildAuditExportReceiptContinuityArgs(auditExportReceipt),
   });
+  const playgroundHref = buildSettingsHref({ pathname: "/playground", ...handoffHrefArgs });
   const usageHref = buildSettingsHref({ pathname: "/usage", ...handoffHrefArgs });
   const verificationHref = buildSettingsHref({ pathname: "/verification?surface=verification", ...handoffHrefArgs });
   const goLiveHref = buildSettingsHref({ pathname: "/go-live?surface=go_live", ...handoffHrefArgs });
@@ -961,8 +1193,10 @@ export function WorkspaceSettingsPanel({
     ssoReadiness?.email_domain ?? null,
   ]);
   const ssoConfiguredDomainsDraftValue = ssoConfiguredDomains.join(", ");
-  const ssoConfiguredIdentity =
-    ssoReadiness?.provider_type === "saml" ? (ssoReadiness?.audience ?? null) : (ssoReadiness?.client_id ?? null);
+  const ssoConfiguredIdentity = readString(
+    ssoReadiness?.provider_type === "saml" ? ssoReadiness?.audience : ssoReadiness?.client_id,
+  );
+  const ssoConfiguredSigningCertificate = readString(ssoReadiness?.signing_certificate);
   const ssoNextSteps = ssoReadiness?.next_steps ?? [
     "Upgrade to a plan with SSO support.",
     "Choose OIDC or SAML as the connection protocol.",
@@ -986,6 +1220,24 @@ export function WorkspaceSettingsPanel({
   const dedicatedDataClassification = readString(dedicatedEnvironmentReadiness?.data_classification);
   const dedicatedRequestedCapacity = readString(dedicatedEnvironmentReadiness?.requested_capacity);
   const dedicatedRequestedSla = readString(dedicatedEnvironmentReadiness?.requested_sla);
+  const ssoRecoveryCard = buildEnterpriseRecoveryCard({
+    feature: "sso",
+    contractSource: ssoContractSource,
+    contractIssue: ssoContractIssue,
+    writeResponseCode: ssoWriteState.responseCode,
+    sessionHref,
+    verificationHref,
+    upgradeHref: ssoUpgradeHref,
+  });
+  const dedicatedRecoveryCard = buildEnterpriseRecoveryCard({
+    feature: "dedicated_environment",
+    contractSource: dedicatedContractSource,
+    contractIssue: dedicatedContractIssue,
+    writeResponseCode: dedicatedWriteState.responseCode,
+    sessionHref,
+    verificationHref,
+    upgradeHref: dedicatedEnvironmentUpgradeHref,
+  });
   const ssoDomainList = ssoDraft.domains
     .split(",")
     .map((item) => item.trim().toLowerCase())
@@ -1004,6 +1256,8 @@ export function WorkspaceSettingsPanel({
   const ssoPreflightReady = ssoValidationErrors.length === 0;
   const ssoSubmitDisabledReason = ssoWriteState.submitting
     ? "Submitting SSO configuration..."
+    : !hasEnterpriseWriteAccess
+      ? "SSO configuration requires workspace owner or admin access before controlled live write is enabled."
     : !ssoFeatureEnabled
       ? "SSO write flow is locked until plan upgrade."
       : !ssoPreflightReady
@@ -1027,6 +1281,8 @@ export function WorkspaceSettingsPanel({
   const dedicatedPreflightReady = dedicatedValidationErrors.length === 0;
   const dedicatedSubmitDisabledReason = dedicatedWriteState.submitting
     ? "Submitting dedicated-environment intake..."
+    : !hasEnterpriseWriteAccess
+      ? "Dedicated environment configuration requires workspace owner or admin access before controlled live write is enabled."
     : !dedicatedEnvironmentFeatureEnabled
       ? "Dedicated environment write flow is locked until plan upgrade."
       : !dedicatedPreflightReady
@@ -1057,13 +1313,16 @@ export function WorkspaceSettingsPanel({
           body: `Finish the first demo by confirming billing, feature gating, and audit-export readiness so the Week 8 checklist can cite concrete evidence. This page captures the billing plan, the enrolled feature toggles, and the ability to download audit events before you head back to verification or the mock go-live drill.`,
         }
       : null;
+  const rollbackOwnerSummary =
+    recentOwnerDisplayName ?? recentOwnerLabel ?? recentOwnerEmail ?? "Current operator";
   const intentContextMap: Record<
-    "manage-plan" | "resolve-billing" | "upgrade",
+    SettingsPanelIntent,
     {
       title: string;
       body: string;
       actions: Array<{ label: string; href: string }>;
       footnote: string;
+      highlights?: Array<{ label: string; value: string }>;
     }
   > = {
     "manage-plan": {
@@ -1096,6 +1355,30 @@ export function WorkspaceSettingsPanel({
       ],
       footnote: "The upgrade intent keeps the new feature gating decision in the same navigation context—no support or impersonation is happening.",
     },
+    rollback: {
+      title: "Rollback guidance intent",
+      body:
+        latestDemoRun
+          ? "This rollback lane is for controlled recovery after a failed, cancelled, or unstable demo run. Re-check the run context, capture the recovery evidence, confirm downstream usage impact, then return to the readiness lane with the same workspace thread."
+          : "This rollback lane is for controlled recovery when the Week 8 drill needs to pause. Re-check the workspace session, capture the recovery evidence, confirm downstream usage impact, then return to the readiness lane with the same workspace thread.",
+      actions: [
+        { label: "Retry playground run", href: playgroundHref },
+        { label: "Capture recovery evidence", href: verificationHref },
+        { label: "Confirm usage impact", href: usageHref },
+        { label: "Return to admin readiness view", href: adminReturnHref },
+      ],
+      footnote:
+        "Navigation only: this rollback lane preserves run-aware handoff context across playground, verification, usage, and admin. It does not automate rollback, remediation, or role changes.",
+      highlights: [
+        { label: "Current run", value: latestDemoRun?.run_id ?? runId ?? "No demo run linked" },
+        { label: "Run status", value: rollbackStatusLabel },
+        {
+          label: "Latest hint",
+          value: latestDemoRunHint?.status_label ?? "Record the recovery decision in verification notes.",
+        },
+        { label: "Owner", value: rollbackOwnerSummary },
+      ],
+    },
   };
   const intentCard = highlightIntent ? intentContextMap[highlightIntent] : null;
   const showBillingFollowUpCard =
@@ -1116,6 +1399,7 @@ export function WorkspaceSettingsPanel({
     footnote:
       "Navigation only: these links preserve governance context across settings, verification, go-live, and admin readiness without automation, support tooling, or impersonation.",
   };
+  const settingsAdminReturnActionsHref = "#settings-admin-return-actions";
   const usagePressureCard = {
     title: "Plan limit and usage pressure",
     body:
@@ -1173,6 +1457,10 @@ export function WorkspaceSettingsPanel({
           "These navigation cues keep checkout, portal, and audit evidence linked to the same workspace timeline; they do not open support workflows, automate remediation, or impersonate any role.",
       }
     : null;
+  const billingEvidenceAdminReturnActionsHref = "#settings-billing-evidence-admin-return";
+  const ssoAdminReturnActionsHref = "#settings-sso-admin-return";
+  const dedicatedAdminReturnActionsHref = "#settings-dedicated-admin-return";
+  const auditExportAdminReturnActionsHref = "#settings-audit-export-admin-return";
 
   useEffect(() => {
     if (!initialCheckoutSessionId || checkout.session?.session_id === initialCheckoutSessionId) {
@@ -1220,11 +1508,12 @@ export function WorkspaceSettingsPanel({
   }, [checkout.session?.session_id, initialCheckoutSessionId]);
 
   useEffect(() => {
-    const configKey = ssoReadiness?.configured_at ?? (ssoConfigured ? "configured" : null);
+    const configKey = buildSsoHydrationConfigKey({
+      readiness: ssoReadiness,
+      configuredIdentity: ssoConfiguredIdentity,
+      configuredDomains: ssoConfiguredDomains,
+    });
     if (!configKey || hydratedSsoConfigKey === configKey) {
-      return;
-    }
-    if (!ssoReadiness?.provider_type && !ssoReadiness?.metadata_url && !ssoConfiguredIdentity && ssoConfiguredDomains.length === 0) {
       return;
     }
 
@@ -1247,17 +1536,14 @@ export function WorkspaceSettingsPanel({
   ]);
 
   useEffect(() => {
-    const configKey = dedicatedEnvironmentReadiness?.configured_at ?? (dedicatedConfigured ? "configured" : null);
+    const configKey = buildDedicatedHydrationConfigKey({
+      readiness: dedicatedEnvironmentReadiness,
+      configuredRegion: dedicatedConfiguredRegion,
+      requesterEmail: dedicatedRequesterEmail,
+      requestedCapacity: dedicatedRequestedCapacity,
+      requestedSla: dedicatedRequestedSla,
+    });
     if (!configKey || hydratedDedicatedConfigKey === configKey) {
-      return;
-    }
-    if (
-      !dedicatedConfiguredRegion &&
-      !dedicatedRequesterEmail &&
-      !dedicatedRequestedCapacity &&
-      !dedicatedRequestedSla &&
-      !dedicatedEnvironmentReadiness?.network_boundary
-    ) {
       return;
     }
 
@@ -1376,9 +1662,7 @@ export function WorkspaceSettingsPanel({
     try {
       const payload = await completeBillingCheckoutSession(checkout.session.session_id);
       const session = extractCheckoutSession(payload);
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace-settings", workspaceSlug],
-      });
+      await invalidateBillingAndEnterpriseQueries();
       setCheckout((current) => ({
         ...current,
         completing: false,
@@ -1419,9 +1703,7 @@ export function WorkspaceSettingsPanel({
 
     try {
       await cancelBillingSubscription();
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace-settings", workspaceSlug],
-      });
+      await invalidateBillingAndEnterpriseQueries();
       setSubscriptionAction({
         openingPortal: false,
         cancelling: false,
@@ -1462,9 +1744,7 @@ export function WorkspaceSettingsPanel({
 
     try {
       await resumeBillingSubscription();
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace-settings", workspaceSlug],
-      });
+      await invalidateBillingAndEnterpriseQueries();
       setSubscriptionAction({
         openingPortal: false,
         cancelling: false,
@@ -1520,6 +1800,20 @@ export function WorkspaceSettingsPanel({
         notice: null,
       });
     }
+  }
+
+  async function invalidateBillingAndEnterpriseQueries(): Promise<void> {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["workspace-settings", workspaceSlug],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["workspace-sso-readiness", workspaceSlug],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["workspace-dedicated-environment-readiness", workspaceSlug],
+      }),
+    ]);
   }
 
   async function submitSsoConfiguration(): Promise<void> {
@@ -1692,49 +1986,71 @@ export function WorkspaceSettingsPanel({
       contractIssueMessage: null,
       contractIssueCode: null,
     });
+    try {
+      const result = await downloadWorkspaceAuditExportViewModel({
+        format: auditExportFormat,
+        from: from ?? undefined,
+        to: to ?? undefined,
+      });
+      const contractSource = result.contract_meta.source;
+      if (result.ok) {
+        const download = result;
+        const sha256 = await computeBlobSha256(download.blob);
+        const objectUrl = URL.createObjectURL(download.blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = download.filename;
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(objectUrl);
+        setAuditExport({
+          exporting: false,
+          error: null,
+          notice: "Audit export downloaded. Attach it to verification/go-live evidence as needed.",
+          contractSource,
+          contractIssueMessage: null,
+          contractIssueCode: null,
+        });
+        setAuditExportReceipt({
+          filename: download.filename,
+          format: download.format,
+          exportedAt: new Date().toISOString(),
+          fromDate: auditFromDate.trim() || null,
+          toDate: auditToDate.trim() || null,
+          contentType: download.content_type,
+          sizeBytes: download.blob.size,
+          sha256,
+        });
+        return;
+      }
 
-    const result = await downloadWorkspaceAuditExportViewModel({
-      format: auditExportFormat,
-      from: from ?? undefined,
-      to: to ?? undefined,
-    });
-    const contractSource = result.contract_meta.source;
-    if (result.ok) {
-      const download = result;
-      const objectUrl = URL.createObjectURL(download.blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = download.filename;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
+      const issue = result.error;
+      const sourceMessage =
+        contractSource === "fallback_feature_gate"
+          ? "Audit export is gated by current plan entitlements. Upgrade to unlock export."
+          : contractSource === "fallback_control_plane_unavailable"
+            ? "Control plane is unavailable; audit export cannot be generated right now."
+            : "Audit export request failed. Retry after checking workspace/control-plane health.";
       setAuditExport({
         exporting: false,
-        error: null,
-        notice: "Audit export downloaded. Attach it to verification/go-live evidence as needed.",
+        error: `${sourceMessage}${issue.message ? ` (${issue.message})` : ""}`,
+        notice: null,
         contractSource,
-        contractIssueMessage: null,
-        contractIssueCode: null,
+        contractIssueMessage: issue.message,
+        contractIssueCode: issue.code,
       });
-      return;
+    } catch (error) {
+      setAuditExport({
+        exporting: false,
+        error: formatAuditExportActionError(error),
+        notice: null,
+        contractSource: "fallback_error",
+        contractIssueMessage:
+          isControlPlaneRequestError(error) || error instanceof Error ? error.message : null,
+        contractIssueCode: isControlPlaneRequestError(error) ? error.code : "request_failed",
+      });
     }
-
-    const issue = result.error;
-    const sourceMessage =
-      contractSource === "fallback_feature_gate"
-        ? "Audit export is gated by current plan entitlements. Upgrade to unlock export."
-        : contractSource === "fallback_control_plane_unavailable"
-          ? "Control plane is unavailable; audit export cannot be generated right now."
-          : "Audit export request failed. Retry after checking workspace/control-plane health.";
-    setAuditExport({
-      exporting: false,
-      error: `${sourceMessage}${issue.message ? ` (${issue.message})` : ""}`,
-      notice: null,
-      contractSource,
-      contractIssueMessage: issue.message,
-      contractIssueCode: issue.code,
-    });
   }
 
   return (
@@ -1817,7 +2133,11 @@ export function WorkspaceSettingsPanel({
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p className="text-muted">{governanceClosureCard.body}</p>
-          <div className="flex flex-wrap gap-2">
+          <p className="text-xs text-muted">
+            Use the <Link href={settingsAdminReturnActionsHref}>admin readiness return actions below</Link> once the
+            settings evidence is ready to hand back.
+          </p>
+          <div id="settings-admin-return-actions" className="flex flex-wrap gap-2">
             {governanceClosureCard.actions.map((action) => (
               <Link
                 key={action.href}
@@ -1991,6 +2311,24 @@ export function WorkspaceSettingsPanel({
               <p className="mt-1 text-xs text-muted">Issue: {ssoContractIssue.message}</p>
             ) : null}
           </div>
+          {ssoRecoveryCard ? (
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <p className="font-medium text-foreground">{ssoRecoveryCard.title}</p>
+              <p className="mt-1 text-xs text-muted">{ssoRecoveryCard.body}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ssoRecoveryCard.actions.map((action) => (
+                  <Link
+                    key={action.href}
+                    href={action.href}
+                    className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+                  >
+                    {action.label}
+                  </Link>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted">{ssoRecoveryCard.footnote}</p>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-border bg-background p-4">
@@ -2042,6 +2380,12 @@ export function WorkspaceSettingsPanel({
                     {ssoReadiness?.entrypoint_url ?? "Not saved"}
                   </p>
                 </div>
+                <div className="rounded-xl border border-border bg-card p-3 sm:col-span-2">
+                  <p className="text-xs text-muted">Signing certificate</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {ssoConfiguredSigningCertificate ?? "Not saved"}
+                  </p>
+                </div>
               </div>
               {ssoReadiness?.notes ? (
                 <p className="mt-3 text-xs text-muted">Operator notes: {ssoReadiness.notes}</p>
@@ -2082,7 +2426,7 @@ export function WorkspaceSettingsPanel({
                 Protocol
                 <select
                   value={ssoDraft.protocol}
-                  disabled={!ssoFeatureEnabled}
+                  disabled={!ssoFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     const value = event.currentTarget.value === "saml" ? "saml" : "oidc";
                     setSsoDraft((current) => ({ ...current, protocol: value }));
@@ -2101,7 +2445,7 @@ export function WorkspaceSettingsPanel({
                   type="url"
                   placeholder="https://idp.example.com/.well-known/openid-configuration"
                   value={ssoDraft.metadataUrl}
-                  disabled={!ssoFeatureEnabled}
+                  disabled={!ssoFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setSsoDraft((current) => ({ ...current, metadataUrl: event.currentTarget.value }));
                     setSsoPreflightNotice(null);
@@ -2116,7 +2460,7 @@ export function WorkspaceSettingsPanel({
                   type="text"
                   placeholder="workspace-console"
                   value={ssoDraft.entityId}
-                  disabled={!ssoFeatureEnabled}
+                  disabled={!ssoFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setSsoDraft((current) => ({ ...current, entityId: event.currentTarget.value }));
                     setSsoPreflightNotice(null);
@@ -2131,7 +2475,7 @@ export function WorkspaceSettingsPanel({
                   type="text"
                   placeholder="example.com, sub.example.com"
                   value={ssoDraft.domains}
-                  disabled={!ssoFeatureEnabled}
+                  disabled={!ssoFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setSsoDraft((current) => ({ ...current, domains: event.currentTarget.value }));
                     setSsoPreflightNotice(null);
@@ -2153,7 +2497,7 @@ export function WorkspaceSettingsPanel({
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={!ssoPreflightReady}
+                disabled={!hasEnterpriseWriteAccess || !ssoPreflightReady}
                 onClick={() => {
                   setSsoPreflightNotice(
                     "SSO preflight is ready. Review the summary, then use controlled live write to record configuration intent.",
@@ -2181,6 +2525,12 @@ export function WorkspaceSettingsPanel({
             <p className="mt-2 text-xs text-muted">
               Submit status: {ssoSubmitDisabledReason ?? "Ready for controlled live write."}
             </p>
+            {!hasEnterpriseWriteAccess ? (
+              <p className="mt-2 text-xs text-muted">
+                Current workspace role: <span className="text-foreground">{formatTokenLabel(workspaceRole)}</span>.
+                Coordinate the final SSO controlled live write with a workspace owner or admin.
+              </p>
+            ) : null}
             {!ssoPreflightReady ? (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted">
                 {ssoValidationErrors.map((line) => (
@@ -2230,7 +2580,11 @@ export function WorkspaceSettingsPanel({
           ? "SSO is already included in this plan, so keep the verification details and linked artifacts stitched into the Week 7/8 governance trail."
           : "SSO remains plan gated; keep this lane ready with the recorded run notes so the supported upgrade can reference them once it is unlocked."}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <p className="text-xs text-muted">
+        Use the <Link href={ssoAdminReturnActionsHref}>admin readiness return action below</Link> once the SSO evidence
+        is ready to hand back.
+      </p>
+      <div id="settings-sso-admin-return" className="flex flex-wrap gap-2">
         <Link
           href={verificationHref}
           className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
@@ -2319,6 +2673,24 @@ export function WorkspaceSettingsPanel({
               <p className="mt-1 text-xs text-muted">Issue: {dedicatedContractIssue.message}</p>
             ) : null}
           </div>
+          {dedicatedRecoveryCard ? (
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <p className="font-medium text-foreground">{dedicatedRecoveryCard.title}</p>
+              <p className="mt-1 text-xs text-muted">{dedicatedRecoveryCard.body}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {dedicatedRecoveryCard.actions.map((action) => (
+                  <Link
+                    key={action.href}
+                    href={action.href}
+                    className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+                  >
+                    {action.label}
+                  </Link>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted">{dedicatedRecoveryCard.footnote}</p>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-border bg-background p-4">
@@ -2412,7 +2784,7 @@ export function WorkspaceSettingsPanel({
                   type="text"
                   placeholder="us-east-1"
                   value={dedicatedDraft.targetRegion}
-                  disabled={!dedicatedEnvironmentFeatureEnabled}
+                  disabled={!dedicatedEnvironmentFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setDedicatedDraft((current) => ({ ...current, targetRegion: event.currentTarget.value }));
                     setDedicatedPreflightNotice(null);
@@ -2425,7 +2797,7 @@ export function WorkspaceSettingsPanel({
                 Data classification
                 <select
                   value={dedicatedDraft.dataClassification}
-                  disabled={!dedicatedEnvironmentFeatureEnabled}
+                  disabled={!dedicatedEnvironmentFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     const value = event.currentTarget.value;
                     setDedicatedDraft((current) => ({
@@ -2449,7 +2821,7 @@ export function WorkspaceSettingsPanel({
                   type="email"
                   placeholder="owner@example.com"
                   value={dedicatedDraft.requesterEmail}
-                  disabled={!dedicatedEnvironmentFeatureEnabled}
+                  disabled={!dedicatedEnvironmentFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setDedicatedDraft((current) => ({ ...current, requesterEmail: event.currentTarget.value }));
                     setDedicatedPreflightNotice(null);
@@ -2464,7 +2836,7 @@ export function WorkspaceSettingsPanel({
                   type="text"
                   placeholder="6 vCPU / 16 GB memory"
                   value={dedicatedDraft.requestedCapacity}
-                  disabled={!dedicatedEnvironmentFeatureEnabled}
+                  disabled={!dedicatedEnvironmentFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setDedicatedDraft((current) => ({ ...current, requestedCapacity: event.currentTarget.value }));
                     setDedicatedPreflightNotice(null);
@@ -2479,7 +2851,7 @@ export function WorkspaceSettingsPanel({
                   type="text"
                   placeholder="99.9% / 24x7"
                   value={dedicatedDraft.requestedSla}
-                  disabled={!dedicatedEnvironmentFeatureEnabled}
+                  disabled={!dedicatedEnvironmentFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setDedicatedDraft((current) => ({ ...current, requestedSla: event.currentTarget.value }));
                     setDedicatedPreflightNotice(null);
@@ -2492,7 +2864,7 @@ export function WorkspaceSettingsPanel({
                 Network/isolation notes (optional)
                 <textarea
                   value={dedicatedDraft.networkNotes}
-                  disabled={!dedicatedEnvironmentFeatureEnabled}
+                  disabled={!dedicatedEnvironmentFeatureEnabled || !hasEnterpriseWriteAccess}
                   onChange={(event) => {
                     setDedicatedDraft((current) => ({ ...current, networkNotes: event.currentTarget.value }));
                     setDedicatedPreflightNotice(null);
@@ -2517,7 +2889,7 @@ export function WorkspaceSettingsPanel({
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={!dedicatedPreflightReady}
+                disabled={!hasEnterpriseWriteAccess || !dedicatedPreflightReady}
                 onClick={() => {
                   setDedicatedPreflightNotice(
                     "Dedicated environment preflight is ready. Review the summary, then use controlled live write to record the provisioning request.",
@@ -2549,6 +2921,12 @@ export function WorkspaceSettingsPanel({
             <p className="mt-2 text-xs text-muted">
               Submit status: {dedicatedSubmitDisabledReason ?? "Ready for controlled live write."}
             </p>
+            {!hasEnterpriseWriteAccess ? (
+              <p className="mt-2 text-xs text-muted">
+                Current workspace role: <span className="text-foreground">{formatTokenLabel(workspaceRole)}</span>.
+                Coordinate the final dedicated-environment controlled live write with a workspace owner or admin.
+              </p>
+            ) : null}
             {!dedicatedPreflightReady ? (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted">
                 {dedicatedValidationErrors.map((line) => (
@@ -2604,7 +2982,11 @@ export function WorkspaceSettingsPanel({
           ? "The plan already gates the dedicated deployment, so keep delivery notes, compliance context, and artifacts together as the environment provisions."
           : "Dedicated environment is still plan gated; once the workspace upgrade unlocks it, keep this lane ready with the recorded readiness notes before returning to admin readiness."}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <p className="text-xs text-muted">
+        Use the <Link href={dedicatedAdminReturnActionsHref}>admin readiness return action below</Link> once the
+        dedicated-environment evidence is ready to hand back.
+      </p>
+      <div id="settings-dedicated-admin-return" className="flex flex-wrap gap-2">
         <Link
           href={verificationHref}
           className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
@@ -2686,6 +3068,13 @@ export function WorkspaceSettingsPanel({
             <p className="mt-2 text-xs text-muted">
               Self-serve enabled: {billingSummary?.self_serve_enabled ? "yes" : "no (workspace-managed fallback)"}
             </p>
+            {selfServeSetupNotice ? (
+              <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50/80 p-3 text-xs text-amber-900">
+                <p className="font-medium">Self-serve provider setup required</p>
+                <p className="mt-1">{selfServeSetupNotice}</p>
+                <p className="mt-1 font-mono">billing_self_serve_not_configured</p>
+              </div>
+            ) : null}
           </div>
           {providerEntries.length > 0 ? (
             <div className="rounded-2xl border border-border bg-background p-4">
@@ -2739,6 +3128,7 @@ export function WorkspaceSettingsPanel({
                   providerCode: currentBillingProvider?.code ?? resolvedBillingProviderCode,
                   selfServeEnabled: billingSummary.self_serve_enabled,
                   providerSupportsCheckout: currentBillingProvider?.supports_checkout,
+                  selfServeReasonCode: billingSummary.self_serve_reason_code ?? null,
                 })}
               </p>
               {canStartCheckout ? (
@@ -2795,6 +3185,16 @@ export function WorkspaceSettingsPanel({
             <div className="rounded-2xl border border-border bg-background p-4">
               <p className="font-medium text-foreground">{intentCard.title}</p>
               <p className="mt-1 text-xs text-muted">{intentCard.body}</p>
+              {intentCard.highlights?.length ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {intentCard.highlights.map((item) => (
+                    <div key={item.label} className="rounded-xl border border-border bg-card px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">{item.label}</p>
+                      <p className="mt-1 text-xs text-foreground">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 {intentCard.actions.map((action) => (
                   <Link
@@ -2813,7 +3213,16 @@ export function WorkspaceSettingsPanel({
             <div className="rounded-2xl border border-border bg-background p-4">
               <p className="font-medium text-foreground">{billingFollowUpCard.title}</p>
               <p className="mt-1 text-xs text-muted">{billingFollowUpCard.body}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              {!normalizedSource || normalizedSource !== "onboarding" ? (
+                <p className="mt-3 text-xs text-muted">
+                  Use the <Link href={billingEvidenceAdminReturnActionsHref}>admin readiness return action below</Link>{" "}
+                  once the billing evidence is ready to hand back.
+                </p>
+              ) : null}
+              <div
+                id={!normalizedSource || normalizedSource !== "onboarding" ? "settings-billing-evidence-admin-return" : undefined}
+                className="mt-3 flex flex-wrap gap-2"
+              >
                 {billingFollowUpCard.actions.map((action) => (
                   <Link
                     key={action.href}
@@ -2876,11 +3285,14 @@ export function WorkspaceSettingsPanel({
             </div>
           ) : null}
           <div className="rounded-2xl border border-border bg-background p-4">
-            <p className="text-muted">Audit export</p>
+            <p className="text-muted">Audit export continuity</p>
             <p className="mt-1 text-xs text-muted">
               {auditExportEnabled
                 ? "Export workspace audit events for compliance review and attach output into verification/go-live evidence."
                 : "Audit export is not enabled on this workspace plan. Upgrade to unlock export downloads."}
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              Navigation-only manual relay: these links preserve the workspace context but do not automatically attach the receipt or close rollout steps for you.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant={contractSourceBadgeVariant(auditContractSource)}>
@@ -2985,6 +3397,70 @@ export function WorkspaceSettingsPanel({
                 Export disabled reason: current plan does not include audit export.
               </p>
             ) : null}
+            {auditExportReceipt ? (
+              <div className="mt-3 rounded-2xl border border-border bg-card p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-medium text-foreground">Latest export receipt</p>
+                  <Badge variant="subtle">{auditExportReceipt.format.toUpperCase()}</Badge>
+                </div>
+                <p className="mt-2 text-xs text-muted">
+                  Keep this receipt with the downloaded file so verification, go-live, and admin follow-up all cite the
+                  same export details.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <p className="text-xs text-muted">Filename</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{auditExportReceipt.filename}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Exported at</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {formatDateTime(auditExportReceipt.exportedAt)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Filters</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {auditExportReceipt.fromDate || auditExportReceipt.toDate
+                        ? `${auditExportReceipt.fromDate ?? "start"} -> ${auditExportReceipt.toDate ?? "end"}`
+                        : "Full workspace history"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Content type</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {auditExportReceipt.contentType ?? "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">File size</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {formatFileSize(auditExportReceipt.sizeBytes)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">SHA-256</p>
+                    <p className="mt-1 break-all text-sm font-medium text-foreground">
+                      {auditExportReceipt.sha256 ?? "Unavailable in this browser"}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-muted">
+                  Date filters above reflect the manual input on this page; export execution still uses UTC day
+                  boundaries for the generated file.
+                </p>
+                <div className="mt-3 rounded-xl border border-border bg-background p-3">
+                  <p className="text-xs text-muted">Evidence note</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {formatAuditExportEvidenceNote(auditExportReceipt)}
+                  </p>
+                  <p className="mt-2 text-xs text-muted">
+                    Carry this exact note into verification, go-live, or the delivery track so the export file, filter
+                    window, and hash stay aligned.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
           {checkout.session ? (
             <div className="rounded-2xl border border-border bg-background p-4">
@@ -3078,7 +3554,11 @@ export function WorkspaceSettingsPanel({
             ? "Audit export is available for this plan, so catalog the filters and download details alongside verification, go-live, and admin readiness."
             : "Audit export is still plan gated; once the upgrade unlocks it, return here to note the intended download parameters before continuing the Week 7/8 trail."}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <p className="text-xs text-muted">
+          Use the <Link href={auditExportAdminReturnActionsHref}>admin readiness return action below</Link> once the
+          export evidence is ready to hand back.
+        </p>
+        <div id="settings-audit-export-admin-return" className="flex flex-wrap gap-2">
           <Link
             href={verificationHref}
             className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"

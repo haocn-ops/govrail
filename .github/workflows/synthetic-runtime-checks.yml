@@ -38,7 +38,17 @@ jobs:
       SYNTH_SUBJECT_ROLES: ${{ vars.ACP_SYNTH_SUBJECT_ROLES }}
       RUN_SSE_PROBES: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.run_sse_probes }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
       - name: Run synthetic probes
+        id: run_synthetic_probes
         run: |
           set -euo pipefail
           mkdir -p synthetic-runtime-checks
@@ -396,6 +406,76 @@ jobs:
           });
           EOF
 
+      - name: Build synthetic health summary
+        if: always()
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PROBE_RUNTIME_OUTCOME: ${{ steps.run_synthetic_probes.outcome }}
+          RUN_SSE_PROBES: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.run_sse_probes }}
+        run: |
+          set -euo pipefail
+          mkdir -p synthetic-runtime-checks
+          node <<'EOF'
+          const fs = require("node:fs");
+
+          const summaryPath = "synthetic-runtime-checks/synthetic-summary.json";
+          const hasSummary = fs.existsSync(summaryPath);
+          const summary = hasSummary ? JSON.parse(fs.readFileSync(summaryPath, "utf8")) : null;
+          const checks = Array.isArray(summary?.checks) ? summary.checks : [];
+          const okCount = checks.filter((check) => check && check.ok === true).length;
+          const skippedCount = checks.filter((check) => check && check.skipped === true).length;
+          const failedCount = checks.filter((check) => check && check.skipped !== true && check.ok !== true).length;
+
+          const lines = [
+            "# Synthetic runtime health",
+            "",
+            `- Event name: ${process.env.EVENT_NAME || "<unknown>"}`,
+            `- Run SSE probes: ${process.env.RUN_SSE_PROBES || "false"}`,
+            `- Probe runtime: ${process.env.PROBE_RUNTIME_OUTCOME || "skipped"}`,
+            `- Summary present: ${hasSummary}`,
+            `- Target count: ${Array.isArray(summary?.configured_targets) ? summary.configured_targets.length : 0}`,
+            `- Check count: ${checks.length}`,
+            `- Successful checks: ${okCount}`,
+            `- Skipped checks: ${skippedCount}`,
+            `- Failed checks: ${failedCount}`,
+          ];
+          fs.writeFileSync("synthetic-runtime-checks/synthetic-health-summary.md", `${lines.join("\n")}\n`);
+
+          const manifest = {
+            type: "synthetic_runtime_health",
+            inputs: {
+              event_name: process.env.EVENT_NAME || "",
+              run_sse_probes: (process.env.RUN_SSE_PROBES || "false") === "true",
+            },
+            outcomes: {
+              probe_runtime: process.env.PROBE_RUNTIME_OUTCOME || "skipped",
+            },
+            target_count: Array.isArray(summary?.configured_targets) ? summary.configured_targets.length : 0,
+            check_count: checks.length,
+            configured_identity: summary?.configured_identity ?? {
+              has_subject_id: false,
+              has_subject_roles: false,
+            },
+            artifacts: {
+              synthetic_summary_json: "synthetic-runtime-checks/synthetic-summary.json",
+              summary_md: "synthetic-runtime-checks/synthetic-health-summary.md",
+            },
+            generated_at: new Date().toISOString(),
+          };
+          fs.writeFileSync(
+            "synthetic-runtime-checks/synthetic-runtime-health-manifest.json",
+            `${JSON.stringify(manifest, null, 2)}\n`,
+          );
+          EOF
+
+      - name: Validate synthetic health artifact contract
+        if: always()
+        run: |
+          set -euo pipefail
+          node scripts/validate_synthetic_runtime_artifact.mjs \
+            --manifest synthetic-runtime-checks/synthetic-runtime-health-manifest.json \
+            --artifact-dir synthetic-runtime-checks
+
       - name: Upload synthetic artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -447,11 +527,83 @@ jobs:
         run: mkdir -p synthetic-runtime-checks
 
       - name: Run production readonly verify
+        id: verify_readonly
         env:
           VERIFY_OUTPUT_PATH: synthetic-runtime-checks/production-readonly-summary.json
         run: |
           set -euo pipefail
           npm run post-deploy:verify:readonly 2>&1 | tee synthetic-runtime-checks/production-readonly.log
+
+      - name: Build synthetic readonly summary
+        if: always()
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          VERIFY_READONLY_OUTCOME: ${{ steps.verify_readonly.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p synthetic-runtime-checks
+          cat > synthetic-runtime-checks/production-readonly-summary.md <<EOF
+          # Synthetic runtime production readonly verify
+
+          - Event name: ${EVENT_NAME}
+          - Base URL: ${BASE_URL}
+          - Tenant ID: ${TENANT_ID}
+          - Run ID: ${RUN_ID}
+          - Readonly verification: ${VERIFY_READONLY_OUTCOME}
+          EOF
+
+          if [ -f synthetic-runtime-checks/production-readonly-summary.json ]; then
+            node -e '
+              const fs = require("node:fs");
+              const summary = JSON.parse(fs.readFileSync("synthetic-runtime-checks/production-readonly-summary.json", "utf8"));
+              const lines = [
+                `- Summary path: ${summary.verification_output_path ?? "synthetic-runtime-checks/production-readonly-summary.json"}`,
+                `- Started at: ${summary.started_at ?? "<none>"}`,
+                `- Completed at: ${summary.completed_at ?? "<none>"}`,
+                `- Duration ms: ${summary.duration_ms ?? "<none>"}`,
+                `- Check count: ${summary.check_count ?? "<none>"}`,
+                `- Trace ID: ${summary.trace_id ?? "<none>"}`,
+                `- Run status: ${summary.run_status ?? "<none>"}`,
+                `- Artifact count: ${summary.artifact_count ?? "<none>"}`,
+                `- Artifact body checked: ${summary.artifact_body_checked ?? "<none>"}`
+              ];
+              fs.appendFileSync("synthetic-runtime-checks/production-readonly-summary.md", `${lines.join("\n")}\n`);
+            '
+          fi
+
+          node -e '
+            const fs = require("node:fs");
+            const manifest = {
+              type: "synthetic_runtime_production_readonly",
+              inputs: {
+                event_name: process.env.EVENT_NAME || "",
+                base_url: process.env.BASE_URL || "",
+                tenant_id: process.env.TENANT_ID || "",
+                run_id: process.env.RUN_ID || "",
+              },
+              outcomes: {
+                verify_readonly: process.env.VERIFY_READONLY_OUTCOME || "skipped",
+              },
+              artifacts: {
+                verify_readonly_log: "synthetic-runtime-checks/production-readonly.log",
+                verify_readonly_summary: "synthetic-runtime-checks/production-readonly-summary.json",
+                summary_md: "synthetic-runtime-checks/production-readonly-summary.md",
+              },
+              generated_at: new Date().toISOString(),
+            };
+            fs.writeFileSync(
+              "synthetic-runtime-checks/synthetic-runtime-production-manifest.json",
+              `${JSON.stringify(manifest, null, 2)}\n`,
+            );
+          '
+
+      - name: Validate synthetic readonly artifact contract
+        if: always()
+        run: |
+          set -euo pipefail
+          node scripts/validate_synthetic_runtime_artifact.mjs \
+            --manifest synthetic-runtime-checks/synthetic-runtime-production-manifest.json \
+            --artifact-dir synthetic-runtime-checks
 
       - name: Upload production readonly artifact
         if: always()

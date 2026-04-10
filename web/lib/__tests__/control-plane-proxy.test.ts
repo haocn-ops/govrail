@@ -9,6 +9,7 @@ import {
   controlPlaneErrorResponse,
   proxyControlPlane,
   proxyControlPlaneOrFallback,
+  requireMetadataWorkspaceContext,
 } from "../control-plane-proxy";
 
 const PROXY_ENV_KEYS = [
@@ -49,6 +50,8 @@ const metadataWorkspaceContext = {
     is_fallback: false,
     local_only: false,
     warning: null,
+    session_checkpoint_required: false,
+    checkpoint_label: "Trusted metadata session",
   },
   session_user: null,
   workspace: {
@@ -95,6 +98,43 @@ test("controlPlaneErrorResponse honors explicit status override", async () => {
   };
   assert.equal(payload.error.code, "workspace_context_not_metadata");
   assert.equal(payload.error.message, "Metadata-backed context required");
+});
+
+test("requireMetadataWorkspaceContext returns structured fallback details for non-metadata sources", async () => {
+  const response = requireMetadataWorkspaceContext({
+    workspaceContext: {
+      ...metadataWorkspaceContext,
+      source: "env-fallback",
+      source_detail: {
+        label: "Environment fallback (non-production)",
+        is_fallback: true,
+        local_only: true,
+        warning:
+          "Workspace context was loaded from environment fallback values. Use metadata-backed session context before production rollout.",
+        session_checkpoint_required: true,
+        checkpoint_label: "Session checkpoint required",
+      },
+    },
+    message: "Workspace details require metadata-backed SaaS context.",
+  });
+
+  assert.ok(response);
+  assert.equal(response.status, 412);
+  const payload = (await response.json()) as {
+    error: {
+      code: string;
+      message: string;
+      details?: Record<string, unknown>;
+    };
+  };
+  assert.equal(payload.error.code, "workspace_context_not_metadata");
+  assert.equal(payload.error.details?.source, "env-fallback");
+  assert.equal(payload.error.details?.source_label, "Environment fallback (non-production)");
+  assert.equal(payload.error.details?.session_checkpoint_required, true);
+  assert.equal(payload.error.details?.checkpoint_label, "Session checkpoint required");
+  assert.match(String(payload.error.details?.warning ?? ""), /metadata-backed session context/i);
+  assert.equal(payload.error.details?.workspace_id, "ws_meta_1");
+  assert.equal(payload.error.details?.workspace_slug, "meta-one");
 });
 
 test(

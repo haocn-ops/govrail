@@ -1,6 +1,10 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
+function hasFlag(flag) {
+  return process.argv.includes(flag);
+}
+
 function printUsage() {
   console.log(`render_access_ingress_plan.mjs
 
@@ -23,6 +27,7 @@ Options:
   --verification-subject-id <id>      Default: post_deploy_verifier
   --verification-subject-roles <csv>  Default: platform_admin,legal_approver
   --northbound-auth-mode <mode>       Default: trusted_edge
+  --strict                            Fail when required handoff/evidence metadata is missing
   --help                              Show this help message
 `);
 }
@@ -117,6 +122,36 @@ function deriveReadonlyOutputPath(writeOutputPath) {
   return `${writeOutputPath}-readonly`;
 }
 
+function buildPlanWarnings(plan) {
+  const warnings = [];
+
+  if (!plan.handoff_owner) {
+    warnings.push(`handoff_owner is missing; generated artifacts will be harder to hand off cleanly`);
+  }
+  if (!plan.change_reference) {
+    warnings.push(`change_reference is missing; verify evidence will be less traceable during audits and rollback`);
+  }
+  if (!plan.readonly_run_id_source) {
+    warnings.push(`readonly_run_id_source is missing; operators may not know which production-safe RUN_ID to reuse`);
+  }
+  if (!plan.service_token_audience) {
+    warnings.push(`service_token_audience is missing; token scope and ownership are not fully documented`);
+  }
+  if (plan.access_group_names.length === 0) {
+    warnings.push(`access_group_names is empty; role/group mapping is not captured in the handoff bundle`);
+  }
+  if (plan.write_verify_output_path === plan.readonly_verify_output_path) {
+    warnings.push(
+      `write_verify_output_path and readonly_verify_output_path resolve to the same path; write and readonly evidence may overwrite each other`,
+    );
+  }
+  if (plan.deploy_env === "production" && plan.northbound_auth_mode !== "trusted_edge") {
+    warnings.push(`production ingress plan should use northbound_auth_mode=trusted_edge`);
+  }
+
+  return warnings;
+}
+
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
@@ -184,7 +219,7 @@ function planFromTemplate(template) {
   };
 }
 
-function renderChecklist(plan) {
+function renderChecklist(plan, validation) {
   const writeVerifyCommand = buildWriteVerifyCommand(plan);
   const readonlyVerifyCommand = buildReadonlyVerifyCommand(plan);
 
@@ -237,14 +272,23 @@ function renderChecklist(plan) {
     "- If this plan is for staging, use write-mode verification first.",
     "- If this plan is for production, prefer readonly verification after the controlled write verify has completed.",
     "",
+    ...(validation.warnings.length > 0
+      ? [
+          "## Validation Warnings",
+          "",
+          ...validation.warnings.map((warning) => `- ${warning}`),
+          "",
+        ]
+      : []),
     ...(plan.notes ? ["## Notes", "", plan.notes, ""] : []),
   ].join("\n");
 }
 
-function renderPlanJson(plan) {
+function renderPlanJson(plan, validation) {
   return {
     ok: true,
     ...plan,
+    validation,
     trusted_headers: {
       subject: plan.trusted_subject_header,
       roles: plan.trusted_roles_header,
@@ -537,7 +581,7 @@ function renderEvidenceTemplate(plan) {
   };
 }
 
-function renderHandoffManifest(plan) {
+function renderHandoffManifest(plan, validation) {
   return {
     ok: true,
     tenant_id: plan.tenant_id,
@@ -575,6 +619,7 @@ function renderHandoffManifest(plan) {
         readonly: buildReadonlyVerifyCommand(plan),
       },
     },
+    validation,
     required_handoff_fields: [
       "access_application_name",
       "service_token_name",
@@ -593,7 +638,7 @@ function renderHandoffManifest(plan) {
 }
 
 async function main() {
-  if (process.argv.includes("--help")) {
+  if (hasFlag("--help")) {
     printUsage();
     return;
   }
@@ -603,6 +648,7 @@ async function main() {
   const tenantIdArg = normalizeOptionalString(readArg("--tenant-id"));
   const deployEnvArg = normalizeOptionalString(readArg("--deploy-env"));
   const workerUrlArg = normalizeOptionalString(readArg("--worker-url"));
+  const strict = hasFlag("--strict");
 
   const template = planFile
     ? JSON.parse(await readFile(resolve(planFile), "utf8"))
@@ -630,6 +676,16 @@ async function main() {
       };
 
   const plan = planFromTemplate(template);
+  const warnings = buildPlanWarnings(plan);
+  const validation = {
+    strict,
+    warning_count: warnings.length,
+    warnings,
+  };
+  if (strict && warnings.length > 0) {
+    throw new Error(`Access ingress plan validation warnings in --strict mode:\n- ${warnings.join("\n- ")}`);
+  }
+
   await mkdir(outputDir, { recursive: true });
 
   const planJsonPath = join(outputDir, "access-ingress-plan.json");
@@ -640,14 +696,14 @@ async function main() {
   const rotationChecklistPath = join(outputDir, "access-ingress-rotation-checklist.md");
   const evidenceTemplatePath = join(outputDir, "access-ingress-evidence-template.json");
   const handoffManifestPath = join(outputDir, "access-ingress-handoff-manifest.json");
-  const renderedPlan = renderPlanJson(plan);
-  const renderedChecklist = renderChecklist(plan);
+  const renderedPlan = renderPlanJson(plan, validation);
+  const renderedChecklist = renderChecklist(plan, validation);
   const renderedVerifyHelper = renderVerifyHelper(plan);
   const renderedSelfCheckHelper = renderSelfCheckHelper(plan);
   const renderedFoldEvidenceHelper = renderFoldEvidenceHelper(plan);
   const renderedRotationChecklist = renderRotationChecklist(plan);
   const renderedEvidenceTemplate = renderEvidenceTemplate(plan);
-  const renderedHandoffManifest = renderHandoffManifest(plan);
+  const renderedHandoffManifest = renderHandoffManifest(plan, validation);
 
   await Promise.all([
     writeFile(planJsonPath, `${JSON.stringify(renderedPlan, null, 2)}\n`, "utf8"),

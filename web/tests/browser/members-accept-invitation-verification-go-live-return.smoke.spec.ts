@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const membersEntry =
-  "/members?source=onboarding&attention_workspace=preview&attention_organization=org_preview&delivery_context=recent_activity&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Owner";
+  "/members?source=onboarding&attention_workspace=preview&attention_organization=org_preview&delivery_context=recent_activity&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Owner&recent_owner_display_name=Preview%20Owner&recent_owner_email=preview.owner%40govrail.test";
 
 test("members -> accept-invitation -> verification -> go-live keeps manual return continuity", async ({ page }) => {
   test.slow();
@@ -23,7 +23,8 @@ test("members -> accept-invitation -> verification -> go-live keeps manual retur
   await expect(page).toHaveURL(/recent_track_key=verification/);
   await expect(page).toHaveURL(/recent_update_kind=verification/);
   await expect(page).toHaveURL(/evidence_count=2/);
-  await expect(page).toHaveURL(/recent_owner_label=Owner/);
+  await expect(page).toHaveURL(/recent_owner_display_name=Preview(?:\+|%20)Owner/);
+  await expect(page).toHaveURL(/recent_owner_email=preview\.owner(?:%40|@)govrail\.test/);
   await expect(page.getByRole("heading", { name: "Accept workspace invitation" })).toBeVisible();
   await expect(page.getByText("Token guidance")).toBeVisible();
   await expect(page.getByRole("button", { name: "Accept invitation" })).toBeVisible();
@@ -39,7 +40,8 @@ test("members -> accept-invitation -> verification -> go-live keeps manual retur
   await expect(page).toHaveURL(/recent_track_key=verification/);
   await expect(page).toHaveURL(/recent_update_kind=verification/);
   await expect(page).toHaveURL(/evidence_count=2/);
-  await expect(page).toHaveURL(/recent_owner_label=Owner/);
+  await expect(page).toHaveURL(/recent_owner_display_name=Preview(?:\+|%20)Owner/);
+  await expect(page).toHaveURL(/recent_owner_email=preview\.owner(?:%40|@)govrail\.test/);
   const verificationLink = page.getByRole("link", { name: "Capture verification evidence" }).first();
   await expect(verificationLink).toBeVisible();
 
@@ -54,7 +56,8 @@ test("members -> accept-invitation -> verification -> go-live keeps manual retur
   await expect(page).toHaveURL(/recent_track_key=verification/);
   await expect(page).toHaveURL(/recent_update_kind=verification/);
   await expect(page).toHaveURL(/evidence_count=2/);
-  await expect(page).toHaveURL(/recent_owner_label=Owner/);
+  await expect(page).toHaveURL(/recent_owner_display_name=Preview(?:\+|%20)Owner/);
+  await expect(page).toHaveURL(/recent_owner_email=preview\.owner(?:%40|@)govrail\.test/);
   await expect(page.getByRole("heading", { name: "Week 8 launch checklist" })).toBeVisible();
   await expect(page.getByText("Verification evidence lane")).toBeVisible();
   const goLiveLink = page.getByRole("link", { name: "Continue to go-live drill" }).first();
@@ -71,7 +74,8 @@ test("members -> accept-invitation -> verification -> go-live keeps manual retur
   await expect(page).toHaveURL(/recent_track_key=verification/);
   await expect(page).toHaveURL(/recent_update_kind=verification/);
   await expect(page).toHaveURL(/evidence_count=2/);
-  await expect(page).toHaveURL(/recent_owner_label=Owner/);
+  await expect(page).toHaveURL(/recent_owner_display_name=Preview(?:\+|%20)Owner/);
+  await expect(page).toHaveURL(/recent_owner_email=preview\.owner(?:%40|@)govrail\.test/);
   await expect(page.getByRole("heading", { name: "Mock go-live drill" })).toBeVisible();
   await expect(page.getByText("Session-aware drill lane")).toBeVisible();
 });

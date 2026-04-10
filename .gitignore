@@ -10,7 +10,9 @@ coverage/
 .dev.vars
 *.tsbuildinfo
 *.log
+test-results/
 .access-ingress-plan*/
+.observability-bundles/
 .secret-rotation/
 .onboarding-bundles/
 release-gate/

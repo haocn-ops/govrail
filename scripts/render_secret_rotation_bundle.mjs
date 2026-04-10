@@ -845,6 +845,7 @@ async function main() {
     writeFile(artifacts.checklist.absolute, `${renderChecklist(plan, artifacts, phaseMetadata)}\n`, "utf8"),
     writeFile(artifacts.manifest.absolute, `${JSON.stringify(manifest, null, 2)}\n`, "utf8"),
     writeFile(artifacts.script.absolute, renderShellScript(plan, artifacts, phaseMetadata), "utf8"),
+    writeFile(artifacts.commandLog.absolute, "", "utf8"),
     writeFile(
       artifacts.previewEvidence.absolute,
       `${JSON.stringify(buildEvidenceTemplate(plan, "preview", artifacts, phaseMetadata), null, 2)}\n`,

@@ -1,28 +1,23 @@
 import Link from "next/link";
 
-import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
+import { ConsoleAdminFollowUp } from "@/components/admin/console-admin-follow-up";
 import { ApiKeysPanel } from "@/components/api-keys/api-keys-panel";
 import { CreateApiKeyForm } from "@/components/api-keys/create-api-key-form";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildHandoffHref } from "@/lib/handoff-query";
+import { buildConsoleHandoffHref, parseConsoleHandoffState } from "@/lib/console-handoff";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
-function getParam(value?: string | string[] | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function normalizeRecentTrackKey(value?: string | null): "verification" | "go_live" | null {
-  if (value === "verification" || value === "go_live") {
-    return value;
-  }
-  return null;
-}
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
 
 export default async function ApiKeysPage({
   searchParams,
@@ -30,69 +25,37 @@ export default async function ApiKeysPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
-  const source = getParam(searchParams?.source);
-  const handoffWorkspace = getParam(searchParams?.attention_workspace);
-  const handoffOrganization = getParam(searchParams?.attention_organization);
-  const week8Focus = getParam(searchParams?.week8_focus);
-  const deliveryContext = getParam(searchParams?.delivery_context);
-  const recentTrackKey = normalizeRecentTrackKey(getParam(searchParams?.recent_track_key));
-  const recentUpdateKind = getParam(searchParams?.recent_update_kind);
-  const evidenceCountParam = getParam(searchParams?.evidence_count);
-  const evidenceCount =
-    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
-  const ownerLabel =
-    getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
-  const showOnboardingHint = source === "onboarding";
-  const showReadinessHandoff = source === "admin-readiness";
-  const showAttentionHandoff = source === "admin-attention";
-  const handoffArgs = {
+  const handoff = parseConsoleHandoffState(searchParams);
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
+  const {
     source,
     week8Focus,
-    attentionWorkspace: handoffWorkspace,
-    attentionOrganization: handoffOrganization,
+    attentionWorkspace,
+    attentionOrganization,
     deliveryContext,
     recentTrackKey,
     recentUpdateKind,
     evidenceCount,
-    recentOwnerLabel: ownerLabel,
-  };
-  const serviceAccountsHref = buildHandoffHref("/service-accounts", handoffArgs);
-  const usageHref = buildHandoffHref("/usage", handoffArgs);
-  const settingsHref = buildHandoffHref("/settings?intent=manage-plan", handoffArgs);
-  const playgroundHref = buildHandoffHref("/playground", handoffArgs);
-  const verificationHref = buildHandoffHref("/verification?surface=verification", handoffArgs);
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  } = handoff;
+  const showOnboardingHint = source === "onboarding";
+  const serviceAccountsHref = buildConsoleHandoffHref("/service-accounts", runAwareHandoff);
+  const usageHref = buildConsoleHandoffHref("/usage", runAwareHandoff);
+  const settingsHref = buildConsoleHandoffHref("/settings?intent=manage-plan", runAwareHandoff);
+  const playgroundHref = buildConsoleHandoffHref("/playground", runAwareHandoff);
+  const verificationHref = buildConsoleHandoffHref("/verification?surface=verification", runAwareHandoff);
 
   return (
     <div className="space-y-8">
-      {showAttentionHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-attention"
-          surface="api-keys"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-        />
-      ) : null}
-      {showReadinessHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-readiness"
-          surface="api-keys"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          week8Focus={week8Focus}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-        />
-      ) : null}
+      <ConsoleAdminFollowUp
+        handoff={runAwareHandoff}
+        surface="api-keys"
+        workspaceSlug={workspaceContext.workspace.slug}
+      />
       <PageHeader
         eyebrow="API Keys"
         title="Credential lifecycle"
@@ -115,25 +78,25 @@ export default async function ApiKeysPage({
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={buildHandoffHref("/service-accounts", handoffArgs)}
+              href={serviceAccountsHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 1: Review service account
             </Link>
             <Link
-              href={buildHandoffHref("/playground", handoffArgs)}
+              href={playgroundHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 3: Run playground demo
             </Link>
             <Link
-              href={buildHandoffHref("/usage", handoffArgs)}
+              href={usageHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 4: Confirm usage
             </Link>
             <Link
-              href={buildHandoffHref("/verification?surface=verification", handoffArgs)}
+              href={verificationHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 5: Record verification evidence
@@ -157,13 +120,13 @@ export default async function ApiKeysPage({
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={buildHandoffHref("/usage", handoffArgs)}
+              href={usageHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Check usage pressure
             </Link>
             <Link
-              href={buildHandoffHref("/settings?intent=manage-plan", handoffArgs)}
+              href={settingsHref}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Check plan and billing
@@ -192,13 +155,13 @@ export default async function ApiKeysPage({
             </p>
             <div className="flex flex-wrap gap-2">
               <Link
-                href={buildHandoffHref("/playground", handoffArgs)}
+                href={playgroundHref}
                 className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
               >
                 Open playground
               </Link>
               <Link
-                href={buildHandoffHref("/verification?surface=verification", handoffArgs)}
+                href={verificationHref}
                 className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
               >
                 Open verification
@@ -253,13 +216,15 @@ export default async function ApiKeysPage({
           workspaceSlug={workspaceContext.workspace.slug}
           source={source}
           week8Focus={week8Focus}
-          attentionWorkspace={handoffWorkspace}
-          attentionOrganization={handoffOrganization}
+          attentionWorkspace={attentionWorkspace}
+          attentionOrganization={attentionOrganization}
           deliveryContext={deliveryContext}
           recentTrackKey={recentTrackKey}
           recentUpdateKind={recentUpdateKind}
           evidenceCount={evidenceCount}
-          recentOwnerLabel={ownerLabel}
+          recentOwnerLabel={recentOwnerLabel}
+          recentOwnerDisplayName={recentOwnerDisplayName}
+          recentOwnerEmail={recentOwnerEmail}
         />
       </div>
     </div>

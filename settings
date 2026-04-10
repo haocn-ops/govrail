@@ -1,0 +1,90 @@
+# Settings Console Surface
+
+對應入口：`web/app/(console)/settings/page.tsx`
+
+## 1. 這個 surface 目前負責什麼
+
+`/settings` 已不是單純配置頁，而是 enterprise evidence lane 的治理入口。它把以下事情收斂到同一頁：
+
+- workspace tenancy 與 session context 檢查
+- self-serve billing follow-up / portal return
+- audit export / SSO readiness / dedicated environment planning
+- 向 `usage / verification / go-live / admin` 延續 handoff context
+
+## 2. 真實頁面結構
+
+目前頁面區塊順序如下：
+
+1. `WorkspaceContextSurfaceNotice`
+2. `ConsoleAdminFollowUp`
+   - 視 `handoff.source` 顯示 `admin-attention` 或 `admin-readiness`
+3. `PageHeader`
+4. `Enterprise evidence lane`
+   - 明講這是一條 manual governance surface
+   - 提供到 `usage / verification / go-live / admin` 的顯式導流
+5. `WorkspaceSettingsPanel`
+   - 實際承載 billing / audit export / SSO / dedicated environment 的主體
+6. `Observability and retention`
+   - 補上 audit / retention / tenant routing 的運維語義
+
+## 3. handoff / query / session 結構
+
+這頁已改為走共用 console helper：
+
+- `parseConsoleHandoffState(searchParams)`
+- `buildConsoleHandoffHref(pathname, handoff)`
+- `buildConsoleAdminReturnState(...)`
+- `buildConsoleAdminReturnHref(...)`
+
+重要 query / state：
+
+- `intent=upgrade|manage-plan|resolve-billing`
+- `checkout_session_id`
+- `source=admin-attention|admin-readiness|onboarding`
+- `week8_focus`
+- `attention_workspace`
+- `attention_organization`
+- `delivery_context`
+- `recent_track_key`
+- `recent_update_kind`
+- `evidence_count`
+- `recent_owner_*`
+
+頁面上的 `session / usage / verification / go-live / admin` 連結都應沿用同一份 handoff state，避免 evidence lane 中途丟失 query continuity。
+
+## 4. 目前已落地的測試契約
+
+- `web/tests/page-level/settings-self-serve-lane.page.test.ts`
+  - 固定 Settings 作為 manual governance surface 的文案與導航語義
+  - 固定 `WorkspaceContextSurfaceNotice` 與 `buildConsoleHandoffHref(...)` 的接法
+- `web/tests/page-level/workspace-context-hardening.page.test.ts`
+  - 固定 workspace context callout 的 metadata / fallback / local-only guardrails
+- `web/tests/page-level/settings-billing-portal-return-evidence.page.test.ts`
+  - 固定 billing evidence 與 verification/go-live/admin 回跳鏈路
+- `web/tests/e2e/saas-mainline-smoke.e2e.test.ts`
+  - 固定 settings enterprise submit / readiness refresh / evidence continuity 的 smoke
+- `web/tests/browser/settings-verification-admin-return.smoke.spec.ts`
+  - 固定 settings -> verification -> admin focused browser smoke
+- `web/tests/browser/settings-go-live-admin-return.smoke.spec.ts`
+  - 固定 settings -> go-live -> admin focused browser smoke
+- `web/tests/e2e/browser-e2e-mainline-console-readiness.test.ts`
+  - 固定 mainline console focused batch 與 runner wiring
+- 若只需快速重跑這條主線 smoke，請從倉庫根目錄執行 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`；`npm run web:test:e2e` 仍保留給整包 non-browser smoke。
+- 若只需 focused browser 重跑，請從倉庫根目錄執行 `npm run web:test:browser:mainline-console-verification` 或 `npm run web:test:browser:mainline-console-go-live`；前者覆蓋 `settings -> verification -> admin`，後者覆蓋 `settings -> go-live -> admin`。
+
+## 5. 已完成範圍與保守邊界
+
+已完成：
+
+- settings 與 verification/go-live/admin-readiness 的 query continuity
+- workspace/session checkpoint reuse
+- enterprise readiness surface productization 的最小主幹
+
+保守邊界：
+
+- 頁面仍以「人工判讀 + 受控提交」為主
+- 不自動開 support workflow
+- 不自動 remediation
+- 不代表 enterprise capability 已全面自助開放
+
+後續若要擴展，應延續 `WorkspaceSettingsPanel` 的 controlled live write contract，而不是把 enterprise 行為直接塞回 page route。

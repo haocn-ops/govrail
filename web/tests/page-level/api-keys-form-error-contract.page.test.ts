@@ -25,3 +25,9 @@ test("API keys panel keeps structured action error copy", async () => {
   assert.match(source, /API key action failed/);
   assert.match(source, /text-red-600/);
 });
+
+test("API keys panel calls out verification evidence and go-live drill", async () => {
+  const source = await readSource(panelPath);
+  assert.match(source, /demo evidence looks clean, rehearse the go-live drill/);
+  assert.match(source, /Capture Week 8 evidence/);
+});

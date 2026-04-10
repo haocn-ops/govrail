@@ -266,6 +266,32 @@ test(
 );
 
 test(
+  "smoke(non-browser): createBillingPortalSession surfaces portal_url when provider exists",
+  async () => {
+    await withMockFetch(async (input, init) => {
+      if (String(input) === "/api/control-plane/workspace/billing/portal-sessions" && init?.method === "POST") {
+        return Response.json({
+          data: {
+            billing_provider: "stripe",
+            portal_url: "https://billing.stripe.test/session",
+            return_url: "https://govrail.net/settings?intent=manage-plan",
+          },
+        });
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)} ${init?.method ?? "GET"}`);
+    }, async () => {
+      const portal = await createBillingPortalSession({
+        return_url: "https://govrail.net/settings?intent=manage-plan",
+      });
+      assert.equal(portal.billing_provider, "stripe");
+      assert.equal(portal.return_url, "https://govrail.net/settings?intent=manage-plan");
+      assert.equal(portal.portal_url, "https://billing.stripe.test/session");
+    });
+  },
+);
+
+test(
   "smoke(non-browser): billing services preserve structured self-serve and portal error semantics",
   { concurrency: false },
   async () => {
@@ -371,6 +397,63 @@ test(
         },
       );
     });
+  },
+);
+
+test(
+  "smoke(non-browser): completeBillingCheckoutSession surfaces deferred completion errors to match Stripe webhooks",
+  async () => {
+    const calls: Array<{ path: string; method: string }> = [];
+    await withMockFetch(async (input, init) => {
+      calls.push({ path: String(input), method: init?.method ?? "GET" });
+
+      if (
+        String(input) === "/api/control-plane/workspace/billing/checkout-sessions/chk_deferred/complete" &&
+        init?.method === "POST"
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "billing_checkout_completion_deferred",
+              message: "This checkout session must be finalized by its billing provider webhook flow",
+              details: {
+                billing_provider: "stripe",
+                webhook_event: "checkout.session.completed",
+              },
+            },
+          }),
+          {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unexpected fetch ${String(input)} ${init?.method ?? "GET"}`);
+    }, async () => {
+      await assert.rejects(
+        () => completeBillingCheckoutSession("chk_deferred"),
+        (error: unknown) => {
+          assert.ok(error instanceof ControlPlaneRequestError);
+          assert.equal(error.code, "billing_checkout_completion_deferred");
+          assert.equal(error.status, 409);
+          assert.equal(
+            error.message,
+            "This checkout session must be finalized by its billing provider webhook flow",
+          );
+          assert.equal(error.details.billing_provider, "stripe");
+          assert.equal(error.details.webhook_event, "checkout.session.completed");
+          return true;
+        },
+      );
+    });
+
+    assert.deepEqual(calls, [
+      {
+        path: "/api/control-plane/workspace/billing/checkout-sessions/chk_deferred/complete",
+        method: "POST",
+      },
+    ]);
   },
 );
 

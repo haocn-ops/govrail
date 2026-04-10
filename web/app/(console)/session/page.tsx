@@ -3,18 +3,20 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { SessionAccessPanel } from "@/components/session/session-access-panel";
 import { Badge } from "@/components/ui/badge";
-import { buildHandoffHref } from "@/lib/handoff-query";
+import { buildConsoleHandoffHref, parseConsoleHandoffState } from "@/lib/console-handoff";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
-function getParam(value?: string | string[] | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return Array.isArray(value) ? value[0] : value;
-}
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
 
 export default async function SessionPage({
   searchParams,
@@ -23,41 +25,21 @@ export default async function SessionPage({
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
   const accessibleWorkspaceCount = workspaceContext.available_workspaces.length;
-  const source = getParam(searchParams?.source);
-  const handoffWorkspace = getParam(searchParams?.attention_workspace);
-  const handoffOrganization = getParam(searchParams?.attention_organization);
-  const week8Focus = getParam(searchParams?.week8_focus);
-  const deliveryContext = getParam(searchParams?.delivery_context);
-  const recentTrackKey = getParam(searchParams?.recent_track_key);
-  const recentUpdateKind = getParam(searchParams?.recent_update_kind);
-  const evidenceCountParam = getParam(searchParams?.evidence_count);
-  const evidenceCount =
-    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
-  const ownerLabel =
-    getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
-  const handoffArgs = {
-    source,
-    week8Focus,
-    attentionWorkspace: handoffWorkspace,
-    attentionOrganization: handoffOrganization,
-    deliveryContext,
-    recentTrackKey,
-    recentUpdateKind,
-    evidenceCount,
-    recentOwnerLabel: ownerLabel,
-  };
-  const onboardingHref = buildHandoffHref("/onboarding", handoffArgs);
-  const settingsHref = buildHandoffHref("/settings", handoffArgs);
-  const membersHref = buildHandoffHref("/members", handoffArgs);
-  const usageHref = buildHandoffHref("/usage", handoffArgs);
-  const playgroundHref = buildHandoffHref("/playground", handoffArgs);
-  const artifactsHref = buildHandoffHref("/artifacts", handoffArgs);
-  const verificationHref = buildHandoffHref("/verification?surface=verification", handoffArgs, {
-    preserveExistingQuery: true,
-  });
-  const goLiveHref = buildHandoffHref("/go-live?surface=go_live", handoffArgs, {
-    preserveExistingQuery: true,
-  });
+  const handoff = parseConsoleHandoffState(searchParams);
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
+  const source = handoff.source;
+  const showAttentionHandoff = source === "admin-attention";
+  const showReadinessHandoff = source === "admin-readiness";
+  const onboardingHref = buildConsoleHandoffHref("/onboarding", runAwareHandoff);
+  const settingsHref = buildConsoleHandoffHref("/settings", runAwareHandoff);
+  const membersHref = buildConsoleHandoffHref("/members", runAwareHandoff);
+  const usageHref = buildConsoleHandoffHref("/usage", runAwareHandoff);
+  const playgroundHref = buildConsoleHandoffHref("/playground", runAwareHandoff);
+  const artifactsHref = buildConsoleHandoffHref("/artifacts", runAwareHandoff);
+  const verificationHref = buildConsoleHandoffHref("/verification?surface=verification", runAwareHandoff);
+  const goLiveHref = buildConsoleHandoffHref("/go-live?surface=go_live", runAwareHandoff);
 
   return (
     <div className="space-y-8">
@@ -87,6 +69,18 @@ export default async function SessionPage({
             If anything looks off, identity, tenant, workspace, or roles, use the Session access panel below to
             revalidate before continuing.
           </p>
+          {showAttentionHandoff ? (
+            <p className="text-xs text-muted">
+              Admin attention queue handoff is active for this workspace, so preserve the current console context before
+              you return to the queue.
+            </p>
+          ) : null}
+          {showReadinessHandoff ? (
+            <p className="text-xs text-muted">
+              Admin readiness handoff is active for this workspace, so keep this session context aligned before you
+              return to the Week 8 readiness view.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
       <Card>
@@ -195,7 +189,7 @@ export default async function SessionPage({
           </p>
         </CardContent>
       </Card>
-      <SessionAccessPanel workspaceContext={workspaceContext} />
+      <SessionAccessPanel workspaceContext={workspaceContext} handoff={runAwareHandoff} />
     </div>
   );
 }

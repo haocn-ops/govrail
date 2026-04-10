@@ -32,5 +32,24 @@
     "CONTROL_PLANE_TENANT_ID": "tenant_demo",
     "CONTROL_PLANE_SUBJECT_ID": "console@govrail.net",
     "CONTROL_PLANE_SUBJECT_ROLES": "platform_admin"
+  },
+  "env": {
+    "staging": {
+      "name": "agent-control-plane-web-staging",
+      "workers_dev": true,
+      "routes": [],
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "agent-control-plane-web-staging"
+        }
+      ],
+      "vars": {
+        "CONTROL_PLANE_BASE_URL": "https://agent-control-plane-staging.izhenghaocn.workers.dev",
+        "CONTROL_PLANE_TENANT_ID": "tenant_verify_staging",
+        "CONTROL_PLANE_SUBJECT_ID": "console-staging@govrail.net",
+        "CONTROL_PLANE_SUBJECT_ROLES": "platform_admin"
+      }
+    }
   }
 }

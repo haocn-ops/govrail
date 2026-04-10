@@ -22,33 +22,53 @@ async function readSource(filePath: string): Promise<string> {
 }
 
 function assertProxyWrapperImports(source: string): void {
-  assert.match(source, /import \{ proxyControlPlane \} from "@\/lib\/control-plane-proxy";/);
-  assert.match(source, /import \{ resolveWorkspaceContextForServer \} from "@\/lib\/workspace-context";/);
   assert.match(source, /export const dynamic = "force-dynamic";/);
 }
 
-function assertBillingGetHelperContract(source: string): void {
-  assert.match(source, /import \{ buildBillingGetProxyInit \} from "(?:\.\.\/)+route-helpers";/);
-  assert.match(source, /init:\s*buildBillingGetProxyInit\(\)/);
+function assertBillingGetHelperContract(
+  source: string,
+  options: {
+    importPattern: RegExp;
+    invocationPattern: RegExp;
+  },
+): void {
+  assert.match(source, options.importPattern);
+  assert.match(source, options.invocationPattern);
+  assert.doesNotMatch(source, /proxyControlPlane\(/);
+  assert.doesNotMatch(source, /resolveWorkspaceContextForServer\(/);
+  assert.doesNotMatch(source, /buildBillingGetProxyInit\(\)/);
   assert.doesNotMatch(source, /body:/);
   assert.doesNotMatch(source, /idempotency-key/);
 }
 
-function assertBillingPostHelperContract(source: string): void {
-  assert.match(source, /import \{ buildBillingPostProxyInit \} from "(?:\.\.\/)+route-helpers";/);
-  assert.match(source, /init:\s*await buildBillingPostProxyInit\(request\)/);
+function assertBillingPostHelperContract(
+  source: string,
+  options: {
+    importPattern: RegExp;
+    invocationPattern: RegExp;
+  },
+): void {
+  assert.match(source, options.importPattern);
+  assert.match(source, options.invocationPattern);
+  assert.doesNotMatch(source, /proxyControlPlane\(/);
+  assert.doesNotMatch(source, /resolveWorkspaceContextForServer\(/);
+  assert.doesNotMatch(source, /buildBillingPostProxyInit\(request\)/);
   assert.doesNotMatch(source, /buildProxyControlPlanePostInit\(/);
   assert.doesNotMatch(source, /request\.headers\.get\("content-type"\)/);
   assert.doesNotMatch(source, /crypto\.randomUUID\(\)/);
   assert.doesNotMatch(source, /body:\s*await request\.text\(\)/);
 }
 
-function assertBillingPostWrapperContract(source: string, upstreamPathPattern: RegExp): void {
+function assertBillingPostWrapperContract(
+  source: string,
+  options: {
+    importPattern: RegExp;
+    invocationPattern: RegExp;
+  },
+): void {
   assertProxyWrapperImports(source);
   assert.match(source, /export async function POST\(\s*request: Request/s);
-  assert.match(source, /const workspaceContext = await resolveWorkspaceContextForServer\(\);/);
-  assert.match(source, upstreamPathPattern);
-  assertBillingPostHelperContract(source);
+  assertBillingPostHelperContract(source, options);
 }
 
 function assertNoDirectFetchOrBase(source: string): void {
@@ -70,21 +90,26 @@ test("billing checkout session routes keep proxy wrapper path and method semanti
 
   assertBillingPostWrapperContract(
     checkoutSessionsSource,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/billing\/checkout-sessions`/,
+    {
+      importPattern: /import \{ proxyWorkspaceBillingPost \} from "\.\.\/route-helpers";/,
+      invocationPattern: /return proxyWorkspaceBillingPost\(request,\s*"\/checkout-sessions"\);/,
+    },
   );
 
   assertProxyWrapperImports(checkoutSessionSource);
   assert.match(checkoutSessionSource, /export async function GET\(\s*_request: Request,\s*\{ params \}/s);
   assert.match(checkoutSessionSource, /const \{ sessionId \} = params;/);
-  assert.match(
-    checkoutSessionSource,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/billing\/checkout-sessions\/\$\{sessionId\}`/,
-  );
-  assertBillingGetHelperContract(checkoutSessionSource);
+  assertBillingGetHelperContract(checkoutSessionSource, {
+    importPattern: /import \{ proxyWorkspaceBillingGet \} from "\.\.\/\.\.\/route-helpers";/,
+    invocationPattern: /return proxyWorkspaceBillingGet\(`\/checkout-sessions\/\$\{sessionId\}`\);/,
+  });
 
   assertBillingPostWrapperContract(
     checkoutSessionCompleteSource,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/billing\/checkout-sessions\/\$\{sessionId\}:complete`/,
+    {
+      importPattern: /import \{ proxyWorkspaceBillingPost \} from "\.\.\/\.\.\/\.\.\/route-helpers";/,
+      invocationPattern: /return proxyWorkspaceBillingPost\(request,\s*`\/checkout-sessions\/\$\{sessionId\}:complete`\);/,
+    },
   );
   assert.match(checkoutSessionCompleteSource, /const \{ sessionId \} = params;/);
 });
@@ -137,23 +162,31 @@ test("billing providers, portal, and subscription routes keep proxy wrapper sema
 
   assertProxyWrapperImports(providersSource);
   assert.match(providersSource, /export async function GET\(\)/);
-  assert.match(
-    providersSource,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/billing\/providers`/,
-  );
-  assertBillingGetHelperContract(providersSource);
+  assertBillingGetHelperContract(providersSource, {
+    importPattern: /import \{ proxyWorkspaceBillingGet \} from "\.\.\/route-helpers";/,
+    invocationPattern: /return proxyWorkspaceBillingGet\("\/providers"\);/,
+  });
 
   assertBillingPostWrapperContract(
     portalSource,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/billing\/portal-sessions`/,
+    {
+      importPattern: /import \{ proxyWorkspaceBillingPost \} from "\.\.\/route-helpers";/,
+      invocationPattern: /return proxyWorkspaceBillingPost\(request,\s*"\/portal-sessions"\);/,
+    },
   );
   assertBillingPostWrapperContract(
     cancelSource,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/billing\/subscription:cancel`/,
+    {
+      importPattern: /import \{ proxyWorkspaceBillingPost \} from "\.\.\/\.\.\/route-helpers";/,
+      invocationPattern: /return proxyWorkspaceBillingPost\(request,\s*"\/subscription:cancel"\);/,
+    },
   );
   assertBillingPostWrapperContract(
     resumeSource,
-    /`\/api\/v1\/saas\/workspaces\/\$\{workspaceContext\.workspace\.workspace_id\}\/billing\/subscription:resume`/,
+    {
+      importPattern: /import \{ proxyWorkspaceBillingPost \} from "\.\.\/\.\.\/route-helpers";/,
+      invocationPattern: /return proxyWorkspaceBillingPost\(request,\s*"\/subscription:resume"\);/,
+    },
   );
 });
 
@@ -202,10 +235,24 @@ test("billing routes reuse helper init builders", async () => {
   ]);
 
   for (const source of [checkoutSessionsSource, checkoutSessionCompleteSource, portalSource, cancelSource, resumeSource]) {
-    assertBillingPostHelperContract(source);
+    const isComplete = source === checkoutSessionCompleteSource;
+    const isSubscription = source === cancelSource || source === resumeSource;
+    assertBillingPostHelperContract(source, {
+      importPattern: isComplete
+        ? /import \{ proxyWorkspaceBillingPost \} from "\.\.\/\.\.\/\.\.\/route-helpers";/
+        : isSubscription
+          ? /import \{ proxyWorkspaceBillingPost \} from "\.\.\/\.\.\/route-helpers";/
+          : /import \{ proxyWorkspaceBillingPost \} from "\.\.\/route-helpers";/,
+      invocationPattern: /proxyWorkspaceBillingPost\(request,/,
+    });
   }
 
   for (const source of [checkoutSessionSource, providersSource]) {
-    assertBillingGetHelperContract(source);
+    assertBillingGetHelperContract(source, {
+      importPattern: source === checkoutSessionSource
+        ? /import \{ proxyWorkspaceBillingGet \} from "\.\.\/\.\.\/route-helpers";/
+        : /import \{ proxyWorkspaceBillingGet \} from "\.\.\/route-helpers";/,
+      invocationPattern: /proxyWorkspaceBillingGet\(/,
+    });
   }
 });

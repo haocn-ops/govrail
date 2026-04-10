@@ -1,27 +1,30 @@
 import Link from "next/link";
 
-import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
+import { ConsoleAdminFollowUp } from "@/components/admin/console-admin-follow-up";
+import { WorkspaceContextSurfaceNotice } from "@/components/console/workspace-context-surface-notice";
 import { PageHeader } from "@/components/page-header";
 import { WorkspaceUsageDashboard } from "@/components/usage/workspace-usage-dashboard";
-import { buildAdminReturnHref, buildHandoffHref, buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
+import { buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildConsoleAdminReturnHref,
+  buildConsoleHandoffHref,
+  buildConsoleVerificationChecklistHandoffArgs,
+  buildConsoleAdminReturnState,
+  parseConsoleHandoffState,
+} from "@/lib/console-handoff";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
-function getParam(value?: string | string[] | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function normalizeHandoffSource(value: string | null): "admin-attention" | "admin-readiness" | "onboarding" | null {
-  if (value === "admin-attention" || value === "admin-readiness" || value === "onboarding") {
-    return value;
-  }
-  return null;
-}
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
 
 export default async function UsagePage({
   searchParams,
@@ -29,34 +32,19 @@ export default async function UsagePage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
-  const source = getParam(searchParams?.source);
-  const handoffWorkspace = getParam(searchParams?.attention_workspace);
-  const handoffOrganization = getParam(searchParams?.attention_organization);
-  const week8Focus = getParam(searchParams?.week8_focus);
-  const deliveryContext = getParam(searchParams?.delivery_context);
-  const recentTrackKey = getParam(searchParams?.recent_track_key);
-  const recentUpdateKind = getParam(searchParams?.recent_update_kind);
-  const evidenceCountParam = getParam(searchParams?.evidence_count);
-  const evidenceCount =
-    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
-  const ownerLabel =
-    getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
-  const showReadinessHandoff = source === "admin-readiness";
-  const showAttentionHandoff = source === "admin-attention";
-  const showAdminReturn = showReadinessHandoff || showAttentionHandoff;
-  const adminReturnLabel = showAttentionHandoff ? "Return to admin queue" : "Return to admin readiness";
-  const handoffSource = normalizeHandoffSource(source);
-  const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {
-    source: handoffSource,
-    week8Focus,
-    attentionWorkspace: handoffWorkspace,
-    attentionOrganization: handoffOrganization,
-    deliveryContext,
-    recentTrackKey,
-    recentUpdateKind,
-    evidenceCount,
-    recentOwnerLabel: ownerLabel,
-  };
+  const handoff = parseConsoleHandoffState(searchParams);
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
+  const adminReturnState = buildConsoleAdminReturnState({
+    source: handoff.source,
+    surface: handoff.surface,
+    expectedSurface: "verification",
+    recentTrackKey: handoff.recentTrackKey,
+  });
+  const handoffHrefArgs = buildConsoleVerificationChecklistHandoffArgs(runAwareHandoff);
+  const buildRunAwareUsagePageHref = (pathname: string): string =>
+    buildVerificationChecklistHandoffHref({ pathname, ...handoffHrefArgs, runId: activeRunId });
   const settingsPlanHref = buildVerificationChecklistHandoffHref({
     pathname: "/settings?intent=manage-plan",
     ...handoffHrefArgs,
@@ -77,25 +65,29 @@ export default async function UsagePage({
     pathname: "/go-live?surface=go_live",
     ...handoffHrefArgs,
   });
-  const adminReturnHref = buildAdminReturnHref("/admin", {
-    source: handoffSource,
-    queueSurface: recentTrackKey,
-    week8Focus,
-    attentionWorkspace: handoffWorkspace,
-    attentionOrganization: handoffOrganization,
-    deliveryContext,
-    recentUpdateKind,
-    evidenceCount,
-    recentOwnerLabel: ownerLabel,
+  const adminReturnHref = buildConsoleAdminReturnHref({
+    pathname: "/admin",
+    handoff: runAwareHandoff,
+    workspaceSlug: workspaceContext.workspace.slug,
+    queueSurface: adminReturnState.adminQueueSurface,
   });
-  const sessionHref = buildHandoffHref("/session", handoffHrefArgs);
-  const onboardingHref = buildVerificationChecklistHandoffHref({
-    pathname: "/onboarding",
-    ...handoffHrefArgs,
-  });
+  const sessionHref = buildConsoleHandoffHref("/session", runAwareHandoff);
+  const onboardingHref = buildRunAwareUsagePageHref("/onboarding");
+  const followUpSource =
+    adminReturnState.showAttentionHandoff
+      ? "admin-attention"
+      : adminReturnState.showReadinessHandoff
+        ? "admin-readiness"
+        : null;
 
   return (
     <div className="space-y-8">
+      <WorkspaceContextSurfaceNotice
+        workspaceSlug={workspaceContext.workspace.slug}
+        sourceDetail={workspaceContext.source_detail}
+        surfaceLabel="Usage"
+        sessionHref={sessionHref}
+      />
       <Card>
         <CardHeader>
           <CardTitle>Plan limit governance lane</CardTitle>
@@ -135,46 +127,37 @@ export default async function UsagePage({
             >
               Resolve billing warning
             </Link>
-            {showAdminReturn ? (
+            {adminReturnState.showAdminReturn ? (
               <Link
                 href={adminReturnHref}
                 className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
               >
-                {adminReturnLabel}
+                {adminReturnState.adminReturnLabel}
               </Link>
             ) : null}
           </div>
         </CardContent>
       </Card>
-      {showAttentionHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-attention"
-          surface="usage"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-        />
-      ) : null}
-      {showReadinessHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-readiness"
-          surface="usage"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          week8Focus={week8Focus}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-        />
-      ) : null}
+      <ConsoleAdminFollowUp
+        handoff={runAwareHandoff}
+        payload={
+          followUpSource
+            ? {
+                source: followUpSource,
+                week8Focus: handoff.week8Focus,
+                attentionOrganization: handoff.attentionOrganization,
+                deliveryContext: handoff.deliveryContext,
+                recentTrackKey: handoff.recentTrackKey,
+                recentUpdateKind: handoff.recentUpdateKind,
+                evidenceCount: handoff.evidenceCount,
+                ownerDisplayName: handoff.recentOwnerDisplayName ?? handoff.recentOwnerLabel,
+                ownerEmail: handoff.recentOwnerEmail,
+              }
+            : null
+        }
+        surface="usage"
+        workspaceSlug={workspaceContext.workspace.slug}
+      />
       <PageHeader
         eyebrow="Usage"
         title="Workspace usage and plan posture"
@@ -197,7 +180,7 @@ export default async function UsagePage({
               Return to onboarding summary
             </Link>
             <Link
-              href={buildVerificationChecklistHandoffHref({ pathname: "/playground", ...handoffHrefArgs })}
+              href={buildRunAwareUsagePageHref("/playground")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Go to playground run
@@ -244,12 +227,12 @@ export default async function UsagePage({
             >
               Continue to go-live drill
             </Link>
-            {showAdminReturn ? (
+            {adminReturnState.showAdminReturn ? (
               <Link
                 href={adminReturnHref}
                 className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/60"
               >
-                {adminReturnLabel}
+                {adminReturnState.adminReturnLabel}
               </Link>
             ) : null}
           </div>
@@ -257,15 +240,23 @@ export default async function UsagePage({
       </Card>
       <WorkspaceUsageDashboard
         workspaceSlug={workspaceContext.workspace.slug}
-        source={source}
-        week8Focus={week8Focus}
-        attentionWorkspace={handoffWorkspace}
-        attentionOrganization={handoffOrganization}
-        deliveryContext={deliveryContext}
-        recentTrackKey={recentTrackKey}
-        recentUpdateKind={recentUpdateKind}
-        evidenceCount={evidenceCount}
-        recentOwnerLabel={ownerLabel}
+        source={handoff.source}
+        runId={activeRunId}
+        week8Focus={handoff.week8Focus}
+        attentionWorkspace={handoff.attentionWorkspace}
+        attentionOrganization={handoff.attentionOrganization}
+        deliveryContext={handoff.deliveryContext}
+        recentTrackKey={handoff.recentTrackKey}
+        recentUpdateKind={handoff.recentUpdateKind}
+        evidenceCount={handoff.evidenceCount}
+        recentOwnerLabel={handoff.recentOwnerLabel}
+        recentOwnerDisplayName={handoff.recentOwnerDisplayName}
+        recentOwnerEmail={handoff.recentOwnerEmail}
+        auditReceiptFilename={handoff.auditReceiptFilename}
+        auditReceiptExportedAt={handoff.auditReceiptExportedAt}
+        auditReceiptFromDate={handoff.auditReceiptFromDate}
+        auditReceiptToDate={handoff.auditReceiptToDate}
+        auditReceiptSha256={handoff.auditReceiptSha256}
       />
     </div>
   );

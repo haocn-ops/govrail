@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { assertOrderedSnippets } from "./source-contract-helpers";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const onboardingWizardPath = path.resolve(testDir, "../onboarding/workspace-onboarding-wizard.tsx");
@@ -18,7 +19,7 @@ test("Onboarding wizard keeps shared handoff helper coupling with next-step and 
 
   assert.match(
     source,
-    /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/,
+    /import \{ buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/,
   );
   assert.match(source, /function toSurfacePath\(surface: OnboardingSurface\): string/);
   assert.match(source, /if \(surface === "service_accounts" \|\| surface === "service-accounts"\) \{\s*return "\/service-accounts";\s*\}/s);
@@ -28,7 +29,12 @@ test("Onboarding wizard keeps shared handoff helper coupling with next-step and 
 
   assert.match(
     source,
-    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*\};/s,
+    /const latestDemoRun = onboardingState\?\.latest_demo_run \?\? null;/,
+  );
+  assert.match(source, /const activeRunId = latestDemoRun\?\.run_id \?\? runId \?\? null;/);
+  assert.match(
+    source,
+    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{\s*source: normalizedSource,\s*runId: activeRunId,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\};/s,
   );
   assert.match(
     source,
@@ -38,6 +44,7 @@ test("Onboarding wizard keeps shared handoff helper coupling with next-step and 
     source,
     /const recommendedNextHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: toSurfacePath\(recommendedNext\.surface\),\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
   );
+  assert.match(source, /recommendedNext\.surface === onboardingGuide\.surface \? onboardingGuideHref : recommendedNextHref/);
   assert.match(source, /<Link href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/members", \.\.\.handoffHrefArgs \}\)\}>/);
   assert.match(source, /<Link href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/service-accounts", \.\.\.handoffHrefArgs \}\)\}>/);
   assert.match(source, /<Link href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/api-keys", \.\.\.handoffHrefArgs \}\)\}>/);
@@ -45,6 +52,22 @@ test("Onboarding wizard keeps shared handoff helper coupling with next-step and 
   assert.match(
     source,
     /const verificationChecklistHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/verification\?surface=verification",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+  );
+  assert.match(
+    source,
+    /const sessionCheckpointHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/session",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+  );
+  assert.match(
+    source,
+    /const usageCheckpointHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/usage",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+  );
+  assert.match(
+    source,
+    /const settingsBillingHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/settings\?intent=manage-plan",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+  );
+  assert.match(
+    source,
+    /const settingsAuditExportHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/settings\?intent=upgrade",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
   );
   assert.match(
     source,
@@ -62,11 +85,11 @@ test("Playground panel keeps label-to-target continuity for usage/settings/servi
 
   assert.match(
     source,
-    /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/,
+    /import \{ buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/,
   );
   assert.match(
     source,
-    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext: normalizedDeliveryContext,\s*recentTrackKey: normalizedRecentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*\};/s,
+    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext: normalizedDeliveryContext,\s*recentTrackKey: normalizedRecentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\};/s,
   );
   assert.match(source, /if \(surface === "verification"\) \{\s*return "\/verification\?surface=verification";\s*\}/s);
   assert.match(source, /if \(surface === "go_live" \|\| surface === "go-live"\) \{\s*return "\/go-live\?surface=go_live";\s*\}/s);
@@ -87,27 +110,24 @@ test("Playground panel keeps label-to-target continuity for usage/settings/servi
 
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/usage", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Review usage/s,
+    /const buildRunAwarePlaygroundHref = \(pathname: string\): string =>\s*buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/s,
   );
+  assert.match(source, /const usageHref = buildRunAwarePlaygroundHref\("\/usage"\);/);
+  assert.match(source, /const settingsHref = buildRunAwarePlaygroundHref\("\/settings\?intent=manage-plan"\);/);
+  assert.match(source, /const settingsUpgradeHref = buildRunAwarePlaygroundHref\("\/settings\?intent=upgrade"\);/);
+  assert.match(source, /const serviceAccountsHref = buildRunAwarePlaygroundHref\("\/service-accounts"\);/);
+  assert.match(source, /const apiKeysHref = buildRunAwarePlaygroundHref\("\/api-keys"\);/);
+  assert.match(source, /const verificationHref = buildRunAwarePlaygroundHref\("\/verification\?surface=verification"\);/);
+  assert.match(source, /href=\{usageHref\}[\s\S]*Review usage pressure/s);
+  assert.match(source, /href=\{settingsHref\}[\s\S]*Confirm plan and billing/s);
+  assert.match(source, /href=\{serviceAccountsHref\}[\s\S]*Review service account/s);
+  assert.match(source, /href=\{apiKeysHref\}[\s\S]*Check API key scope/s);
+  assert.match(source, /href=\{verificationHref\}[\s\S]*Prepare verification handoff/s);
+  assert.match(source, /href=\{verificationHref\}[\s\S]*Open verification/s);
+  assert.match(source, /href=\{settingsUpgradeHref\}[\s\S]*Reopen audit export receipt/s);
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/settings", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Check plan and limits/s,
-  );
-  assert.match(
-    source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/service-accounts", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Review service accounts/s,
-  );
-  assert.match(
-    source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/api-keys", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Check API key scope/s,
-  );
-  assert.match(
-    source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/verification\?surface=verification", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Open verification/s,
-  );
-  assert.match(
-    source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: toSurfacePath\(onboardingGuide\.actionSurface\), \.\.\.handoffHrefArgs \}\)\}[\s\S]*\{onboardingGuide\.actionLabel\}/s,
+    /href=\{buildRunAwarePlaygroundHref\(toSurfacePath\(onboardingGuide\.actionSurface\)\)\}[\s\S]*\{onboardingGuide\.actionLabel\}/s,
   );
 });
 
@@ -116,29 +136,54 @@ test("Usage dashboard keeps label-to-target continuity for playground/verificati
 
   assert.match(
     source,
-    /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/,
+    /import \{ buildAdminReturnHref, buildVerificationChecklistHandoffHref \} from "@\/lib\/handoff-query";/,
   );
   assert.match(
     source,
-    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{\s*source: normalizedSource,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext: normalizeDeliveryContext\(deliveryContext\),\s*recentTrackKey: normalizeRecentTrackKey\(recentTrackKey\),\s*recentUpdateKind: normalizeRecentUpdateKind\(recentUpdateKind\),\s*evidenceCount,\s*recentOwnerLabel,\s*\};/s,
+    /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{/,
+  );
+  assertOrderedSnippets(
+    source,
+    [
+      'const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {',
+      "source: normalizedSource,",
+      "week8Focus,",
+      "attentionWorkspace,",
+      "attentionOrganization,",
+      "deliveryContext: normalizeDeliveryContext(deliveryContext),",
+      "recentTrackKey: normalizedRecentTrackKey,",
+      "recentUpdateKind: normalizedRecentUpdateKind,",
+      "evidenceCount: normalizedEvidenceCount,",
+      "recentOwnerLabel,",
+      "recentOwnerDisplayName,",
+      "recentOwnerEmail,",
+    ],
+    "usage dashboard handoff href args",
+  );
+  assert.match(source, /const latestDemoRun = onboardingState\?\.latest_demo_run \?\? null;/);
+  assert.match(source, /const activeRunId = latestDemoRun\?\.run_id \?\? runId \?\? null;/);
+  assert.match(
+    source,
+    /const buildRunAwareUsageHref = \(pathname: string\): string =>\s*buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/s,
   );
 
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/playground", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Run a playground demo/s,
+    /href=\{buildRunAwareUsageHref\("\/playground"\)\}[\s\S]*Step 1: Run in playground/s,
   );
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/verification\?surface=verification", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Capture evidence in verification/s,
+    /href=\{verificationHref\}[\s\S]*Step 3: Capture verification evidence/s,
   );
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: "\/api-keys", \.\.\.handoffHrefArgs \}\)\}[\s\S]*Review API key scopes/s,
+    /href=\{buildRunAwareUsageHref\("\/api-keys"\)\}[\s\S]*Optional: Review API key scopes/s,
   );
-  assert.match(source, /\{ label: "Return to verification", path: "\/verification\?surface=verification" \}/);
-  assert.match(source, /\{ label: "Review billing \+ settings", path: "\/settings" \}/);
+  assert.match(source, /\{ label: "Open playground run", path: "\/playground" \}/);
+  assert.match(source, /\{ label: "Back to playground run", path: "\/playground" \}/);
+  assert.match(source, /\{ label: "Review billing \+ settings", path: "\/settings\?intent=manage-plan" \}/);
   assert.match(source, /\{ label: "Capture verification evidence", path: "\/verification\?surface=verification" \}/);
-  assert.match(source, /\{ label: "Review billing \+ features", path: "\/settings" \}/);
+  assert.match(source, /\{ label: "Review billing \+ features", path: "\/settings\?intent=manage-plan" \}/);
   assert.match(source, /const latestDemoRunHint = args\.onboardingState\?\.latest_demo_run_hint \?\? null;/);
   assert.match(source, /const deliveryGuidance = args\.onboardingState\?\.delivery_guidance \?\? null;/);
   assert.match(
@@ -151,6 +196,8 @@ test("Usage dashboard keeps label-to-target continuity for playground/verificati
   );
   assert.match(
     source,
-    /href=\{buildVerificationChecklistHandoffHref\(\{ pathname: action\.path, \.\.\.handoffHrefArgs \}\)\}/s,
+    /href=\{buildRunAwareUsageHref\(action\.path\)\}/s,
   );
+  assert.match(source, /const adminHref = buildAdminReturnHref\("\/admin", \{/);
+  assert.match(source, /runId: activeRunId,/);
 });

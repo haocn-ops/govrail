@@ -4,6 +4,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import { performWorkspaceSwitch } from "@/lib/client-workspace-navigation";
+import {
+  applyWorkspaceSwitchOutcome,
+  beginWorkspaceSwitcherSelection,
+  createWorkspaceSwitcherViewState,
+  syncWorkspaceSwitcherViewState,
+} from "@/components/workspace-switcher-state";
+
 type WorkspaceOption = {
   workspace_id: string;
   slug: string;
@@ -23,92 +31,105 @@ export function WorkspaceSwitcher({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState(currentWorkspaceSlug);
-  const [isSaving, setIsSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [viewState, setViewState] = useState(() => createWorkspaceSwitcherViewState(currentWorkspaceSlug));
+  const [showGuidance, setShowGuidance] = useState(false);
+  const { selected, isSaving, errorMessage, warningMessage } = viewState;
 
   useEffect(() => {
-    setSelected(currentWorkspaceSlug);
-    setIsSaving(false);
+    setViewState((state) => syncWorkspaceSwitcherViewState(state, currentWorkspaceSlug));
   }, [currentWorkspaceSlug]);
 
   async function switchWorkspace(nextSlug: string, previousSlug: string) {
-    try {
-      const response = await fetch("/api/workspace-context", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          workspace_slug: nextSlug,
-        }),
-      });
+    const outcome = await performWorkspaceSwitch({
+      selection: {
+        workspace_slug: nextSlug,
+      },
+      queryClient,
+      resetMode: "clear",
+    });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: { message?: string } }
-          | null;
-        throw new Error(payload?.error?.message ?? "Failed to switch workspace");
-      }
+    const { nextState, shouldRefresh } = applyWorkspaceSwitchOutcome({
+      nextSlug,
+      previousSlug,
+      outcome,
+    });
 
-      queryClient.clear();
+    setViewState(nextState);
+    if (shouldRefresh) {
       router.refresh();
-    } catch (error) {
-      setSelected(previousSlug);
-      setErrorMessage(error instanceof Error ? error.message : "Failed to switch workspace");
-    } finally {
-      setIsSaving(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs text-muted">
-        <span className="uppercase tracking-[0.15em]">Workspace</span>
-        <select
-          className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground outline-none disabled:opacity-70"
-          value={selected}
-          disabled={isSaving}
-          onChange={(event) => {
-            const nextSlug = event.currentTarget.value;
-            if (nextSlug === selected) {
-              return;
-            }
-            const previousSlug = selected;
-            setSelected(nextSlug);
-            setErrorMessage(null);
-            setIsSaving(true);
-            startTransition(() => {
-              void switchWorkspace(nextSlug, previousSlug);
-            });
-          }}
-          aria-label="Select workspace"
-        >
-        {workspaces.map((workspace) => (
-          <option key={workspace.workspace_id} value={workspace.slug}>
-            {workspace.display_name}
-          </option>
-        ))}
-      </select>
-      {isSaving ? <span className="text-[10px] text-muted">syncing...</span> : null}
-    </label>
-    <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
-      <span>{workspaceCountLabel(workspaces.length)}</span>
-      <span>·</span>
-      <span>current: {currentWorkspaceSlug}</span>
-    </div>
-    <p className="text-[10px] text-muted">
-      Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
-      verification, or go-live with the correct context.
-    </p>
-    <p className="text-[10px] text-muted">
-      This switcher only changes the manual workspace context for the console. It does not impersonate another member,
-      edit roles, or trigger support-side automation.
-    </p>
+    <div className="rounded-lg border border-border/50 bg-background/35 px-3 py-2">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] uppercase tracking-[0.12em] text-muted">
+          <span className="uppercase tracking-[0.15em]">Workspace</span>
+          <span>{workspaceCountLabel(workspaces.length)}</span>
+          <span>·</span>
+          <span>current: {currentWorkspaceSlug}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="min-w-[190px] rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:opacity-70"
+            value={selected}
+            disabled={isSaving}
+            onChange={(event) => {
+              const nextSlug = event.currentTarget.value;
+              const nextState = beginWorkspaceSwitcherSelection(viewState, nextSlug);
+              if (!nextState) {
+                return;
+              }
+              const previousSlug = selected;
+              setViewState(nextState);
+              startTransition(() => {
+                void switchWorkspace(nextSlug, previousSlug);
+              });
+            }}
+            aria-label="Select workspace"
+          >
+            {workspaces.map((workspace) => (
+              <option key={workspace.workspace_id} value={workspace.slug}>
+                {workspace.display_name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-3 text-[11px] font-medium text-foreground transition hover:bg-card"
+            onClick={() => setShowGuidance((value) => !value)}
+            aria-expanded={showGuidance}
+          >
+            {showGuidance ? "Hide context guidance" : "Workspace guidance"}
+          </button>
+          {isSaving ? <span className="text-[11px] text-muted">syncing...</span> : null}
+        </div>
+      </div>
       {errorMessage ? (
-        <p className="text-[10px] text-amber-700" role="status">
+        <p className="mt-3 text-[11px] text-amber-700" role="status">
           {errorMessage}
         </p>
+      ) : null}
+      {warningMessage ? (
+        <p className="mt-3 text-[11px] text-amber-700" role="status">
+          {warningMessage}
+        </p>
+      ) : null}
+      {showGuidance ? (
+        <div className="mt-2 grid gap-2 rounded-lg border border-border bg-background px-3 py-3 text-[11px] leading-5 text-muted">
+          <p>
+            Switch workspaces only after you confirm the current identity and tenant, then visit onboarding, billing,
+            verification, or go-live with the correct context.
+          </p>
+          <p>
+            This control only updates the console's manual workspace context. Keep an eye on the topbar badges: if
+            they show fallback or local-only context, it means metadata-backed session data isn't available yet, so revisit <code className="font-mono">/session</code> before trusting the next lane.
+          </p>
+          <p>
+            This switcher only changes the manual workspace context for the console. It does not impersonate another
+            member, edit roles, or trigger support-side automation.
+          </p>
+        </div>
       ) : null}
     </div>
   );

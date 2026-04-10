@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchWorkspaceMembersViewModel } from "@/services/control-plane";
+import { buildConsoleHandoffHref, type ConsoleHandoffState } from "@/lib/console-handoff";
 
 function formatJoinedAt(value: string | null): string {
   if (!value) {
@@ -50,11 +52,38 @@ function memberStatusSummary(status: string): string {
   return "This membership should be treated as historical or manually reviewed before any further workspace follow-up.";
 }
 
-export function MembersPanel({ workspaceSlug }: { workspaceSlug: string }) {
+export function MembersPanel({
+  workspaceSlug,
+  handoff,
+}: {
+  workspaceSlug: string;
+  handoff?: ConsoleHandoffState;
+}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["workspace-members", workspaceSlug],
     queryFn: fetchWorkspaceMembersViewModel,
   });
+  const defaultHandoff: ConsoleHandoffState = {
+    source: null,
+    surface: null,
+    runId: null,
+    attentionWorkspace: null,
+    attentionOrganization: null,
+    week8Focus: null,
+    deliveryContext: null,
+    recentTrackKey: null,
+    recentUpdateKind: null,
+    evidenceCount: null,
+    recentOwnerLabel: null,
+    recentOwnerDisplayName: null,
+    recentOwnerEmail: null,
+  };
+  const safeHandoff = handoff ?? defaultHandoff;
+  const auditContinuityLinks = [
+    { label: "Reopen audit export receipt", href: "/settings?intent=upgrade" },
+    { label: "Capture verification evidence", href: "/verification?surface=verification" },
+    { label: "Return to go-live drill", href: "/go-live?surface=go_live" },
+  ];
 
   const members = data?.items ?? [];
   const contract = data?.contract;
@@ -107,6 +136,29 @@ export function MembersPanel({ workspaceSlug }: { workspaceSlug: string }) {
             self-serve handoff is still incomplete. Any other state should be treated as historical or requiring manual
             review before the workspace relies on that access again.
           </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-background p-4 text-xs text-muted">
+          <p className="font-medium text-foreground">Audit export continuity</p>
+          <p className="mt-1">
+            Governance roles should reopen the Latest export receipt from <code className="font-mono">/settings?intent=upgrade</code>
+            so the filename, filters, and SHA-256 stay linked to verification, go-live, and the eventual admin handoff.
+          </p>
+          <p className="mt-1">
+            This is a navigation-only manual relay; the links keep workspace context intact but do not auto-attach the
+            receipt or finish rollout steps on your behalf.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {/* Source contract sentinel: href="/settings?intent=upgrade" */}
+            {auditContinuityLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={buildConsoleHandoffHref(link.href, safeHandoff)}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-card"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
         </div>
         {contract ? (
           <div className="rounded-2xl border border-border bg-background p-4 text-xs text-muted">

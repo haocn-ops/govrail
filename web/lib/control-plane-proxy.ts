@@ -39,6 +39,11 @@ export function requireMetadataWorkspaceContext(args: {
     message: args.message,
     details: {
       source: args.workspaceContext.source,
+      source_label: args.workspaceContext.source_detail.label,
+      warning: args.workspaceContext.source_detail.warning,
+      session_checkpoint_required:
+        args.workspaceContext.source_detail.session_checkpoint_required,
+      checkpoint_label: args.workspaceContext.source_detail.checkpoint_label,
       workspace_id: args.workspaceContext.workspace.workspace_id,
       workspace_slug: args.workspaceContext.workspace.slug,
     },
@@ -151,7 +156,11 @@ export async function proxyControlPlane(
 export async function proxyControlPlaneOrFallback<T>(
   path: string,
   fallbackData: T,
-  options?: { includeTenant?: boolean; init?: RequestInit },
+  options?: {
+    includeTenant?: boolean;
+    init?: RequestInit;
+    workspaceContext?: Awaited<ReturnType<typeof resolveWorkspaceContextForServer>>;
+  },
 ): Promise<Response> {
   const upstream = await proxyControlPlane(path, options);
   if (upstream.ok) {

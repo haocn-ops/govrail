@@ -18,12 +18,14 @@ test("Admin overview keeps readiness follow-up handoff links on shared query hel
   assert.match(source, /function buildSurfaceFollowUpHref\(\{/);
   assert.match(source, /return buildHandoffHref\(/);
   assert.match(source, /source: "admin-readiness",/);
+  assert.match(source, /runId,/);
   assert.match(source, /week8Focus: readinessFocus,/);
   assert.match(source, /attentionWorkspace: workspaceSlug,/);
   assert.match(source, /attentionOrganization: organizationId,/);
   assert.match(source, /\{ preserveExistingQuery: true \}/);
 
   assert.match(source, /pathname: "\/settings\?intent=resolve-billing"/);
+  assert.match(source, /pathname: "\/settings\?intent=manage-plan"/);
   assert.match(source, /pathname: "\/onboarding"/);
   assert.match(source, /pathname: "\/verification\?surface=verification"/);
   assert.match(source, /pathname: "\/go-live\?surface=go_live"/);
@@ -33,40 +35,47 @@ test("Admin overview keeps readiness follow-up handoff links on shared query hel
 test("Admin overview keeps attention action query naming consistent for surface and recent delivery metadata", async () => {
   const source = await readSource(adminOverviewPath);
 
-  assert.match(source, /searchParams: \{/);
-  assert.match(source, /pathname: targetSurface === "go_live" \? "\/go-live" : "\/verification",/);
-  assert.match(source, /source: "admin-attention",/);
-  assert.match(source, /surface: targetSurface,/);
-  assert.match(source, /attention_workspace: workspace\.slug,/);
-  assert.match(source, /attention_organization: options\?\.attentionOrganizationId \?\? null,/);
-  assert.match(source, /delivery_context: options\?\.deliveryContext \?\? null,/);
-  assert.match(source, /recent_track_key: options\?\.recentTrackKey \?\? null,/);
-  assert.match(source, /recent_update_kind: options\?\.recentUpdateKind \?\? null,/);
-  assert.match(source, /evidence_count:\s*typeof options\?\.evidenceCount === "number" \? String\(options\.evidenceCount\) : null,/s);
-  assert.match(source, /recent_owner_label: options\?\.recentOwnerLabel \?\? null,/);
-  assert.match(source, /recent_owner_display_name: options\?\.recentOwnerDisplayName \?\? null,/);
-  assert.match(source, /recent_owner_email: options\?\.recentOwnerEmail \?\? null,/);
-  assert.match(source, /targetSurface === "go_live" \? "Open go-live drill" : "Open verification checklist"/);
-  assert.match(source, /pathname: "\/go-live\?surface=go_live"/);
+  assert.match(
+    source,
+    /import \{\s*buildWorkspaceNavigationHref,\s*performWorkspaceSwitch,\s*\} from "@\/lib\/client-workspace-navigation";/s,
+  );
+  assert.match(
+    source,
+    /import \{\s*adminAttentionActionLabel,\s*buildAdminAttentionNavigationTarget,\s*buildAdminReadinessNavigationTarget,\s*\} from "@\/lib\/admin-follow-up-navigation";/s,
+  );
+  assert.match(source, /const outcome = await performWorkspaceSwitch\(\{/);
+  assert.match(source, /workspace_slug: options\.workspaceSlug,/);
+  assert.match(source, /await navigateWithWorkspaceContext\(buildAdminAttentionNavigationTarget\(workspace, options\)\);/);
+  assert.match(
+    source,
+    /await navigateWithWorkspaceContext\(\s*buildAdminReadinessNavigationTarget\(workspace, \{\s*readinessFocus,\s*attentionOrganizationId,\s*\}\),\s*\);/s,
+  );
+  assert.match(source, /router\.push\(buildWorkspaceNavigationHref\(options\.pathname, options\.searchParams\)\);/);
+  assert.match(source, /const actionLabel = adminAttentionActionLabel\(targetSurface\);/);
 });
 
 test("Admin overview keeps direct admin-attention go-live queue entry and return cues explicit", async () => {
   const source = await readSource(adminOverviewPath);
 
   assert.match(source, /const targetSurface = workspace\.next_action_surface \?\? "verification";/);
-  assert.match(source, /pathname: targetSurface === "go_live" \? "\/go-live" : "\/verification",/);
-  assert.match(source, /surface: targetSurface,/);
-  assert.match(source, /targetSurface === "go_live" \? "Open go-live drill" : "Open verification checklist"/);
+  assert.match(source, /adminAttentionActionLabel\(targetSurface\)/);
+  assert.match(source, /const returnLinksHref = "#admin-return-links";/);
   assert.match(source, /<p className="font-medium">Admin queue focus restored<\/p>/);
   assert.match(source, /Continue the governance review from the filtered queue/);
+  assert.match(source, /<Link href=\{returnLinksHref\}>return links below<\/Link>/);
+  assert.match(source, /<div id="admin-return-links" className="flex flex-wrap gap-2">/);
   assert.match(source, /<Link[\s\S]*?>\s*Clear follow-up return\s*<\/Link>/s);
 });
 
 test("Admin overview surfaces contract source and 404/503 fallback guidance in the platform snapshot", async () => {
   const source = await readSource(adminOverviewPath);
 
-  assert.match(source, /const adminContractMeta = data\?\.contract_meta \?\? null;/);
-  assert.match(source, /const adminContractSource = adminContractMeta\?\.source \?\? \(data \? "live" : null\);/);
+  assert.match(source, /const normalizedData = useMemo\(\(\) => \{/);
+  assert.match(source, /if \(!preferPreviewScaffolding\) \{\s*return data;\s*\}/s);
+  assert.match(source, /const previewData = buildAdminOverviewPreviewData\(data\?\.updated_at\);/);
+  assert.match(source, /if \(!data\) \{\s*return \{\s*\.\.\.previewData,/s);
+  assert.match(source, /const adminContractMeta = normalizedData\?\.contract_meta \?\? null;/);
+  assert.match(source, /const adminContractSource = adminContractMeta\?\.source \?\? \(normalizedData \? "live" : null\);/);
   assert.match(
     source,
     /function adminContractLabel\(\s*source\?: ControlPlaneContractMeta\["source"\] \| null,\s*issue\?: AdminContractIssue \| null,\s*\): string \{/s,

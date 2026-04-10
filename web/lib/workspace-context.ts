@@ -13,6 +13,8 @@ export type WorkspaceContextSourceDetail = {
   is_fallback: boolean;
   local_only: boolean;
   warning: string | null;
+  session_checkpoint_required: boolean;
+  checkpoint_label: "Trusted metadata session" | "Session checkpoint required";
 };
 
 export type WorkspaceRecord = {
@@ -89,6 +91,8 @@ export function describeWorkspaceContextSource(source: WorkspaceContextSource): 
       is_fallback: false,
       local_only: false,
       warning: null,
+      session_checkpoint_required: false,
+      checkpoint_label: "Trusted metadata session",
     };
   }
 
@@ -97,6 +101,8 @@ export function describeWorkspaceContextSource(source: WorkspaceContextSource): 
     is_fallback: true,
     local_only: true,
     warning: getFallbackWorkspaceContextWarning(source),
+    session_checkpoint_required: true,
+    checkpoint_label: "Session checkpoint required",
   };
 }
 

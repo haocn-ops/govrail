@@ -1,7 +1,7 @@
-import { proxyControlPlane } from "@/lib/control-plane-proxy";
+import { proxyHealthGet } from "../system-route-helpers";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return proxyControlPlane("/api/v1/health", { includeTenant: false });
+  return proxyHealthGet();
 }

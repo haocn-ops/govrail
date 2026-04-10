@@ -10,8 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { buildVerificationChecklistHandoffHref } from "@/components/verification/week8-verification-checklist";
+import {
+  fetchWorkspaceContextSource,
+  type WorkspaceContextSourceState,
+} from "@/lib/client-workspace-context";
+import { performWorkspaceSwitch } from "@/lib/client-workspace-navigation";
 import type { ControlPlaneWorkspaceBootstrapResult, ControlPlaneWorkspaceOnboardingState } from "@/lib/control-plane-types";
+import { buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
 import {
   bootstrapWorkspace,
   createWorkspace,
@@ -27,81 +32,6 @@ function normalizeSlug(value: string): string {
     .replace(/^-+|-+$/g, "");
 
   return normalized || "workspace";
-}
-
-type WorkspaceContextSource = "metadata" | "env-fallback" | "preview-fallback";
-
-type WorkspaceContextResponse = {
-  data?: {
-    source?: WorkspaceContextSource;
-    source_detail?: {
-      label?: string;
-      is_fallback?: boolean;
-      local_only?: boolean;
-      warning?: string | null;
-    };
-  };
-};
-
-type WorkspaceContextSourceState = {
-  source: WorkspaceContextSource;
-  label: string;
-  isFallback: boolean;
-  localOnly: boolean;
-  warning: string | null;
-};
-
-async function fetchWorkspaceContextSource(): Promise<WorkspaceContextSourceState | null> {
-  try {
-    const response = await fetch("/api/workspace-context", {
-      headers: {
-        accept: "application/json",
-      },
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const payload = (await response.json()) as WorkspaceContextResponse;
-    const source = payload.data?.source;
-    if (source !== "metadata" && source !== "env-fallback" && source !== "preview-fallback") {
-      return null;
-    }
-    const detail = payload.data?.source_detail;
-    return {
-      source,
-      label:
-        typeof detail?.label === "string" && detail.label.trim() !== ""
-          ? detail.label.trim()
-          : source,
-      isFallback: detail?.is_fallback === true || source !== "metadata",
-      localOnly: detail?.local_only === true,
-      warning: typeof detail?.warning === "string" && detail.warning.trim() !== "" ? detail.warning.trim() : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function selectWorkspaceContext(workspace: {
-  workspace_id: string;
-  slug: string;
-}): Promise<void> {
-  try {
-    await fetch("/api/workspace-context", {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        workspace_id: workspace.workspace_id,
-        workspace_slug: workspace.slug,
-      }),
-    });
-  } catch {
-    // Keep the onboarding flow resilient even if the context switch probe fails.
-  }
 }
 
 function getActionableErrorMessage(error: unknown, fallback: string): string {
@@ -151,6 +81,13 @@ function formatUsageWindowDate(value?: string | null): string {
     return "-";
   }
   return new Date(value).toLocaleDateString();
+}
+
+function formatCredentialCoverage(active: number, total: number): string {
+  if (total <= active) {
+    return String(active);
+  }
+  return `${active} active · ${total - active} historical`;
 }
 
 type OnboardingSource = "admin-attention" | "admin-readiness" | "onboarding";
@@ -372,6 +309,7 @@ function getRecoveryLane(args: {
 export function WorkspaceOnboardingWizard({
   workspaceSlug,
   source = "onboarding",
+  runId,
   week8Focus,
   attentionWorkspace,
   attentionOrganization,
@@ -380,9 +318,12 @@ export function WorkspaceOnboardingWizard({
   recentUpdateKind,
   evidenceCount,
   recentOwnerLabel,
+  recentOwnerDisplayName,
+  recentOwnerEmail,
 }: {
   workspaceSlug: string;
   source?: string | null;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -391,6 +332,8 @@ export function WorkspaceOnboardingWizard({
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -411,7 +354,13 @@ export function WorkspaceOnboardingWizard({
   });
   const contextSourceQuery = useQuery({
     queryKey: ["workspace-context-source"],
-    queryFn: fetchWorkspaceContextSource,
+    queryFn: async (): Promise<WorkspaceContextSourceState | null> => {
+      try {
+        return await fetchWorkspaceContextSource();
+      } catch {
+        return null;
+      }
+    },
   });
   const persistedWorkspace =
     workspaceQuery.data?.workspace &&
@@ -490,9 +439,15 @@ export function WorkspaceOnboardingWizard({
       setCreatedWorkspace(nextWorkspace);
       setBootstrapResult(null);
 
-      await selectWorkspaceContext(nextWorkspace);
-
-      await queryClient.invalidateQueries();
+      await performWorkspaceSwitch({
+        selection: {
+          workspace_id: nextWorkspace.workspace_id,
+          workspace_slug: nextWorkspace.slug,
+        },
+        queryClient,
+        resetMode: "invalidate",
+        continueOnError: true,
+      });
       router.refresh();
     },
   });
@@ -519,6 +474,7 @@ export function WorkspaceOnboardingWizard({
   const stepThreeReady = stepTwoComplete && serviceAccountReady && apiKeyReady;
   const stepThreeComplete = onboardingState?.checklist.demo_run_succeeded === true;
   const latestDemoRun = onboardingState?.latest_demo_run ?? null;
+  const activeRunId = latestDemoRun?.run_id ?? runId ?? null;
   const latestDemoRunHint = onboardingState?.latest_demo_run_hint ?? null;
   const deliveryGuidance = onboardingState?.delivery_guidance ?? null;
   const recoveryLane = getRecoveryLane({
@@ -548,6 +504,7 @@ export function WorkspaceOnboardingWizard({
       : "onboarding";
   const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>[0], "pathname"> = {
     source: normalizedSource,
+    runId: activeRunId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -556,6 +513,8 @@ export function WorkspaceOnboardingWizard({
     recentUpdateKind,
     evidenceCount,
     recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
   };
   const onboardingGuideHref = buildVerificationChecklistHandoffHref({
     pathname: toSurfacePath(onboardingGuide.surface),
@@ -579,6 +538,10 @@ export function WorkspaceOnboardingWizard({
   });
   const settingsBillingHref = buildVerificationChecklistHandoffHref({
     pathname: "/settings?intent=manage-plan",
+    ...handoffHrefArgs,
+  });
+  const settingsAuditExportHref = buildVerificationChecklistHandoffHref({
+    pathname: "/settings?intent=upgrade",
     ...handoffHrefArgs,
   });
   const goLiveDrillHref = buildVerificationChecklistHandoffHref({
@@ -980,7 +943,7 @@ export function WorkspaceOnboardingWizard({
                     : onboardingState?.checklist.demo_run_created
                     ? "A demo run exists. Inspect the latest run and confirm it completed."
                     : stepThreeReady
-                    ? "Service account and API key exist; Playground is now unlocked."
+                    ? "An active service account and active API key exist; Playground is now unlocked."
                     : "Finish the baseline, service account, and API key steps before invoking the run."}
                 </p>
                 {latestDemoRunHint?.suggested_action ? (
@@ -1018,6 +981,32 @@ export function WorkspaceOnboardingWizard({
                   the notes, Go-live rehearses the next gate, and Session remains the safe place to re-check context if
                   anything feels off.
                 </p>
+              </div>
+              <div className="mt-3 rounded-xl border border-border bg-background p-3 text-xs">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted">Audit export continuity</p>
+                <p className="mt-1 text-muted">
+                  Keep the Latest export receipt from /settings in play: reuse the same filename, filters, and SHA-256
+                  throughout verification, delivery, and go-live notes so the admin handoff can cite the same evidence
+                  thread.
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  This is navigation-only and a manual relay; the links do not attach the receipt automatically or resolve
+                  rollout issues for you.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Link
+                    href={settingsAuditExportHref}
+                    className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+                  >
+                    Reopen audit export receipt
+                  </Link>
+                  <Link
+                    href={verificationChecklistHref}
+                    className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
+                  >
+                    Capture verification evidence
+                  </Link>
+                </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link
@@ -1061,19 +1050,25 @@ export function WorkspaceOnboardingWizard({
               <div className="flex items-center justify-between rounded-2xl border border-border bg-background p-4">
                 <div>
                   <p className="font-medium text-foreground">Service account</p>
-                  <p className="mt-1 text-xs text-muted">Create one machine identity for the first workload.</p>
+                  <p className="mt-1 text-xs text-muted">Create one active machine identity for the first workload.</p>
                 </div>
                 <Badge variant={onboardingState?.checklist.service_account_created ? "strong" : "subtle"}>
-                  {onboardingState?.summary.service_accounts_total ?? 0}
+                  {formatCredentialCoverage(
+                    onboardingState?.summary.active_service_accounts_total ?? 0,
+                    onboardingState?.summary.service_accounts_total ?? 0,
+                  )}
                 </Badge>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-border bg-background p-4">
                 <div>
                   <p className="font-medium text-foreground">API key</p>
-                  <p className="mt-1 text-xs text-muted">Issue and store the first secret for northbound access.</p>
+                  <p className="mt-1 text-xs text-muted">Issue and store the first active secret for northbound access.</p>
                 </div>
                 <Badge variant={onboardingState?.checklist.api_key_created ? "strong" : "subtle"}>
-                  {onboardingState?.summary.api_keys_total ?? 0}
+                  {formatCredentialCoverage(
+                    onboardingState?.summary.active_api_keys_total ?? 0,
+                    onboardingState?.summary.api_keys_total ?? 0,
+                  )}
                 </Badge>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-border bg-background p-4">

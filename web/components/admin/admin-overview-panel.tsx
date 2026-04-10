@@ -14,6 +14,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildWorkspaceNavigationHref,
+  performWorkspaceSwitch,
+} from "@/lib/client-workspace-navigation";
+import { buildAdminOverviewPreviewData } from "@/lib/admin-overview-preview";
+import {
+  adminAttentionActionLabel,
+  buildAdminAttentionNavigationTarget,
+  buildAdminReadinessNavigationTarget,
+} from "@/lib/admin-follow-up-navigation";
 import type {
   ControlPlaneAdminAttentionWorkspace,
   ControlPlaneAdminDeliveryWorkspace,
@@ -304,11 +314,13 @@ function buildAdminHref({
 
 function buildSurfaceFollowUpHref({
   pathname,
+  runId,
   readinessFocus,
   workspaceSlug,
   organizationId,
 }: {
   pathname: string;
+  runId?: string | null;
   readinessFocus?: ControlPlaneAdminWeek8ReadinessFocus | null;
   workspaceSlug?: string | null;
   organizationId?: string | null;
@@ -317,6 +329,7 @@ function buildSurfaceFollowUpHref({
     pathname,
     {
       source: "admin-readiness",
+      runId,
       week8Focus: readinessFocus,
       attentionWorkspace: workspaceSlug,
       attentionOrganization: organizationId,
@@ -327,6 +340,7 @@ function buildSurfaceFollowUpHref({
 
 function readinessFollowUpAction(
   readinessFocus: ControlPlaneAdminWeek8ReadinessFocus | null,
+  runId?: string | null,
   attentionWorkspaceSlug?: string | null,
   attentionOrganizationId?: string | null,
 ): { label: string; href: string; hint: string } | null {
@@ -338,6 +352,7 @@ function readinessFollowUpAction(
       label: "Open billing warning flow",
       href: buildSurfaceFollowUpHref({
         pathname: "/settings?intent=resolve-billing",
+        runId,
         readinessFocus,
         workspaceSlug: attentionWorkspaceSlug,
         organizationId: attentionOrganizationId,
@@ -351,6 +366,7 @@ function readinessFollowUpAction(
       label: "Open onboarding flow",
       href: buildSurfaceFollowUpHref({
         pathname: "/onboarding",
+        runId,
         readinessFocus,
         workspaceSlug: attentionWorkspaceSlug,
         organizationId: attentionOrganizationId,
@@ -364,6 +380,7 @@ function readinessFollowUpAction(
       label: "Open Week 8 checklist",
       href: buildSurfaceFollowUpHref({
         pathname: "/verification?surface=verification",
+        runId,
         readinessFocus,
         workspaceSlug: attentionWorkspaceSlug,
         organizationId: attentionOrganizationId,
@@ -376,6 +393,7 @@ function readinessFollowUpAction(
     label: "Open mock go-live drill",
     href: buildSurfaceFollowUpHref({
       pathname: "/go-live?surface=go_live",
+      runId,
       readinessFocus,
       workspaceSlug: attentionWorkspaceSlug,
       organizationId: attentionOrganizationId,
@@ -394,6 +412,7 @@ export function AdminOverviewPanel({
   attentionOrganizationId,
   queueReturned,
   readinessReturned,
+  preferPreviewScaffolding = false,
 }: {
   initialSurfaceFilter?: SurfaceFilter;
   initialReadinessFocus?: ControlPlaneAdminWeek8ReadinessFocus;
@@ -401,33 +420,84 @@ export function AdminOverviewPanel({
   attentionOrganizationId?: string | null;
   queueReturned?: boolean;
   readinessReturned?: boolean;
+  preferPreviewScaffolding?: boolean;
 }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-overview"],
     queryFn: fetchAdminOverview,
   });
 
-  const summary = data?.summary;
-  const adminContractMeta = data?.contract_meta ?? null;
-  const adminContractSource = adminContractMeta?.source ?? (data ? "live" : null);
-  const planDistribution = data?.plan_distribution ?? [];
-  const recentWorkspaces = data?.recent_workspaces ?? [];
-  const featureRollout = data?.feature_rollout;
-  const deliveryGovernance = data?.delivery_governance;
-  const week8Readiness = data?.week8_readiness;
-  const week8ReadinessWorkspaces = data?.week8_readiness_workspaces ?? [];
-  const recentDeliveryWorkspaces = data?.recent_delivery_workspaces ?? [];
+  const normalizedData = useMemo(() => {
+    if (!preferPreviewScaffolding) {
+      return data;
+    }
+
+    const previewData = buildAdminOverviewPreviewData(data?.updated_at);
+    if (!data) {
+      return {
+        ...previewData,
+        contract_meta: {
+          source: "fallback_error" as const,
+          normalized_at: previewData.updated_at,
+          issue: {
+            code: "admin_overview_preview_fallback",
+            message: "Admin overview is showing preview fallback data until the live control-plane summary is available.",
+            status: null,
+            retryable: true,
+            details: {
+              path: "/api/v1/saas/admin/overview",
+            },
+          },
+        },
+      };
+    }
+
+    return {
+      ...data,
+      recent_workspaces: data.recent_workspaces.length > 0 ? data.recent_workspaces : previewData.recent_workspaces,
+      delivery_governance: data.delivery_governance ?? previewData.delivery_governance,
+      recent_delivery_workspaces:
+        data.recent_delivery_workspaces && data.recent_delivery_workspaces.length > 0
+          ? data.recent_delivery_workspaces
+          : previewData.recent_delivery_workspaces,
+      attention_workspaces:
+        data.attention_workspaces && data.attention_workspaces.length > 0
+          ? data.attention_workspaces
+          : previewData.attention_workspaces,
+      attention_summary: data.attention_summary ?? previewData.attention_summary,
+      attention_organizations:
+        data.attention_organizations && data.attention_organizations.length > 0
+          ? data.attention_organizations
+          : previewData.attention_organizations,
+      week8_readiness: data.week8_readiness ?? previewData.week8_readiness,
+      week8_readiness_workspaces:
+        data.week8_readiness_workspaces && data.week8_readiness_workspaces.length > 0
+          ? data.week8_readiness_workspaces
+          : previewData.week8_readiness_workspaces,
+    };
+  }, [data, preferPreviewScaffolding]);
+
+  const summary = normalizedData?.summary;
+  const adminContractMeta = normalizedData?.contract_meta ?? null;
+  const adminContractSource = adminContractMeta?.source ?? (normalizedData ? "live" : null);
+  const planDistribution = normalizedData?.plan_distribution ?? [];
+  const recentWorkspaces = normalizedData?.recent_workspaces ?? [];
+  const featureRollout = normalizedData?.feature_rollout;
+  const deliveryGovernance = normalizedData?.delivery_governance;
+  const week8Readiness = normalizedData?.week8_readiness;
+  const week8ReadinessWorkspaces = normalizedData?.week8_readiness_workspaces ?? [];
+  const recentDeliveryWorkspaces = normalizedData?.recent_delivery_workspaces ?? [];
   const recentDeliveryWorkspacesWithMetadata: RecentDeliveryDetail[] = recentDeliveryWorkspaces.map(
     (workspace) => ({
       ...workspace,
       organization_display_name: workspace.organization_display_name ?? workspace.slug,
     }),
   );
-  const attentionSummary = data?.attention_summary;
-  const attentionOrganizations = data?.attention_organizations ?? [];
+  const attentionSummary = normalizedData?.attention_summary;
+  const attentionOrganizations = normalizedData?.attention_organizations ?? [];
   const totalWorkspaces = summary?.workspaces_total ?? 0;
   const showRecentDeliveryWorkspaces = recentDeliveryWorkspacesWithMetadata.length > 0;
-  const attentionWorkspaces = data?.attention_workspaces ?? [];
+  const attentionWorkspaces = normalizedData?.attention_workspaces ?? [];
   const readinessFocus = initialReadinessFocus ?? null;
   const organizationMatchesFocus = (workspace: {
     organization_id: string;
@@ -623,6 +693,15 @@ export function AdminOverviewPanel({
         readinessReturned,
       })
     : null;
+  const clearReadinessReturnedHref = readinessReturned
+    ? buildAdminHref({
+        surface: activeSurface,
+        readinessFocus,
+        organizationId: attentionOrganizationId,
+        workspaceSlug: attentionWorkspaceSlug,
+        queueReturned,
+      })
+    : null;
   const clearAllHref = hasFocusState ? "/admin" : null;
   const router = useRouter();
   const [switchingWorkspace, setSwitchingWorkspace] = useState<string | null>(null);
@@ -653,34 +732,19 @@ export function AdminOverviewPanel({
   }) => {
     setActionError(null);
     setSwitchingWorkspace(options.workspaceSlug);
-    try {
-      const response = await fetch("/api/workspace-context", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          workspace_slug: options.workspaceSlug,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(`Workspace switch failed (${response.status})`);
-      }
+    const outcome = await performWorkspaceSwitch({
+      selection: {
+        workspace_slug: options.workspaceSlug,
+      },
+    });
+    if (outcome.status === "switched") {
       startRoutingTransition(() => {
-        const searchParams = new URLSearchParams();
-        Object.entries(options.searchParams ?? {}).forEach(([key, value]) => {
-          if (value) {
-            searchParams.set(key, value);
-          }
-        });
-        const query = searchParams.toString();
-        router.push(query ? `${options.pathname}?${query}` : options.pathname);
+        router.push(buildWorkspaceNavigationHref(options.pathname, options.searchParams));
       });
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to switch workspace");
-    } finally {
-      setSwitchingWorkspace(null);
+    } else {
+      setActionError(outcome.error?.message ?? "Unable to switch workspace");
     }
+    setSwitchingWorkspace(null);
   };
 
   const handleAction = async (
@@ -696,48 +760,16 @@ export function AdminOverviewPanel({
       recentOwnerEmail?: string | null;
     },
   ) => {
-    const targetSurface = workspace.next_action_surface ?? "verification";
-    await navigateWithWorkspaceContext({
-      workspaceSlug: workspace.slug,
-      pathname: targetSurface === "go_live" ? "/go-live" : "/verification",
-      searchParams: {
-        source: "admin-attention",
-        surface: targetSurface,
-        attention_workspace: workspace.slug,
-        attention_organization: options?.attentionOrganizationId ?? null,
-        delivery_context: options?.deliveryContext ?? null,
-        recent_track_key: options?.recentTrackKey ?? null,
-        recent_update_kind: options?.recentUpdateKind ?? null,
-        evidence_count:
-          typeof options?.evidenceCount === "number" ? String(options.evidenceCount) : null,
-        recent_owner_label: options?.recentOwnerLabel ?? null,
-        recent_owner_display_name: options?.recentOwnerDisplayName ?? null,
-        recent_owner_email: options?.recentOwnerEmail ?? null,
-      },
-    });
+    await navigateWithWorkspaceContext(buildAdminAttentionNavigationTarget(workspace, options));
   };
 
   const handleReadinessAction = async (workspace: ControlPlaneAdminWeek8ReadinessWorkspace) => {
-    const targetSurface: AdminNavigationSurface = workspace.next_action_surface;
-    await navigateWithWorkspaceContext({
-      workspaceSlug: workspace.slug,
-      pathname:
-        targetSurface === "go_live"
-          ? "/go-live"
-          : targetSurface === "verification"
-            ? "/verification"
-            : targetSurface === "settings"
-              ? "/settings"
-              : "/onboarding",
-      searchParams: {
-        source: "admin-readiness",
-        surface:
-          targetSurface === "go_live" || targetSurface === "verification" ? targetSurface : null,
-        week8_focus: readinessFocus,
-        attention_workspace: workspace.slug,
-        attention_organization: workspace.organization_id || attentionOrganizationId || null,
-      },
-    });
+    await navigateWithWorkspaceContext(
+      buildAdminReadinessNavigationTarget(workspace, {
+        readinessFocus,
+        attentionOrganizationId,
+      }),
+    );
   };
 
   const renderStatusRow = (label: string, counts: ControlPlaneDeliveryGovernance["verification"]) => (
@@ -920,6 +952,20 @@ export function AdminOverviewPanel({
           return rightOrganizationMatches - leftOrganizationMatches;
         })
       : filteredReadinessWorkspaces;
+  const focusedReadinessWorkspace = attentionWorkspaceSlug
+    ? prioritizedReadinessWorkspaces.find((workspace) => workspace.slug === attentionWorkspaceSlug) ?? null
+    : null;
+  const focusedAttentionWorkspace = attentionWorkspaceSlug
+    ? filteredOrganizationWorkspaces.find((workspace) => workspace.slug === attentionWorkspaceSlug) ?? null
+    : null;
+  const focusedRecentDeliveryWorkspace = attentionWorkspaceSlug
+    ? recentDeliveryWorkspacesWithMetadata.find((workspace) => workspace.slug === attentionWorkspaceSlug) ?? null
+    : null;
+  const focusedRunId =
+    focusedRecentDeliveryWorkspace?.latest_demo_run_id
+    ?? focusedReadinessWorkspace?.latest_demo_run_id
+    ?? focusedAttentionWorkspace?.latest_demo_run_id
+    ?? null;
   const defaultReadinessLimit = 4;
   const [readinessLimit, setReadinessLimit] = useState(defaultReadinessLimit);
   useEffect(() => {
@@ -931,9 +977,11 @@ export function AdminOverviewPanel({
   const readinessActionLabel = (surface: AdminNavigationSurface) => surfaceActionInfo[surface].buttonLabel;
   const readinessFollowUp = readinessFollowUpAction(
     readinessFocus,
+    focusedRunId,
     attentionWorkspaceSlug,
     attentionOrganizationId,
   );
+  const returnLinksHref = "#admin-return-links";
 
   return (
     <div className="space-y-6">
@@ -943,11 +991,13 @@ export function AdminOverviewPanel({
         organization={focusedOrganizationLabel}
         workspace={focusedWorkspaceLabel}
         queueReturned={queueReturned}
+        readinessReturned={readinessReturned}
         clearSurfaceHref={clearSurfaceHref}
         clearReadinessHref={clearReadinessHref}
         clearOrganizationHref={clearOrganizationHref}
         clearWorkspaceHref={clearWorkspaceHref}
         clearQueueReturnedHref={clearQueueReturnedHref}
+        clearReadinessReturnedHref={clearReadinessReturnedHref}
         clearAllHref={clearAllHref}
       />
       {showReadinessReturnBanner ? (
@@ -974,9 +1024,10 @@ export function AdminOverviewPanel({
           <p className="text-muted">
             The attention queue lists workspaces that still need manual review. Open a workspace from the list, perform
             the governance work on verification/go-live/etc., capture evidence or operator notes on that surface, then
-            close the loop by using the return links below to restore the admin overview.
+            close the loop by using the <Link href={returnLinksHref}>return links below</Link> to restore the admin
+            overview.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div id="admin-return-links" className="flex flex-wrap gap-2">
             {clearReadinessHref ? (
               <Link
                 href={clearReadinessHref}
@@ -1404,8 +1455,7 @@ export function AdminOverviewPanel({
               shownActionWorkspaces.map((workspace) => {
                 const targetSurface = (workspace.next_action_surface ?? "verification") as AdminNavigationSurface;
                 const actionDetail = surfaceActionInfo[targetSurface].detail;
-                const actionLabel =
-                  targetSurface === "go_live" ? "Open go-live drill" : "Open verification checklist";
+                const actionLabel = adminAttentionActionLabel(targetSurface);
                 const isSwitching = switchingWorkspace === workspace.slug;
                 const isHighlighted = attentionWorkspaceSlug === workspace.slug;
                 return (
@@ -1526,8 +1576,7 @@ export function AdminOverviewPanel({
                         <div className="mt-3 space-y-3">
                           {workspacesForOrg.map((workspace) => {
                             const targetSurface = workspace.next_action_surface ?? "verification";
-                            const actionLabel =
-                              targetSurface === "go_live" ? "Open go-live drill" : "Open verification checklist";
+                            const actionLabel = adminAttentionActionLabel(targetSurface);
                             const isSwitching = switchingWorkspace === workspace.slug;
                             const isHighlighted = attentionWorkspaceSlug === workspace.slug;
                             return (
@@ -1615,8 +1664,7 @@ export function AdminOverviewPanel({
               </div>
               {recentShownWorkspaces.map((workspace) => {
                 const targetSurface = (workspace.next_action_surface ?? "verification") as AdminNavigationSurface;
-                const actionLabel =
-                  targetSurface === "go_live" ? "Open go-live drill" : "Open verification checklist";
+                const actionLabel = adminAttentionActionLabel(targetSurface);
                 const actionDetail = surfaceActionInfo[targetSurface].detail;
                 const isSwitching = switchingWorkspace === workspace.slug;
                 const isHighlighted = attentionWorkspaceSlug === workspace.slug;
@@ -1724,6 +1772,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/go-live?surface=go_live",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1735,6 +1784,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/verification?surface=verification",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1746,6 +1796,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/onboarding",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1757,6 +1808,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/usage",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1767,7 +1819,8 @@ export function AdminOverviewPanel({
             </Link>
             <Link
               href={buildSurfaceFollowUpHref({
-                pathname: "/settings",
+                pathname: "/settings?intent=manage-plan",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,
@@ -1779,6 +1832,7 @@ export function AdminOverviewPanel({
             <Link
               href={buildSurfaceFollowUpHref({
                 pathname: "/playground",
+                runId: focusedRunId,
                 readinessFocus,
                 workspaceSlug: attentionWorkspaceSlug,
                 organizationId: attentionOrganizationId,

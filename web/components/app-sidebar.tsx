@@ -10,7 +10,7 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-72 flex-col border-r border-border bg-background px-5 py-6 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-72 flex-col overflow-y-auto border-r border-border bg-background px-5 py-6 lg:flex">
       <div className="mb-8 flex items-center gap-3 px-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-card text-sm font-semibold text-foreground">
           GR
@@ -21,7 +21,7 @@ export function AppSidebar() {
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-2">
+      <nav className="flex min-h-0 flex-1 flex-col gap-2">
         {navigationItems.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
@@ -50,13 +50,6 @@ export function AppSidebar() {
         })}
       </nav>
 
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted">Production surface</p>
-        <p className="mt-2 text-sm font-medium text-foreground">Next.js on Workers</p>
-        <p className="mt-1 text-xs leading-5 text-muted">
-          Govrail runs as a dedicated console on OpenNext and Cloudflare Workers, fronting the production API.
-        </p>
-      </div>
     </aside>
   );
 }

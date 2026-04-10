@@ -7,12 +7,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildVerificationChecklistHandoffHref } from "@/components/verification/week8-verification-checklist";
+import { buildVerificationChecklistHandoffHref } from "@/lib/handoff-query";
 import { ControlPlaneRequestError, disableServiceAccount, fetchCurrentWorkspace, fetchServiceAccounts } from "@/services/control-plane";
 
 type HandoffSource = "admin-attention" | "admin-readiness" | "onboarding";
 type HandoffQuery = {
   source?: HandoffSource | null;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -21,6 +22,8 @@ type HandoffQuery = {
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 };
 type OnboardingSurface =
   | "onboarding"
@@ -38,13 +41,19 @@ type OnboardingSurface =
 
 function buildContextLines(params: {
   ownerLabel?: string | null;
+  ownerDisplayName?: string | null;
+  ownerEmail?: string | null;
   recentTrackKey?: "verification" | "go_live" | null;
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
 }): string[] {
   const lines: string[] = [];
-  if (params.ownerLabel) {
-    lines.push(`Latest handoff owner: ${params.ownerLabel}`);
+  const ownerSummary =
+    params.ownerDisplayName && params.ownerEmail
+      ? `${params.ownerDisplayName} <${params.ownerEmail}>`
+      : params.ownerDisplayName ?? params.ownerEmail ?? params.ownerLabel ?? null;
+  if (ownerSummary) {
+    lines.push(`Latest handoff owner: ${ownerSummary}`);
   }
   if (params.recentTrackKey) {
     const label = params.recentTrackKey === "go_live" ? "go-live" : "verification";
@@ -122,6 +131,29 @@ function toSurfacePath(surface: OnboardingSurface): string {
   return `/${surface}`;
 }
 
+function credentialCoverage(active?: number | null, total?: number | null): string | null {
+  if (total == null || total <= 0) {
+    return null;
+  }
+  const act = active ?? 0;
+  const historical = Math.max(total - act, 0);
+  if (historical <= 0) {
+    return `${act} active`;
+  }
+  return `${act} active · ${historical} historical`;
+}
+
+function coverageNote(value: string | null): string {
+  return value ? ` Current coverage: ${value}.` : "";
+}
+
+function hasHistoricalOnly(total?: number | null, active?: number | null): boolean {
+  if (total == null || active == null) {
+    return false;
+  }
+  return total > 0 && active === 0;
+}
+
 function getServiceAccountsGuide(args: {
   onboarding?: {
     checklist: {
@@ -135,6 +167,10 @@ function getServiceAccountsGuide(args: {
     recommended_next_surface?: OnboardingSurface | null;
     recommended_next_action?: string | null;
     recommended_next_reason?: string | null;
+    summary?: {
+      service_accounts_total: number;
+      active_service_accounts_total: number;
+    } | null;
   } | null;
 }): { title: string; body: string; actionLabel: string; actionSurface: OnboardingSurface; blockers: string[] } {
   const blockers =
@@ -148,13 +184,22 @@ function getServiceAccountsGuide(args: {
             ? "Demo run exists but has not succeeded yet."
             : null,
         ].filter((item): item is string => item !== null);
+  const coverage = credentialCoverage(
+    args.onboarding?.summary?.active_service_accounts_total ?? null,
+    args.onboarding?.summary?.service_accounts_total ?? null,
+  );
+  const coverageLine = coverage ? coverageNote(coverage) : "";
+  const historicalOnly = hasHistoricalOnly(
+    args.onboarding?.summary?.service_accounts_total ?? null,
+    args.onboarding?.summary?.active_service_accounts_total ?? null,
+  );
 
   if (args.onboarding?.recommended_next_surface && args.onboarding.recommended_next_surface !== "service_accounts") {
     return {
       title: "Onboarding handoff",
       body:
-        args.onboarding.recommended_next_reason ??
-        "Service account step is done or not the critical blocker. Continue with the recommended next surface.",
+        `${args.onboarding.recommended_next_reason ??
+          "Service account step is done or not the critical blocker. Continue with the recommended next surface."}${coverageLine}`,
       actionLabel: args.onboarding.recommended_next_action ?? "Continue onboarding",
       actionSurface: args.onboarding.recommended_next_surface,
       blockers,
@@ -164,7 +209,8 @@ function getServiceAccountsGuide(args: {
   if (args.onboarding?.checklist.api_key_created !== true) {
     return {
       title: "Onboarding handoff",
-      body: "After creating a service account, mint a first API key to unlock Playground demo runs.",
+      body:
+        `After creating a service account, mint a first API key to unlock Playground demo runs.${coverageLine}`,
       actionLabel: "Create API key",
       actionSurface: "api_keys",
       blockers,
@@ -173,7 +219,9 @@ function getServiceAccountsGuide(args: {
   if (args.onboarding?.checklist.demo_run_succeeded !== true) {
     return {
       title: "Onboarding handoff",
-      body: "Credentials are ready. Use Playground to create or confirm the first successful demo run.",
+      body: historicalOnly
+        ? `Only historical or disabled service accounts remain. Create a new active machine identity before you treat Playground as ready.${coverageLine}`
+        : `Credentials are ready. Use Playground to create or confirm the first successful demo run.${coverageLine}`,
       actionLabel: "Run first demo",
       actionSurface: "playground",
       blockers,
@@ -212,6 +260,8 @@ type ServiceAccountsPanelProps = {
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 };
 
 function formatTime(value: string | null): string {
@@ -263,6 +313,8 @@ export function ServiceAccountsPanel({
   recentUpdateKind,
   evidenceCount,
   recentOwnerLabel,
+  recentOwnerDisplayName,
+  recentOwnerEmail,
 }: ServiceAccountsPanelProps) {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
@@ -298,13 +350,18 @@ export function ServiceAccountsPanel({
       : null;
   const metadataLines = buildContextLines({
     ownerLabel: recentOwnerLabel,
+    ownerDisplayName: recentOwnerDisplayName,
+    ownerEmail: recentOwnerEmail,
     recentTrackKey,
     recentUpdateKind,
     evidenceCount,
   });
   const contextCard = getContextCard(normalizedSource, metadataLines);
+  const latestDemoRun = workspaceQuery.data?.onboarding?.latest_demo_run ?? null;
+  const activeRunId = latestDemoRun?.run_id ?? null;
   const handoffHrefArgs: HandoffQuery = {
     source: normalizedSource,
+    runId: activeRunId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -313,6 +370,8 @@ export function ServiceAccountsPanel({
     recentUpdateKind,
     evidenceCount,
     recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
   };
   const onboardingGuide = getServiceAccountsGuide({
     onboarding: workspaceQuery.data?.onboarding ?? null,
@@ -329,11 +388,11 @@ export function ServiceAccountsPanel({
           The first service account usually backs your onboarding demo or any workspace-scoped runtime call. Pair it with
           an API key scoped to `runs:write`; add approvals, cancel/replay, A2A, or MCP scopes later as needed.
         </p>
-        {contextCard ? (
-          <Card className="rounded-2xl border border-border bg-background p-4">
-            <CardHeader>
-              <CardTitle>{contextCard.title}</CardTitle>
-            </CardHeader>
+          {contextCard ? (
+            <Card className="rounded-2xl border border-border bg-background p-4">
+              <CardHeader>
+                <CardTitle>{contextCard.title}</CardTitle>
+              </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p className="text-muted">{contextCard.body}</p>
               {contextCard.metaLines ? (
@@ -354,12 +413,50 @@ export function ServiceAccountsPanel({
                   </Link>
                 ))}
               </div>
-              <p className="text-xs text-muted">
-                These links preserve the admin handoff navigation context without impersonation, automation, or support tooling.
-              </p>
-            </CardContent>
-          </Card>
+            <p className="text-xs text-muted">
+              These links preserve the admin handoff navigation context without impersonation, automation, or support tooling.
+            </p>
+          </CardContent>
+        </Card>
         ) : null}
+        <div className="rounded-2xl border border-border bg-background p-4 text-xs text-muted">
+          <p className="font-medium text-foreground">Audit export continuity</p>
+          <p className="mt-1">
+            Governance roles should reopen the Latest export receipt from <code className="font-mono">/settings?intent=upgrade</code> to keep the filename, filters, and SHA-256 attached to verification, go-live, and the return to admin oversight.
+          </p>
+          <p className="mt-1">
+            This is a navigation-only manual relay; these links maintain the workspace context but do not automatically attach the receipt or finalize rollout steps for you.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link
+              href={buildVerificationChecklistHandoffHref({
+                pathname: "/settings?intent=upgrade",
+                ...handoffHrefArgs,
+              })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Reopen audit export receipt
+            </Link>
+            <Link
+              href={buildVerificationChecklistHandoffHref({
+                pathname: "/verification?surface=verification",
+                ...handoffHrefArgs,
+              })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Capture verification evidence
+            </Link>
+            <Link
+              href={buildVerificationChecklistHandoffHref({
+                pathname: "/go-live?surface=go_live",
+                ...handoffHrefArgs,
+              })}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-card"
+            >
+              Reopen go-live drill
+            </Link>
+          </div>
+        </div>
         <Card className="rounded-2xl border border-border bg-card p-4">
           <CardHeader>
             <CardTitle>{onboardingGuide.title}</CardTitle>
@@ -398,6 +495,9 @@ export function ServiceAccountsPanel({
           <p className="font-medium text-foreground">First-run governance path</p>
           <p className="mt-1 text-xs text-muted">
             Pair the key with a workspace service account, then use `/playground` to submit the first `runs:write` request. Capture the `run_id` and reference it in `/usage` or `/verification` so the Week 8 checklist can see the trace.
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            When usage metrics look healthy, capture verification evidence and rehearse the go-live drill so the evidence path stays intact before you return to the admin lane.
           </p>
           <p className="mt-1 text-xs text-muted">
             When you need replay, cancel, approval, A2A send/cancel, or MCP calls, incrementally add the matching scopes (`runs:manage`, `approvals:write`, `a2a:write`, `mcp:call`) for the same key or rotate to a new one. Keep the scope list narrow—each permission should align with a real workflow.

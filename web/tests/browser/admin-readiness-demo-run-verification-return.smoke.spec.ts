@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { linkByHrefFragments } from "./support/navigation";
+
 test("admin readiness demo-run branch -> verification -> admin keeps readiness browser continuity", async ({
   page,
 }) => {
@@ -8,21 +10,19 @@ test("admin readiness demo-run branch -> verification -> admin keeps readiness b
   await page.goto("/admin?week8_focus=demo_run&attention_organization=org_preview&attention_workspace=preview");
 
   await expect(page.getByRole("heading", { name: "SaaS admin overview" })).toBeVisible();
-  const governanceFocusSection = page
-    .getByRole("heading", { name: "Governance focus" })
-    .locator("xpath=ancestor::div[contains(@class, 'rounded-2xl')][1]");
-  const readinessSummarySection = page
-    .getByRole("heading", { name: "Week 8 readiness summary" })
-    .locator("xpath=ancestor::div[contains(@class, 'rounded-2xl')][1]");
+  await expect(page.getByRole("heading", { name: "Governance focus" })).toBeVisible();
+  await expect(page.getByText("Demo run", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Preview Organization").first()).toBeVisible();
+  await expect(page.getByText("Preview Workspace").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Week 8 readiness summary" })).toBeVisible();
+  await expect(page.getByText("Drill-down active: Demo run")).toBeVisible();
 
-  await expect(governanceFocusSection).toBeVisible();
-  await expect(governanceFocusSection.getByText("Demo run", { exact: true })).toBeVisible();
-  await expect(governanceFocusSection.getByText("Preview Organization").first()).toBeVisible();
-  await expect(governanceFocusSection.getByText("Preview Workspace").first()).toBeVisible();
-  await expect(readinessSummarySection).toBeVisible();
-  await expect(readinessSummarySection.getByText("Drill-down active: Demo run")).toBeVisible();
-
-  const openWeek8ChecklistLink = readinessSummarySection.getByRole("link", { name: "Open Week 8 checklist" });
+  const openWeek8ChecklistLink = linkByHrefFragments(
+    page,
+    "Open Week 8 checklist",
+    "/verification?surface=verification",
+    "week8_focus=demo_run",
+  );
   await expect(openWeek8ChecklistLink).toBeVisible();
   await openWeek8ChecklistLink.click();
 
@@ -37,10 +37,12 @@ test("admin readiness demo-run branch -> verification -> admin keeps readiness b
   await expect(page.getByText("Focus Demo run")).toBeVisible();
   await expect(page.getByText("Verification evidence lane")).toBeVisible();
 
-  const adminReadinessReturnLink = page
-    .locator("a")
-    .filter({ hasText: "Return to admin readiness view" })
-    .first();
+  const adminReadinessReturnLink = linkByHrefFragments(
+    page,
+    "Return to admin readiness view",
+    "/admin?",
+    "readiness_returned=1",
+  );
   await expect(adminReadinessReturnLink).toBeVisible();
   await adminReadinessReturnLink.click();
 

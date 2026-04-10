@@ -410,6 +410,24 @@ test("downloadWorkspaceAuditExportViewModel maps generic request failure to fall
   });
 });
 
+test("downloadWorkspaceAuditExportViewModel maps transport failures to fallback_error contract", async () => {
+  await withMockFetch(async () => {
+    throw new Error("network down");
+  }, async () => {
+    const result = await downloadWorkspaceAuditExportViewModel();
+    assert.equal(result.ok, false);
+    if (result.ok) {
+      throw new Error("Expected failed audit export result");
+    }
+    assert.equal(result.contract_meta.source, "fallback_error");
+    assert.equal(result.error.code, "request_failed");
+    assert.equal(result.error.message, "network down");
+    assert.equal(result.error.status, null);
+    assert.equal(result.error.retryable, true);
+    assert.equal(result.content_type, null);
+  });
+});
+
 test("fetchWorkspaceSsoReadiness maps 409 workspace_feature_unavailable to fallback_feature_gate", async () => {
   await withMockFetch(async (input) => {
     assert.equal(String(input), "/api/control-plane/workspace/sso");
@@ -491,6 +509,39 @@ test("fetchWorkspaceDedicatedEnvironmentReadiness maps 503 control_plane_base_mi
     assert.equal(result.feature_enabled, false);
     assert.equal(result.status, "staged");
     assert.equal(result.target_region, null);
+  });
+});
+
+test("fetchWorkspaceSsoReadiness maps 503 control_plane_base_missing to fallback_control_plane_unavailable", async () => {
+  await withMockFetch(async (input) => {
+    assert.equal(String(input), "/api/control-plane/workspace/sso");
+    return new Response(
+      JSON.stringify({
+        error: {
+          code: "control_plane_base_missing",
+          message: "Missing CONTROL_PLANE_BASE_URL",
+          details: {
+            upgrade_href: "/settings?intent=upgrade&feature=sso",
+            plan_code: "enterprise",
+          },
+        },
+      }),
+      {
+        status: 503,
+        headers: {
+          "content-type": "application/json",
+        },
+      },
+    );
+  }, async () => {
+    const result = await fetchWorkspaceSsoReadiness();
+    assert.equal(result.feature, "sso");
+    assert.equal(result.contract_meta?.source, "fallback_control_plane_unavailable");
+    assert.equal(result.contract_meta?.issue?.code, "control_plane_base_missing");
+    assert.equal(result.feature_enabled, false);
+    assert.equal(result.status, "staged");
+    assert.equal(result.upgrade_href, "/settings?intent=upgrade&feature=sso");
+    assert.equal(result.plan_code, "enterprise");
   });
 });
 
@@ -1228,10 +1279,10 @@ test("saveWorkspaceDedicatedEnvironmentReadiness keeps admin-access denial detai
     return new Response(
       JSON.stringify({
         error: {
-          code: "forbidden",
+          code: "workspace_admin_required",
           message: "Only workspace owners or admins can configure dedicated environment delivery",
           details: {
-            required_role: "workspace_owner",
+            required_roles: ["workspace_owner", "workspace_admin"],
             workspace_id: "ws_123",
           },
         },
@@ -1258,12 +1309,12 @@ test("saveWorkspaceDedicatedEnvironmentReadiness keeps admin-access denial detai
           return false;
         }
         assert.equal(error.status, 403);
-        assert.equal(error.code, "forbidden");
+        assert.equal(error.code, "workspace_admin_required");
         assert.equal(
           error.message,
           "Only workspace owners or admins can configure dedicated environment delivery",
         );
-        assert.equal(error.details.required_role, "workspace_owner");
+        assert.deepEqual(error.details.required_roles, ["workspace_owner", "workspace_admin"]);
         assert.equal(error.details.workspace_id, "ws_123");
         return true;
       },

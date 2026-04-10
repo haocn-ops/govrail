@@ -14,6 +14,7 @@ async function readSource(filePath: string): Promise<string> {
 test("settings panel keeps checkout/portal action error narratives aligned", async () => {
   const source = await readSource(settingsPanelPath);
 
+  assert.match(source, /function formatPortalActionError\(error: unknown\): string \{/);
   assert.match(
     source,
     /if \(args\.action === "complete" \&\& \(isStripeBillingProvider\(args\.providerCode\) \|\| normalizedCode\.includes\("webhook"\)\)\) \{\s*return `\$\{providerLabel\} finalizes completion after checkout\. Use Refresh session after payment to sync status\.`;/s,
@@ -33,6 +34,10 @@ test("settings panel keeps checkout/portal action error narratives aligned", asy
   assert.match(
     source,
     /normalizedCode === "billing_provider_portal_unimplemented"\)\s*\{\s*return "This provider-managed portal flow is not available yet for the current billing provider\.";/s,
+  );
+  assert.match(
+    source,
+    /if \(error\.message\) \{\s*return error\.message;\s*\}\s*\}\s*if \(error instanceof Error && error\.message\) \{\s*return error\.message;\s*\}\s*return "Unable to open billing portal\.";/s,
   );
 });
 
@@ -71,5 +76,35 @@ test("settings panel keeps subscription cancel/resume action error narratives al
   assert.match(
     source,
     /error: formatSubscriptionActionError\(error,\s*\{\s*action: "resume",\s*\}\),/s,
+  );
+});
+
+test("settings panel keeps audit export transport-failure fallback semantics aligned", async () => {
+  const source = await readSource(settingsPanelPath);
+
+  assert.match(source, /function formatAuditExportActionError\(error: unknown\): string \{/);
+  assert.match(
+    source,
+    /normalizedCode === "workspace_feature_unavailable"\) \{\s*return "Audit export is gated by current plan entitlements\. Upgrade to unlock export\.";/s,
+  );
+  assert.match(
+    source,
+    /normalizedCode === "control_plane_base_missing"\) \{\s*return "Control plane is unavailable; audit export cannot be generated right now\.";/s,
+  );
+  assert.match(
+    source,
+    /return `Audit export request failed\. Retry after checking workspace\/control-plane health\. \(\$\{error\.message\}\)`;/s,
+  );
+  assert.match(
+    source,
+    /try \{\s*const result = await downloadWorkspaceAuditExportViewModel\(\{[\s\S]*?\}\);/s,
+  );
+  assert.match(
+    source,
+    /catch \(error\) \{\s*setAuditExport\(\{\s*exporting: false,\s*error: formatAuditExportActionError\(error\),\s*notice: null,\s*contractSource: "fallback_error",/s,
+  );
+  assert.match(
+    source,
+    /contractIssueCode: isControlPlaneRequestError\(error\) \? error\.code : "request_failed",/s,
   );
 });

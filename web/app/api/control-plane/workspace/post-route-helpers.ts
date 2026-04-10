@@ -1,1 +1,4 @@
-export { buildProxyControlPlanePostInit } from "../post-route-helpers";
+export {
+  buildProxyControlPlanePostInit,
+  proxyWorkspaceScopedDetailPost,
+} from "../post-route-helpers";

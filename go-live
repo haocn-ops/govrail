@@ -1,0 +1,86 @@
+# Go-live Console Surface
+
+對應入口：`web/app/(console)/go-live/page.tsx`
+
+## 1. 這個 surface 目前負責什麼
+
+`/go-live` 目前是 mock go-live drill 頁，不是實際部署或自動發布頁。
+
+它負責：
+
+- 承接 verification evidence 的最後一跳
+- 重放 usage / settings / playground / artifacts 的檢查入口
+- 記錄 mock drill 與 delivery notes
+- 在需要時把操作者送回 admin queue / readiness 視角
+
+## 2. 真實頁面結構
+
+目前區塊如下：
+
+1. `WorkspaceContextSurfaceNotice`
+2. `ConsoleAdminFollowUp`
+3. `PageHeader`
+4. `Session-aware drill lane`
+   - verification / usage / settings / playground / artifacts / admin return
+5. `Governance recap`
+   - 強調這是一條 manual drill lane
+6. `MockGoLiveDrillPanel`
+7. `WorkspaceDeliveryTrackPanel`
+   - `sectionKey="go_live"`
+
+## 3. handoff / query / session 結構
+
+這頁已對齊 console helper，而不是自己拼接 query：
+
+- `parseConsoleHandoffState(searchParams)`
+- `buildRecentDeliveryMetadata(handoff)`
+- `buildRecentDeliveryDescription(...)`
+- `buildConsoleAdminReturnState(...)`
+- `buildConsoleAdminReturnHref(...)`
+- `buildConsoleHandoffHref(...)`
+- `ConsoleAdminFollowUp` 直接承接 admin return payload 與 returned-state cues，而不是由 page 層手寫 notice 文案
+
+固定連結語義：
+
+- `verification?surface=verification`
+- `usage`
+- `settings`
+- `playground`
+- `artifacts`
+- `admin` 或帶回跳狀態的 admin return href
+
+這讓 go-live 頁既能承接 verification handoff，也能在 attention / readiness source 下恢復正確的 admin 返回語義。
+
+## 4. 目前已落地的測試契約
+
+- `web/tests/page-level/verification-go-live-handoff.page.test.ts`
+  - 固定 go-live page 的 helper contract、顯式 surface query continuity 與 admin return label
+- `web/tests/page-level/delivery-track-context-handoff.page.test.ts`
+  - 固定 go-live delivery track 與 verification/admin 回跳映射
+- `web/tests/page-level/handoff-query-continuity-contract.page.test.ts`
+  - 固定 go-live panel 對 shared checklist helper 的復用
+- `web/tests/e2e/saas-mainline-smoke.e2e.test.ts`
+  - 固定 settings / verification / go-live / delivery surfaces 的 continuity smoke
+- `web/tests/browser/go-live-delivery-admin-return.smoke.spec.ts`
+  - 固定 go-live focused batch 的 browser return lane
+- `web/tests/e2e/browser-e2e-mainline-console-readiness.test.ts`
+  - 固定 mainline console batch 與 focused runner mapping
+- 若只需快速重跑這條主線 smoke，請從倉庫根目錄執行 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`；`npm run web:test:e2e` 仍保留給整包 non-browser smoke。
+- 若只需 focused browser 重跑，請從倉庫根目錄執行 `npm run web:test:browser:mainline-console-verification`；這組 batch 會覆蓋 `go-live-delivery-admin-return` 這條 go-live -> verification/admin 回流主線。
+
+## 5. 已完成範圍與保守邊界
+
+已完成：
+
+- go-live 與 verification 的顯式 surface continuity
+- recent delivery metadata 描述與 admin return 收斂
+- session-aware / fallback-aware workspace 提示
+
+保守邊界：
+
+- 僅為 mock drill
+- 不觸發 automation
+- 不執行真實 go-live
+- 不做跨角色 impersonation
+
+後續若要往前推，應先在 `MockGoLiveDrillPanel` 與 delivery contract 上加深，而不是把“真實發布”直接放進現有頁面。

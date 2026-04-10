@@ -14,6 +14,10 @@ async function readSource(filePath: string): Promise<string> {
 test("Settings panel keeps SSO saved-section fields aligned with submit payload and draft hydration", async () => {
   const source = await readSource(settingsPanelPath);
 
+  assert.match(
+    source,
+    /import \{\s*buildDedicatedHydrationConfigKey,\s*buildSsoHydrationConfigKey,\s*\} from "@\/components\/settings\/enterprise-hydration";/s,
+  );
   assert.match(source, /Saved configuration/);
   assert.match(source, /Configured domains/);
   assert.match(source, /Metadata URL/);
@@ -23,9 +27,14 @@ test("Settings panel keeps SSO saved-section fields aligned with submit payload 
   assert.match(source, /metadata_url: ssoDraft\.metadataUrl\.trim\(\)/);
   assert.match(source, /client_id: ssoDraft\.protocol === "oidc" && entityId \? entityId : null/);
   assert.match(source, /audience: ssoDraft\.protocol === "saml" && entityId \? entityId : null/);
+  assert.match(
+    source,
+    /const ssoConfiguredIdentity = readString\(\s*ssoReadiness\?\.provider_type === "saml" \? ssoReadiness\?\.audience : ssoReadiness\?\.client_id,\s*\);/s,
+  );
   assert.match(source, /metadataUrl: ssoReadiness\?\.metadata_url \?\? current\.metadataUrl/);
   assert.match(source, /entityId: ssoConfiguredIdentity \?\? current\.entityId/);
   assert.match(source, /domains: ssoConfiguredDomainsDraftValue/);
+  assert.match(source, /const configKey = buildSsoHydrationConfigKey\(\{/);
 });
 
 test("Settings panel keeps dedicated saved-request fields aligned with submit payload and draft hydration", async () => {
@@ -53,6 +62,7 @@ test("Settings panel keeps dedicated saved-request fields aligned with submit pa
   assert.match(source, /requestedCapacity: dedicatedRequestedCapacity \?\? current\.requestedCapacity/);
   assert.match(source, /requestedSla: dedicatedRequestedSla \?\? current\.requestedSla/);
   assert.match(source, /networkNotes: dedicatedEnvironmentReadiness\?\.network_boundary \?\? current\.networkNotes/);
+  assert.match(source, /const configKey = buildDedicatedHydrationConfigKey\(\{/);
 });
 
 test("Settings panel keeps plan-gated next-steps narrative for enterprise SSO and dedicated sections", async () => {
@@ -91,6 +101,9 @@ test("Settings panel keeps SSO saved sections coupled with runtime badges, sourc
   assert.match(source, /formatTokenLabel\(ssoConfigurationState \?\? "unknown"\)/);
   assert.match(source, /formatTokenLabel\(ssoDeliveryStatus \?\? "unknown"\)/);
   assert.match(source, /queryKey: \["workspace-sso-readiness", workspaceSlug\]/);
+  assert.match(source, /const ssoRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /contractSource: ssoContractSource,/);
+  assert.match(source, /contractIssue: ssoContractIssue,/);
 });
 
 test("Settings panel keeps dedicated saved sections coupled with runtime badges, source badges, and readiness/live-write refresh", async () => {
@@ -118,12 +131,15 @@ test("Settings panel keeps dedicated saved sections coupled with runtime badges,
   assert.match(source, /formatTokenLabel\(dedicatedConfigurationState \?\? "unknown"\)/);
   assert.match(source, /formatTokenLabel\(dedicatedDeliveryStatus \?\? "unknown"\)/);
   assert.match(source, /queryKey: \["workspace-dedicated-environment-readiness", workspaceSlug\]/);
+  assert.match(source, /const dedicatedRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /contractSource: dedicatedContractSource,/);
+  assert.match(source, /contractIssue: dedicatedContractIssue,/);
 });
 
 test("Settings panel keeps readiness/attention/onboarding cards aligned with verification and go-live handoff links", async () => {
   const source = await readSource(settingsPanelPath);
 
-  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{/);
+  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{[\s\S]*runId,/);
   assert.match(
     source,
     /const verificationHref = buildSettingsHref\(\{ pathname: "\/verification\?surface=verification", \.\.\.handoffHrefArgs \}\);/,
@@ -131,6 +147,7 @@ test("Settings panel keeps readiness/attention/onboarding cards aligned with ver
   assert.match(source, /const goLiveHref = buildSettingsHref\(\{ pathname: "\/go-live\?surface=go_live", \.\.\.handoffHrefArgs \}\);/);
   assert.match(source, /queueSurface: normalizedRecentTrackKey,/);
   assert.match(source, /attentionWorkspace: attentionWorkspace \?\? workspaceSlug,/);
+  assert.match(source, /runId,/);
 
   assert.match(source, /const readinessCard =\s*normalizedSource === "admin-readiness"/s);
   assert.match(source, /title: "Admin readiness follow-up"/);
@@ -156,10 +173,13 @@ test("Settings panel keeps enterprise evidence continuity navigation-only with e
   );
   assert.match(source, /const governanceClosureCard = \{/);
   assert.match(source, /title: "Billing and readiness closure lane"/);
+  assert.match(source, /const settingsAdminReturnActionsHref = "#settings-admin-return-actions";/);
   assert.match(
     source,
     /governanceClosureCard = \{[\s\S]*?\{ label: "Capture verification evidence", href: verificationHref \}[\s\S]*?footnote:\s*"Navigation only: these links preserve governance context across settings, verification, go-live, and admin readiness without automation, support tooling, or impersonation\."[\s\S]*?\};/s,
   );
+  assert.match(source, /<Link href=\{settingsAdminReturnActionsHref\}>admin readiness return actions below<\/Link>/);
+  assert.match(source, /<div id="settings-admin-return-actions" className="flex flex-wrap gap-2">/);
   assert.match(source, /const usagePressureCard = \{/);
   assert.match(
     source,
@@ -185,10 +205,30 @@ test("Settings panel keeps intent and billing follow-up cards coupled to source-
   assert.match(source, /const intentCard = highlightIntent \? intentContextMap\[highlightIntent\] : null;/);
   assert.match(source, /const showBillingFollowUpCard =\s*!intentCard && \(normalizedSource \|\| checkout\.session \|\| subscriptionAction\.notice \|\| auditExport\.notice\);/s);
   assert.match(source, /title: normalizedSource === "onboarding" \? "Onboarding billing evidence" : "Billing evidence handoff"/);
+  assert.match(source, /const billingEvidenceAdminReturnActionsHref = "#settings-billing-evidence-admin-return";/);
   assert.match(source, /normalizedSource === "onboarding"[\s\S]*\{ label: "Capture verification evidence", href: verificationHref \}/s);
   assert.match(source, /normalizedSource === "onboarding"[\s\S]*\{ label: "Review usage pressure", href: usageHref \}/s);
   assert.match(source, /:\s*\[[\s\S]*\{ label: "Return to Week 8 checklist", href: verificationHref \}/s);
   assert.match(source, /:\s*\[[\s\S]*\{ label: "Continue to go-live drill", href: goLiveHref \}/s);
+  assert.match(source, /<Link href=\{billingEvidenceAdminReturnActionsHref\}>admin readiness return action below<\/Link>/);
+  assert.match(source, /id=\{!normalizedSource \|\| normalizedSource !== "onboarding" \? "settings-billing-evidence-admin-return" : undefined\}/);
+});
+
+test("Settings panel keeps governance closure card aligned with billing warning routing", async () => {
+  const source = await readSource(settingsPanelPath);
+
+  assert.match(
+    source,
+    /label: billingSummary\?\.status_tone === "warning" \? "Resolve billing warning lane" : "Review plan and billing lane"/s,
+  );
+  assert.match(
+    source,
+    /href: billingSummary\?\.status_tone === "warning" \? resolveBillingIntentHref : managePlanIntentHref/s,
+  );
+  assert.match(
+    source,
+    /actions:\s*\[\s*\{\s*label: billingSummary\?\.status_tone === "warning" \? "Resolve billing warning lane" : "Review plan and billing lane",\s*href: billingSummary\?\.status_tone === "warning" \? resolveBillingIntentHref : managePlanIntentHref,\s*\},\s*\{ label: "Capture verification evidence", href: verificationHref \},\s*\{ label: "Rehearse go-live readiness", href: goLiveHref \},\s*\{ label: "Return to admin readiness view", href: adminReturnHref \},\s*\]/s,
+  );
 });
 
 test("Settings panel keeps audit export source-badge and cross-page evidence handoff semantics coupled", async () => {
@@ -213,4 +253,29 @@ test("Settings panel keeps audit export source-badge and cross-page evidence han
   assert.match(source, /contractSourceDescription\(auditContractSource, auditContractIssue\)/);
   assert.match(source, /<Link\s+href=\{verificationHref\}[\s\S]*?>\s*Attach in verification\s*<\/Link>/s);
   assert.match(source, /<Link\s+href=\{goLiveHref\}[\s\S]*?>\s*Carry to go-live drill\s*<\/Link>/s);
+  assert.match(source, /type AuditExportReceipt = AuditExportReceiptSummary & \{/);
+  assert.match(source, /const \[auditExportReceipt, setAuditExportReceipt\] = useState<AuditExportReceipt \| null>\(null\);/);
+  assert.match(source, /function buildAuditExportReceiptContinuityArgs\(/);
+  assert.match(source, /auditReceiptFilename: receipt\?\.filename \?\? null,/);
+  assert.match(source, /auditReceiptExportedAt: receipt\?\.exportedAt \?\? null,/);
+  assert.match(source, /auditReceiptSha256: receipt\?\.sha256 \?\? null,/);
+  assert.match(source, /\.\.\.buildAuditExportReceiptContinuityArgs\(auditExportReceipt\),/);
+  assert.match(source, /auditReceiptFilename: args\.auditReceiptFilename,/);
+  assert.match(source, /auditReceiptExportedAt: args\.auditReceiptExportedAt,/);
+  assert.match(source, /auditReceiptFromDate: args\.auditReceiptFromDate,/);
+  assert.match(source, /auditReceiptToDate: args\.auditReceiptToDate,/);
+  assert.match(source, /auditReceiptSha256: args\.auditReceiptSha256,/);
+  assert.match(source, /const sha256 = await computeBlobSha256\(download\.blob\);/);
+  assert.match(
+    source,
+    /setAuditExportReceipt\(\{\s*filename: download\.filename,\s*format: download\.format,\s*exportedAt: new Date\(\)\.toISOString\(\),\s*fromDate: auditFromDate\.trim\(\) \|\| null,\s*toDate: auditToDate\.trim\(\) \|\| null,\s*contentType: download\.content_type,\s*sizeBytes: download\.blob\.size,\s*sha256,\s*\}\);/s,
+  );
+  assert.match(source, /Latest export receipt/);
+  assert.match(source, /Keep this receipt with the downloaded file/);
+  assert.match(source, /same export details\./);
+  assert.match(source, /SHA-256/);
+  assert.match(source, /function formatAuditExportEvidenceNote\(receipt: AuditExportReceipt\): string \{/);
+  assert.match(source, /Audit export \$\{receipt\.filename\}/);
+  assert.match(source, /Evidence note/);
+  assert.match(source, /Carry this exact note into verification, go-live, or the delivery track/);
 });

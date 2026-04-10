@@ -1,6 +1,9 @@
-export type HandoffQueryArgs = {
+import type { AuditExportReceiptContinuityArgs } from "@/lib/audit-export-receipt";
+
+export type HandoffQueryArgs = AuditExportReceiptContinuityArgs & {
   source?: string | null;
   surface?: string | null;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -13,13 +16,15 @@ export type HandoffQueryArgs = {
   recentOwnerEmail?: string | null;
 };
 
-export type AdminReturnQueryArgs = {
+export type AdminReturnQueryArgs = AuditExportReceiptContinuityArgs & {
   source?: string | null;
+  runId?: string | null;
   queueSurface?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
   deliveryContext?: string | null;
+  recentTrackKey?: string | null;
   recentUpdateKind?: string | null;
   evidenceCount?: number | string | null;
   recentOwnerLabel?: string | null;
@@ -27,9 +32,10 @@ export type AdminReturnQueryArgs = {
   recentOwnerEmail?: string | null;
 };
 
-export type VerificationChecklistHandoffArgs = {
+export type VerificationChecklistHandoffArgs = AuditExportReceiptContinuityArgs & {
   pathname: string;
   source?: string | null;
+  runId?: string | null;
   week8Focus?: string | null;
   attentionWorkspace?: string | null;
   attentionOrganization?: string | null;
@@ -38,11 +44,37 @@ export type VerificationChecklistHandoffArgs = {
   recentUpdateKind?: string | null;
   evidenceCount?: number | null;
   recentOwnerLabel?: string | null;
+  recentOwnerDisplayName?: string | null;
+  recentOwnerEmail?: string | null;
 };
+
+function applyAuditExportReceiptContinuityQuery(
+  searchParams: URLSearchParams,
+  args: AuditExportReceiptContinuityArgs,
+): void {
+  if (args.auditReceiptFilename) {
+    searchParams.set("audit_export_filename", args.auditReceiptFilename);
+  }
+  if (args.auditReceiptExportedAt) {
+    searchParams.set("audit_export_exported_at", args.auditReceiptExportedAt);
+  }
+  if (args.auditReceiptFromDate) {
+    searchParams.set("audit_export_from_date", args.auditReceiptFromDate);
+  }
+  if (args.auditReceiptToDate) {
+    searchParams.set("audit_export_to_date", args.auditReceiptToDate);
+  }
+  if (args.auditReceiptSha256) {
+    searchParams.set("audit_export_sha256", args.auditReceiptSha256);
+  }
+}
 
 export function applyHandoffQuery(searchParams: URLSearchParams, args: HandoffQueryArgs): void {
   if (args.source) {
     searchParams.set("source", args.source);
+  }
+  if (args.runId) {
+    searchParams.set("run_id", args.runId);
   }
   if (args.surface) {
     searchParams.set("surface", args.surface);
@@ -77,9 +109,13 @@ export function applyHandoffQuery(searchParams: URLSearchParams, args: HandoffQu
   if (args.recentOwnerEmail) {
     searchParams.set("recent_owner_email", args.recentOwnerEmail);
   }
+  applyAuditExportReceiptContinuityQuery(searchParams, args);
 }
 
 export function applyAdminReturnQuery(searchParams: URLSearchParams, args: AdminReturnQueryArgs): void {
+  if (args.runId) {
+    searchParams.set("run_id", args.runId);
+  }
   if (args.source === "admin-attention") {
     if (args.queueSurface) {
       searchParams.set("queue_surface", args.queueSurface);
@@ -101,6 +137,9 @@ export function applyAdminReturnQuery(searchParams: URLSearchParams, args: Admin
   if (args.deliveryContext) {
     searchParams.set("delivery_context", args.deliveryContext);
   }
+  if (args.recentTrackKey) {
+    searchParams.set("recent_track_key", args.recentTrackKey);
+  }
   if (args.recentUpdateKind) {
     searchParams.set("recent_update_kind", args.recentUpdateKind);
   }
@@ -116,6 +155,7 @@ export function applyAdminReturnQuery(searchParams: URLSearchParams, args: Admin
   if (args.recentOwnerEmail) {
     searchParams.set("recent_owner_email", args.recentOwnerEmail);
   }
+  applyAuditExportReceiptContinuityQuery(searchParams, args);
 }
 
 export function buildHandoffHref(
@@ -154,6 +194,7 @@ export function buildVerificationChecklistHandoffHref(args: VerificationChecklis
   const {
     pathname,
     source,
+    runId,
     week8Focus,
     attentionWorkspace,
     attentionOrganization,
@@ -162,6 +203,13 @@ export function buildVerificationChecklistHandoffHref(args: VerificationChecklis
     recentUpdateKind,
     evidenceCount,
     recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+    auditReceiptFilename,
+    auditReceiptExportedAt,
+    auditReceiptFromDate,
+    auditReceiptToDate,
+    auditReceiptSha256,
   } = args;
 
   if (source !== "admin-readiness" && source !== "admin-attention" && source !== "onboarding") {
@@ -181,14 +229,23 @@ export function buildVerificationChecklistHandoffHref(args: VerificationChecklis
     pathname,
     {
       source,
+      runId,
       week8Focus,
       attentionWorkspace,
       attentionOrganization,
-      deliveryContext: deliveryContext === "recent_activity" ? deliveryContext : null,
+      deliveryContext:
+        deliveryContext === "recent_activity" || deliveryContext === "week8" ? deliveryContext : null,
       recentTrackKey: resolveAdminQueueSurface(recentTrackKey),
       recentUpdateKind: normalizedRecentUpdateKind,
       evidenceCount,
       recentOwnerLabel,
+      recentOwnerDisplayName,
+      recentOwnerEmail,
+      auditReceiptFilename,
+      auditReceiptExportedAt,
+      auditReceiptFromDate,
+      auditReceiptToDate,
+      auditReceiptSha256,
     },
     { preserveExistingQuery: true },
   );

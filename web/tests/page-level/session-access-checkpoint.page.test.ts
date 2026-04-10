@@ -21,28 +21,24 @@ test("session page keeps manual checkpoint framing and explicit verification/go-
     /Confirm the current SaaS identity, the active workspace context, and which workspaces this console session can reach\./,
   );
   assert.match(source, /Treat this page as the Week 3 checkpoint for all managed SaaS follow-up\./);
-  assert.match(source, /import \{ buildHandoffHref \} from "@\/lib\/handoff-query";/);
-  assert.match(source, /const source = getParam\(searchParams\?\.source\);/);
-  assert.match(source, /const handoffWorkspace = getParam\(searchParams\?\.attention_workspace\);/);
-  assert.match(source, /const handoffOrganization = getParam\(searchParams\?\.attention_organization\);/);
-  assert.match(source, /const week8Focus = getParam\(searchParams\?\.week8_focus\);/);
-  assert.match(source, /const deliveryContext = getParam\(searchParams\?\.delivery_context\);/);
-  assert.match(source, /const recentTrackKey = getParam\(searchParams\?\.recent_track_key\);/);
-  assert.match(source, /const recentUpdateKind = getParam\(searchParams\?\.recent_update_kind\);/);
-  assert.match(source, /const evidenceCountParam = getParam\(searchParams\?\.evidence_count\);/);
   assert.match(
     source,
-    /const handoffArgs = \{\s*source,\s*week8Focus,\s*attentionWorkspace: handoffWorkspace,\s*attentionOrganization: handoffOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel: ownerLabel,\s*\};/s,
+    /import \{ buildConsoleHandoffHref, parseConsoleHandoffState \} from "@\/lib\/console-handoff";/,
   );
   assert.match(
     source,
-    /const verificationHref = buildHandoffHref\("\/verification\?surface=verification", handoffArgs, \{\s*preserveExistingQuery: true,\s*\}\);/s,
+    /import \{ requestControlPlanePageData \} from "@\/lib\/server-control-plane-page-fetch";/,
   );
+  assert.match(source, /const handoff = parseConsoleHandoffState\(searchParams\);/);
+  assert.match(
+    source,
+    /const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>\("\/api\/control-plane\/workspace"\);/,
+  );
+  assert.match(source, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+  assert.match(source, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
+  assert.match(source, /const verificationHref = buildConsoleHandoffHref\("\/verification\?surface=verification", runAwareHandoff\);/);
   assert.match(source, /Continue verification/);
-  assert.match(
-    source,
-    /const goLiveHref = buildHandoffHref\("\/go-live\?surface=go_live", handoffArgs, \{\s*preserveExistingQuery: true,\s*\}\);/s,
-  );
+  assert.match(source, /const goLiveHref = buildConsoleHandoffHref\("\/go-live\?surface=go_live", runAwareHandoff\);/);
   assert.match(source, /Review go-live drill/);
   assert.match(
     source,
@@ -67,6 +63,10 @@ test("session access panel keeps role-aware lane mapping and visibility-only gua
   assert.match(source, /secondaryHref: "\/usage"/);
   assert.match(source, /primaryHref: "\/members"/);
   assert.match(source, /secondaryHref: "\/settings"/);
+  assert.match(source, /const lanePrimaryHref = buildConsoleHandoffHref\(lane\.primaryHref, handoff\);/);
+  assert.match(source, /const laneSecondaryHref = buildConsoleHandoffHref\(lane\.secondaryHref, handoff\);/);
+  assert.match(source, /href=\{lanePrimaryHref\}/);
+  assert.match(source, /href=\{laneSecondaryHref\}/);
 
   assert.match(
     source,
@@ -81,6 +81,8 @@ test("session access panel keeps role-aware lane mapping and visibility-only gua
   assert.match(source, /Workspace reachable/);
   assert.match(source, /Metadata-backed context/);
   assert.match(source, /Role-aware next lanes/);
+  assert.match(source, /const settingsManagePlanHref = buildConsoleHandoffHref\("\/settings\?intent=manage-plan", handoff\);/);
+  assert.match(source, /href=\{settingsManagePlanHref\}[\s\S]*Billing and settings/s);
   assert.match(
     source,
     /All context changes remain manual here; nothing impersonates another role or runs support automation\./,

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { linkByHrefFragments } from "./support/navigation";
+
 test("admin readiness billing warning branch -> settings -> go-live -> admin keeps readiness browser continuity", async ({
   page,
 }) => {
@@ -10,10 +12,12 @@ test("admin readiness billing warning branch -> settings -> go-live -> admin kee
   );
 
   await expect(page.getByRole("heading", { name: "Week 8 readiness summary" })).toBeVisible();
-  const readinessSummarySection = page
-    .getByRole("heading", { name: "Week 8 readiness summary" })
-    .locator("xpath=ancestor::div[contains(@class, 'rounded-2xl')][1]");
-  const billingWarningFlowLink = readinessSummarySection.getByRole("link", { name: "Open billing warning flow" });
+  const billingWarningFlowLink = linkByHrefFragments(
+    page,
+    "Open billing warning flow",
+    "/settings?intent=resolve-billing",
+    "week8_focus=billing_warning",
+  );
   await expect(billingWarningFlowLink).toBeVisible();
   await billingWarningFlowLink.click();
 
@@ -26,7 +30,7 @@ test("admin readiness billing warning branch -> settings -> go-live -> admin kee
   await expect(page.getByRole("heading", { name: "Workspace configuration" })).toBeVisible();
   await expect(page.getByText("Enterprise evidence lane")).toBeVisible();
 
-  const goLiveLink = page.getByRole("link", { name: "Rehearse go-live readiness" }).first();
+  const goLiveLink = linkByHrefFragments(page, "Rehearse go-live readiness", "/go-live?surface=go_live");
   await expect(goLiveLink).toBeVisible();
   await goLiveLink.click();
 
@@ -40,10 +44,12 @@ test("admin readiness billing warning branch -> settings -> go-live -> admin kee
   await expect(page.getByText("Admin follow-up context")).toBeVisible();
   await expect(page.getByText("Focus Billing warning")).toBeVisible();
 
-  const adminReadinessReturnLink = page
-    .locator("a")
-    .filter({ hasText: "Return to admin readiness view" })
-    .first();
+  const adminReadinessReturnLink = linkByHrefFragments(
+    page,
+    "Return to admin readiness view",
+    "/admin?",
+    "readiness_returned=1",
+  );
   await expect(adminReadinessReturnLink).toBeVisible();
   await adminReadinessReturnLink.click();
 

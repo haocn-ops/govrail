@@ -1,4 +1,5 @@
 import { previewPolicies, previewToolProviders } from "@/lib/control-plane-preview";
+import { buildAdminOverviewPreviewData } from "@/lib/admin-overview-preview";
 import type {
   ControlPlaneAdminOverview,
   ControlPlaneApiKey,
@@ -127,6 +128,70 @@ function getEnterpriseFallbackPlanCode(error: unknown): string | null {
     }
   }
   return null;
+}
+
+function buildLiveContractMeta(): ControlPlaneContractMeta {
+  return {
+    source: "live",
+    normalized_at: nowIsoUtc(),
+    issue: null,
+  };
+}
+
+async function fetchEnterpriseReadinessWithFallback<T>(args: {
+  path: string;
+  normalize: (input: Partial<T>, meta: ControlPlaneContractMeta) => T;
+  buildFeatureGateFallback: (error: ControlPlaneRequestError) => Partial<T>;
+  buildControlPlaneFallback: (error: ControlPlaneRequestError) => Partial<T>;
+  buildErrorFallback: (error: unknown) => Partial<T>;
+  featureGateMessage: string;
+  controlPlaneMessage: string;
+  genericMessage: string;
+}): Promise<T> {
+  try {
+    const response = await request<T>(args.path);
+    return args.normalize(response, buildLiveContractMeta());
+  } catch (error) {
+    if (
+      error instanceof ControlPlaneRequestError &&
+      error.status === 409 &&
+      error.code === "workspace_feature_unavailable"
+    ) {
+      return args.normalize(
+        args.buildFeatureGateFallback(error),
+        buildEnterpriseFallbackMeta("fallback_feature_gate", error, args.featureGateMessage),
+      );
+    }
+
+    if (
+      error instanceof ControlPlaneRequestError &&
+      error.status === 503 &&
+      error.code === "control_plane_base_missing"
+    ) {
+      return args.normalize(
+        args.buildControlPlaneFallback(error),
+        buildEnterpriseFallbackMeta(
+          "fallback_control_plane_unavailable",
+          error,
+          args.controlPlaneMessage,
+        ),
+      );
+    }
+
+    return args.normalize(
+      args.buildErrorFallback(error),
+      buildEnterpriseFallbackMeta("fallback_error", error, args.genericMessage),
+    );
+  }
+}
+
+async function saveEnterpriseReadiness<TInput, TOutput>(args: {
+  path: string;
+  input: TInput;
+  normalize: (input: Partial<TOutput>, meta: ControlPlaneContractMeta) => TOutput;
+}): Promise<TOutput> {
+  const response = await postJson<TOutput>(args.path, args.input);
+  return args.normalize(response, buildLiveContractMeta());
 }
 
 function normalizeSsoReadiness(
@@ -573,6 +638,17 @@ export async function fetchAdminOverview(): Promise<ControlPlaneAdminOverview> {
       issue: null,
     },
   });
+  const buildAdminOverviewFallback = (
+    source: ControlPlaneContractMeta["source"],
+    error: unknown,
+  ): ControlPlaneAdminOverview => ({
+    ...buildAdminOverviewPreviewData(),
+    contract_meta: buildEnterpriseFallbackMeta(
+      source,
+      error,
+      "Admin overview is showing preview fallback data until the live control-plane summary is available.",
+    ),
+  });
 
   try {
     return normalizeAdminOverviewContract(
@@ -590,66 +666,8 @@ export async function fetchAdminOverview(): Promise<ControlPlaneAdminOverview> {
           ? "fallback_control_plane_unavailable"
           : "fallback_error";
       return {
-        summary: {
-          organizations_total: 1,
-          workspaces_total: 1,
-          active_workspaces_total: 1,
-          users_total: 1,
-          paid_subscriptions_total: 0,
-          past_due_subscriptions_total: 0,
-        },
-        plan_distribution: [
-          {
-            plan_code: "free",
-            workspace_count: 1,
-          },
-        ],
-        feature_rollout: {
-          sso_enabled_workspaces: 0,
-          audit_export_enabled_workspaces: 0,
-          dedicated_environment_enabled_workspaces: 0,
-        },
-        recent_workspaces: [
-          {
-            workspace_id: "ws_preview",
-            slug: "preview",
-            display_name: "Preview Workspace",
-            organization_display_name: "Preview Organization",
-            plan_code: "free",
-            status: "active",
-            created_at: now,
-          },
-        ],
-        week8_readiness: {
-          total: 1,
-          baseline_ready_total: 0,
-          credentials_ready_total: 0,
-          demo_run_succeeded_total: 0,
-          billing_warning_total: 0,
-          mock_go_live_ready_total: 0,
-        },
-        week8_readiness_workspaces: [
-          {
-            workspace_id: "ws_preview",
-            slug: "preview",
-            display_name: "Preview Workspace",
-            organization_id: "org_preview",
-            organization_display_name: "Preview Organization",
-            baseline_ready: false,
-            credentials_ready: false,
-            demo_run_succeeded: false,
-            billing_warning: false,
-            mock_go_live_ready: false,
-            next_action_surface: "onboarding",
-            updated_at: now,
-          },
-        ],
+        ...buildAdminOverviewFallback(source, error),
         updated_at: now,
-        contract_meta: buildEnterpriseFallbackMeta(
-          source,
-          error,
-          "Admin overview is showing preview fallback data until the live control-plane summary is available.",
-        ),
       };
     }
 
@@ -766,257 +784,199 @@ export async function downloadWorkspaceAuditExportViewModel(input?: {
   const url = query
     ? `/api/control-plane/workspace/audit-events/export?${query}`
     : "/api/control-plane/workspace/audit-events/export";
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      accept: "application/x-ndjson,application/json",
-    },
-    cache: "no-store",
-  });
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        accept: "application/x-ndjson,application/json",
+      },
+      cache: "no-store",
+    });
 
-  if (!response.ok) {
-    const payload = await readErrorEnvelope(response);
-    const issue: ControlPlaneContractIssue = {
-      code: payload.error?.code ?? "request_failed",
-      message: payload.error?.message ?? `Control plane request failed with status ${response.status}`,
-      status: response.status,
-      retryable: response.status >= 500 || response.status === 429,
-      details: payload.error?.details ?? {},
+    if (!response.ok) {
+      const payload = await readErrorEnvelope(response);
+      const issue: ControlPlaneContractIssue = {
+        code: payload.error?.code ?? "request_failed",
+        message: payload.error?.message ?? `Control plane request failed with status ${response.status}`,
+        status: response.status,
+        retryable: response.status >= 500 || response.status === 429,
+        details: payload.error?.details ?? {},
+      };
+      return {
+        ok: false,
+        blob: null,
+        filename: null,
+        format,
+        content_type: response.headers.get("content-type"),
+        error: issue,
+        contract_meta: {
+          source:
+            issue.code === "workspace_feature_unavailable"
+              ? "fallback_feature_gate"
+              : issue.code === "control_plane_base_missing"
+                ? "fallback_control_plane_unavailable"
+                : "fallback_error",
+          normalized_at: nowIsoUtc(),
+          issue,
+        },
+      };
+    }
+
+    const defaultName = input?.format === "json" ? "workspace-audit-export.json" : "workspace-audit-export.jsonl";
+    return {
+      ok: true,
+      blob: await response.blob(),
+      filename: extractDownloadFileName(response.headers, defaultName),
+      format,
+      content_type: response.headers.get("content-type"),
+      contract_meta: {
+        source: "live",
+        normalized_at: nowIsoUtc(),
+        issue: null,
+      },
     };
+  } catch (error) {
+    const issue = toContractIssue(error, "Audit export request could not be completed.");
     return {
       ok: false,
       blob: null,
       filename: null,
       format,
-      content_type: response.headers.get("content-type"),
+      content_type: null,
       error: issue,
-      contract_meta: {
-        source:
-          issue.code === "workspace_feature_unavailable"
-            ? "fallback_feature_gate"
-            : issue.code === "control_plane_base_missing"
-              ? "fallback_control_plane_unavailable"
-              : "fallback_error",
-        normalized_at: nowIsoUtc(),
-        issue,
-      },
+      contract_meta: buildEnterpriseFallbackMeta(
+        "fallback_error",
+        error,
+        "Audit export request could not be completed.",
+      ),
     };
   }
-
-  const defaultName = input?.format === "json" ? "workspace-audit-export.json" : "workspace-audit-export.jsonl";
-  return {
-    ok: true,
-    blob: await response.blob(),
-    filename: extractDownloadFileName(response.headers, defaultName),
-    format,
-    content_type: response.headers.get("content-type"),
-    contract_meta: {
-      source: "live",
-      normalized_at: nowIsoUtc(),
-      issue: null,
-    },
-  };
 }
 
 export async function fetchWorkspaceSsoReadiness(): Promise<ControlPlaneWorkspaceSsoReadiness> {
-  try {
-    const response = await request<ControlPlaneWorkspaceSsoReadiness>("/api/control-plane/workspace/sso");
-    return normalizeSsoReadiness(response, {
-      source: "live",
-      normalized_at: nowIsoUtc(),
-      issue: null,
-    });
-  } catch (error) {
-    if (error instanceof ControlPlaneRequestError && error.status === 409 && error.code === "workspace_feature_unavailable") {
-      const fallbackUpgradeHref = getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade");
-      const fallbackPlanCode = getEnterpriseFallbackPlanCode(error);
-      return normalizeSsoReadiness(
-        {
-          feature: "sso",
-          feature_enabled: false,
-          status: "staged",
-          provider_type: null,
-          connection_mode: "workspace",
-          supported_protocols: ["oidc", "saml"],
-          next_steps: [
-            "Upgrade to a plan with SSO support.",
-            "Choose OIDC or SAML as the connection protocol.",
-            "Configure identity provider metadata and domain mapping.",
-          ],
-          upgrade_href: fallbackUpgradeHref,
-          plan_code: fallbackPlanCode,
-        },
-        buildEnterpriseFallbackMeta(
-          "fallback_feature_gate",
-          error,
-          "SSO is not available on the current workspace plan.",
-        ),
-      );
-    }
-
-    if (error instanceof ControlPlaneRequestError && error.status === 503 && error.code === "control_plane_base_missing") {
-      const fallbackUpgradeHref = getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade");
-      const fallbackPlanCode = getEnterpriseFallbackPlanCode(error);
-      return normalizeSsoReadiness(
-        {
-          feature: "sso",
-          feature_enabled: false,
-          status: "staged",
-          provider_type: null,
-          connection_mode: "workspace",
-          supported_protocols: ["oidc", "saml"],
-          next_steps: [
-            "Set CONTROL_PLANE_BASE_URL to enable live SSO readiness checks.",
-            "Upgrade to a plan with SSO support.",
-          ],
-          upgrade_href: fallbackUpgradeHref,
-          plan_code: fallbackPlanCode,
-        },
-        buildEnterpriseFallbackMeta(
-          "fallback_control_plane_unavailable",
-          error,
-          "Control plane base URL is not configured.",
-        ),
-      );
-    }
-
-    return normalizeSsoReadiness(
-      {
-        feature: "sso",
-        feature_enabled: false,
-        status: "staged",
-        provider_type: null,
-        connection_mode: "workspace",
-        supported_protocols: ["oidc", "saml"],
-        next_steps: [
-          "Retry the SSO readiness request.",
-          "If the issue persists, verify control-plane health and workspace access.",
-        ],
-        upgrade_href: "/settings?intent=upgrade",
-        plan_code: null,
-      },
-      buildEnterpriseFallbackMeta(
-        "fallback_error",
-        error,
-        "SSO readiness could not be loaded.",
-      ),
-    );
-  }
+  return fetchEnterpriseReadinessWithFallback({
+    path: "/api/control-plane/workspace/sso",
+    normalize: normalizeSsoReadiness,
+    buildFeatureGateFallback: (error) => ({
+      feature: "sso",
+      feature_enabled: false,
+      status: "staged",
+      provider_type: null,
+      connection_mode: "workspace",
+      supported_protocols: ["oidc", "saml"],
+      next_steps: [
+        "Upgrade to a plan with SSO support.",
+        "Choose OIDC or SAML as the connection protocol.",
+        "Configure identity provider metadata and domain mapping.",
+      ],
+      upgrade_href: getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade"),
+      plan_code: getEnterpriseFallbackPlanCode(error),
+    }),
+    buildControlPlaneFallback: (error) => ({
+      feature: "sso",
+      feature_enabled: false,
+      status: "staged",
+      provider_type: null,
+      connection_mode: "workspace",
+      supported_protocols: ["oidc", "saml"],
+      next_steps: [
+        "Set CONTROL_PLANE_BASE_URL to enable live SSO readiness checks.",
+        "Upgrade to a plan with SSO support.",
+      ],
+      upgrade_href: getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade"),
+      plan_code: getEnterpriseFallbackPlanCode(error),
+    }),
+    buildErrorFallback: () => ({
+      feature: "sso",
+      feature_enabled: false,
+      status: "staged",
+      provider_type: null,
+      connection_mode: "workspace",
+      supported_protocols: ["oidc", "saml"],
+      next_steps: [
+        "Retry the SSO readiness request.",
+        "If the issue persists, verify control-plane health and workspace access.",
+      ],
+      upgrade_href: "/settings?intent=upgrade",
+      plan_code: null,
+    }),
+    featureGateMessage: "SSO is not available on the current workspace plan.",
+    controlPlaneMessage: "Control plane base URL is not configured.",
+    genericMessage: "SSO readiness could not be loaded.",
+  });
 }
 
 export async function saveWorkspaceSsoReadiness(
   input: ControlPlaneWorkspaceSsoSaveRequest,
 ): Promise<ControlPlaneWorkspaceSsoReadiness> {
-  const response = await postJson<ControlPlaneWorkspaceSsoReadiness>(
-    "/api/control-plane/workspace/sso",
+  return saveEnterpriseReadiness({
+    path: "/api/control-plane/workspace/sso",
     input,
-  );
-  return normalizeSsoReadiness(response, {
-    source: "live",
-    normalized_at: nowIsoUtc(),
-    issue: null,
+    normalize: normalizeSsoReadiness,
   });
 }
 
 export async function fetchWorkspaceDedicatedEnvironmentReadiness(): Promise<ControlPlaneWorkspaceDedicatedEnvironmentReadiness> {
-  try {
-    const response = await request<ControlPlaneWorkspaceDedicatedEnvironmentReadiness>(
-      "/api/control-plane/workspace/dedicated-environment",
-    );
-    return normalizeDedicatedEnvironmentReadiness(response, {
-      source: "live",
-      normalized_at: nowIsoUtc(),
-      issue: null,
-    });
-  } catch (error) {
-    if (error instanceof ControlPlaneRequestError && error.status === 409 && error.code === "workspace_feature_unavailable") {
-      const fallbackUpgradeHref = getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade");
-      const fallbackPlanCode = getEnterpriseFallbackPlanCode(error);
-      return normalizeDedicatedEnvironmentReadiness(
-        {
-          feature: "dedicated_environment",
-          feature_enabled: false,
-          status: "staged",
-          deployment_model: "single_tenant",
-          target_region: null,
-          isolation_summary: "Dedicated compute and data-plane isolation are staged until the workspace plan enables this feature.",
-          next_steps: [
-            "Upgrade to a plan with dedicated environment support.",
-            "Confirm region and compliance boundaries for the target deployment.",
-            "Review network and access isolation requirements before provisioning.",
-          ],
-          upgrade_href: fallbackUpgradeHref,
-          plan_code: fallbackPlanCode,
-        },
-        buildEnterpriseFallbackMeta(
-          "fallback_feature_gate",
-          error,
-          "Dedicated environment is not available on the current workspace plan.",
-        ),
-      );
-    }
-
-    if (error instanceof ControlPlaneRequestError && error.status === 503 && error.code === "control_plane_base_missing") {
-      const fallbackUpgradeHref = getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade");
-      const fallbackPlanCode = getEnterpriseFallbackPlanCode(error);
-      return normalizeDedicatedEnvironmentReadiness(
-        {
-          feature: "dedicated_environment",
-          feature_enabled: false,
-          status: "staged",
-          deployment_model: "single_tenant",
-          target_region: null,
-          isolation_summary: "Set CONTROL_PLANE_BASE_URL to load live dedicated environment readiness.",
-          next_steps: [
-            "Set CONTROL_PLANE_BASE_URL to enable live readiness checks.",
-            "Upgrade to a plan with dedicated environment support.",
-          ],
-          upgrade_href: fallbackUpgradeHref,
-          plan_code: fallbackPlanCode,
-        },
-        buildEnterpriseFallbackMeta(
-          "fallback_control_plane_unavailable",
-          error,
-          "Control plane base URL is not configured.",
-        ),
-      );
-    }
-
-    return normalizeDedicatedEnvironmentReadiness(
-      {
-        feature: "dedicated_environment",
-        feature_enabled: false,
-        status: "staged",
-        deployment_model: "single_tenant",
-        target_region: null,
-        isolation_summary: "Dedicated environment readiness could not be loaded.",
-        next_steps: [
-          "Retry the dedicated environment readiness request.",
-          "If the issue persists, verify control-plane health and workspace access.",
-        ],
-        upgrade_href: "/settings?intent=upgrade",
-        plan_code: null,
-      },
-      buildEnterpriseFallbackMeta(
-        "fallback_error",
-        error,
-        "Dedicated environment readiness could not be loaded.",
-      ),
-    );
-  }
+  return fetchEnterpriseReadinessWithFallback({
+    path: "/api/control-plane/workspace/dedicated-environment",
+    normalize: normalizeDedicatedEnvironmentReadiness,
+    buildFeatureGateFallback: (error) => ({
+      feature: "dedicated_environment",
+      feature_enabled: false,
+      status: "staged",
+      deployment_model: "single_tenant",
+      target_region: null,
+      isolation_summary:
+        "Dedicated compute and data-plane isolation are staged until the workspace plan enables this feature.",
+      next_steps: [
+        "Upgrade to a plan with dedicated environment support.",
+        "Confirm region and compliance boundaries for the target deployment.",
+        "Review network and access isolation requirements before provisioning.",
+      ],
+      upgrade_href: getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade"),
+      plan_code: getEnterpriseFallbackPlanCode(error),
+    }),
+    buildControlPlaneFallback: (error) => ({
+      feature: "dedicated_environment",
+      feature_enabled: false,
+      status: "staged",
+      deployment_model: "single_tenant",
+      target_region: null,
+      isolation_summary: "Set CONTROL_PLANE_BASE_URL to load live dedicated environment readiness.",
+      next_steps: [
+        "Set CONTROL_PLANE_BASE_URL to enable live readiness checks.",
+        "Upgrade to a plan with dedicated environment support.",
+      ],
+      upgrade_href: getEnterpriseFallbackUpgradeHref(error, "/settings?intent=upgrade"),
+      plan_code: getEnterpriseFallbackPlanCode(error),
+    }),
+    buildErrorFallback: () => ({
+      feature: "dedicated_environment",
+      feature_enabled: false,
+      status: "staged",
+      deployment_model: "single_tenant",
+      target_region: null,
+      isolation_summary: "Dedicated environment readiness could not be loaded.",
+      next_steps: [
+        "Retry the dedicated environment readiness request.",
+        "If the issue persists, verify control-plane health and workspace access.",
+      ],
+      upgrade_href: "/settings?intent=upgrade",
+      plan_code: null,
+    }),
+    featureGateMessage: "Dedicated environment is not available on the current workspace plan.",
+    controlPlaneMessage: "Control plane base URL is not configured.",
+    genericMessage: "Dedicated environment readiness could not be loaded.",
+  });
 }
 
 export async function saveWorkspaceDedicatedEnvironmentReadiness(
   input: ControlPlaneWorkspaceDedicatedEnvironmentSaveRequest,
 ): Promise<ControlPlaneWorkspaceDedicatedEnvironmentReadiness> {
-  const response = await postJson<ControlPlaneWorkspaceDedicatedEnvironmentReadiness>(
-    "/api/control-plane/workspace/dedicated-environment",
+  return saveEnterpriseReadiness({
+    path: "/api/control-plane/workspace/dedicated-environment",
     input,
-  );
-  return normalizeDedicatedEnvironmentReadiness(response, {
-    source: "live",
-    normalized_at: nowIsoUtc(),
-    issue: null,
+    normalize: normalizeDedicatedEnvironmentReadiness,
   });
 }
 

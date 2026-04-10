@@ -1,19 +1,21 @@
 import Link from "next/link";
 
-import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
+import { ConsoleAdminFollowUp } from "@/components/admin/console-admin-follow-up";
 import { WorkspaceOnboardingWizard } from "@/components/onboarding/workspace-onboarding-wizard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildHandoffHref } from "@/lib/handoff-query";
+import { buildConsoleRunAwareHandoffHref, parseConsoleHandoffState } from "@/lib/console-handoff";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
-function getParam(value?: string | string[] | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return Array.isArray(value) ? value[0] : value;
-}
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
 
 export default async function OnboardingPage({
   searchParams,
@@ -21,66 +23,21 @@ export default async function OnboardingPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
-  const handoffSource = getParam(searchParams?.source);
-  const handoffWorkspace = getParam(searchParams?.attention_workspace);
-  const handoffOrganization = getParam(searchParams?.attention_organization);
-  const week8Focus = getParam(searchParams?.week8_focus);
-  const deliveryContext = getParam(searchParams?.delivery_context);
-  const recentTrackKey = getParam(searchParams?.recent_track_key);
-  const recentUpdateKind = getParam(searchParams?.recent_update_kind);
-  const evidenceCountParam = getParam(searchParams?.evidence_count);
-  const evidenceCount =
-    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
-  const ownerLabel =
-    getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
-  const ownerEmail = getParam(searchParams?.recent_owner_email);
-  const showAttentionHandoff = handoffSource === "admin-attention";
-  const showReadinessHandoff = handoffSource === "admin-readiness";
-  const handoffArgs = {
-    source: handoffSource,
-    week8Focus,
-    attentionWorkspace: handoffWorkspace,
-    attentionOrganization: handoffOrganization,
-    deliveryContext,
-    recentTrackKey,
-    recentUpdateKind,
-    evidenceCount,
-    recentOwnerLabel: ownerLabel ?? ownerEmail,
-  };
+  const handoff = parseConsoleHandoffState(searchParams);
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
+  const handoffSource = runAwareHandoff.source;
+  const buildRunAwareOnboardingHref = (pathname: string): string =>
+    buildConsoleRunAwareHandoffHref(pathname, handoff, activeRunId);
 
   return (
     <div className="space-y-8">
-      {showAttentionHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-attention"
-          surface="onboarding"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-          ownerEmail={ownerEmail}
-        />
-      ) : null}
-      {showReadinessHandoff ? (
-        <AdminFollowUpNotice
-          source="admin-readiness"
-          surface="onboarding"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          week8Focus={week8Focus}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-          ownerEmail={ownerEmail}
-        />
-      ) : null}
+      <ConsoleAdminFollowUp
+        handoff={runAwareHandoff}
+        surface="onboarding"
+        workspaceSlug={workspaceContext.workspace.slug}
+      />
       <Card>
         <CardHeader>
           <CardTitle>Launch lane context</CardTitle>
@@ -97,49 +54,49 @@ export default async function OnboardingPage({
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={buildHandoffHref("/session", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/session")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Confirm session context
             </Link>
             <Link
-              href={buildHandoffHref("/members", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/members")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 1: Invite first members
             </Link>
             <Link
-              href={buildHandoffHref("/service-accounts", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/service-accounts")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 2: Create service account
             </Link>
             <Link
-              href={buildHandoffHref("/api-keys", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/api-keys")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 3: Issue API key
             </Link>
             <Link
-              href={buildHandoffHref("/playground", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/playground")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 4: Run playground demo
             </Link>
             <Link
-              href={buildHandoffHref("/usage", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/usage")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 5: Confirm usage window
             </Link>
             <Link
-              href={buildHandoffHref("/verification?surface=verification", handoffArgs, { preserveExistingQuery: true })}
+              href={buildRunAwareOnboardingHref("/verification?surface=verification")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 6: Capture verification evidence
             </Link>
             <Link
-              href={buildHandoffHref("/go-live?surface=go_live", handoffArgs, { preserveExistingQuery: true })}
+              href={buildRunAwareOnboardingHref("/go-live?surface=go_live")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Step 7: Rehearse go-live
@@ -173,13 +130,13 @@ export default async function OnboardingPage({
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={buildHandoffHref("/members", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/members")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Open members lane
             </Link>
             <Link
-              href={buildHandoffHref("/accept-invitation", handoffArgs)}
+              href={buildRunAwareOnboardingHref("/accept-invitation")}
               className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-card"
             >
               Open accept-invitation
@@ -190,14 +147,17 @@ export default async function OnboardingPage({
       <WorkspaceOnboardingWizard
         workspaceSlug={workspaceContext.workspace.slug}
         source={handoffSource}
-        week8Focus={week8Focus}
-        attentionWorkspace={handoffWorkspace}
-        attentionOrganization={handoffOrganization}
-        deliveryContext={deliveryContext}
-        recentTrackKey={recentTrackKey}
-        recentUpdateKind={recentUpdateKind}
-        evidenceCount={evidenceCount}
-        recentOwnerLabel={ownerLabel}
+        runId={activeRunId}
+        week8Focus={handoff.week8Focus}
+        attentionWorkspace={handoff.attentionWorkspace}
+        attentionOrganization={handoff.attentionOrganization}
+        deliveryContext={handoff.deliveryContext}
+        recentTrackKey={handoff.recentTrackKey}
+        recentUpdateKind={handoff.recentUpdateKind}
+        evidenceCount={handoff.evidenceCount}
+        recentOwnerLabel={handoff.recentOwnerLabel}
+        recentOwnerDisplayName={handoff.recentOwnerDisplayName}
+        recentOwnerEmail={handoff.recentOwnerEmail}
       />
     </div>
   );

@@ -1,11 +1,16 @@
 import Link from "next/link";
 
-import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
+import { ConsoleAdminFollowUp } from "@/components/admin/console-admin-follow-up";
 import { LogStream } from "@/components/logs/log-stream";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildHandoffHref, type HandoffQueryArgs } from "@/lib/handoff-query";
+import {
+  buildConsoleAdminLinkState,
+  buildConsoleRunAwareHandoffHref,
+  parseConsoleHandoffState,
+} from "@/lib/console-handoff";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
@@ -15,20 +20,6 @@ function getParam(value?: string | string[] | undefined): string | null {
     return null;
   }
   return Array.isArray(value) ? value[0] : value;
-}
-
-function buildLogsHandoffHref(args: HandoffQueryArgs & { pathname: string; runId?: string | null }): string {
-  const { pathname, runId, ...query } = args;
-  const href = buildHandoffHref(pathname, query, { preserveExistingQuery: true });
-  if (!runId) {
-    return href;
-  }
-
-  const [basePath, rawQuery] = href.split("?");
-  const searchParams = new URLSearchParams(rawQuery ?? "");
-  searchParams.set("run_id", runId);
-  const finalQuery = searchParams.toString();
-  return finalQuery ? `${basePath}?${finalQuery}` : basePath;
 }
 
 const evidenceGuidance = {
@@ -42,76 +33,91 @@ const evidenceGuidance = {
   ],
 };
 
+const auditExportCallout = {
+  title: "Audit export continuity",
+  body:
+    "Reopen the Latest export receipt on /settings?intent=upgrade, copy the filename, filters, and SHA-256, and keep that evidence note with you when you move through verification, go-live, and admin so every surface references the identical export.",
+  footnote:
+    "This is a navigation-only manual relay; open the receipt manually, keep the filename/filters/SHA-256 handy, and keep returning to verification, go-live, and admin before closing the admin readiness loop.",
+};
+
+type WorkspaceDetailResponse = {
+  onboarding?: {
+    latest_demo_run?: {
+      run_id: string;
+    } | null;
+  };
+};
+
 export default async function LogsPage({
   searchParams,
 }: {
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
-  const source = getParam(searchParams?.source);
-  const handoffWorkspace = getParam(searchParams?.attention_workspace);
-  const handoffOrganization = getParam(searchParams?.attention_organization);
-  const week8Focus = getParam(searchParams?.week8_focus);
-  const deliveryContext = getParam(searchParams?.delivery_context);
-  const recentTrackKey = getParam(searchParams?.recent_track_key);
-  const recentUpdateKind = getParam(searchParams?.recent_update_kind);
-  const evidenceCountParam = getParam(searchParams?.evidence_count);
-  const evidenceCount =
-    evidenceCountParam && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
-  const ownerLabel =
-    getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
+  const handoff = parseConsoleHandoffState(searchParams);
   const requestedRunId = getParam(searchParams?.run_id) ?? getParam(searchParams?.runId);
-  const showAdminAttention = source === "admin-attention";
-  const showAdminReadiness = source === "admin-readiness";
-  const handoffArgs = {
-    source,
-    week8Focus,
-    attentionWorkspace: handoffWorkspace,
-    attentionOrganization: handoffOrganization,
-    deliveryContext,
-    recentTrackKey,
-    recentUpdateKind,
-    evidenceCount,
-    recentOwnerLabel: ownerLabel,
-    runId: requestedRunId,
-  };
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = requestedRunId ?? workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
+  const adminLinkState = buildConsoleAdminLinkState({
+    handoff: runAwareHandoff,
+    workspaceSlug: workspaceContext.workspace.slug,
+    runId: activeRunId,
+  });
+  const adminHref = adminLinkState.adminHref;
+  const adminReturnActionsHref = "#logs-admin-return-actions";
+  const auditExportLinks = [
+    { label: "Reopen Latest export receipt", path: "/settings?intent=upgrade" },
+    { label: "Carry proof to verification", path: "/verification?surface=verification" },
+    { label: "Align go-live drill", path: "/go-live?surface=go_live" },
+  ];
 
   return (
     <div className="space-y-8">
-      {showAdminAttention ? (
-        <AdminFollowUpNotice
-          source="admin-attention"
-          surface="logs"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-        />
-      ) : null}
-      {showAdminReadiness ? (
-        <AdminFollowUpNotice
-          source="admin-readiness"
-          surface="logs"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          week8Focus={week8Focus}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-        />
-      ) : null}
+      <ConsoleAdminFollowUp
+        handoff={runAwareHandoff}
+        surface="logs"
+        workspaceSlug={workspaceContext.workspace.slug}
+      />
       <PageHeader
         eyebrow="Logs"
         title="Realtime and historical logs"
         description="Inspect workflow, approval, proxy, and dispatch traces for the current workspace before you save evidence elsewhere."
       />
+      <Card>
+        <CardHeader>
+          <CardTitle>{auditExportCallout.title}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted">
+          <p>{auditExportCallout.body}</p>
+          <p>
+            Use the <Link href={adminReturnActionsHref}>admin return action below</Link> once the log evidence is ready
+            to hand back.
+          </p>
+          <div id="logs-admin-return-actions" className="flex flex-wrap gap-2">
+            {auditExportLinks.map((link) => (
+              <Link
+                key={link.label}
+                href={buildConsoleRunAwareHandoffHref(link.path, runAwareHandoff, activeRunId)}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+              >
+                {link.label}
+              </Link>
+            ))}
+            {adminLinkState.showAdminReturn ? (
+              <Link
+                key={adminLinkState.adminLinkLabel}
+                href={adminHref}
+                className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
+              >
+                {adminLinkState.adminLinkLabel}
+              </Link>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted">{auditExportCallout.footnote}</p>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Evidence context</CardTitle>
@@ -120,10 +126,10 @@ export default async function LogsPage({
           <p>{evidenceGuidance.body}</p>
           <p>
             Current workspace: <span className="font-medium text-foreground">{workspaceContext.workspace.slug}</span>
-            {handoffWorkspace ? (
+            {handoff.attentionWorkspace ? (
               <>
                 {" "}
-                · Requested from admin: <span className="font-medium text-foreground">{handoffWorkspace}</span>
+                · Requested from admin: <span className="font-medium text-foreground">{handoff.attentionWorkspace}</span>
               </>
             ) : null}
           </p>
@@ -131,7 +137,7 @@ export default async function LogsPage({
             {evidenceGuidance.links.map((link) => (
               <Link
                 key={link.label}
-                href={buildLogsHandoffHref({ pathname: link.path, ...handoffArgs })}
+                href={buildConsoleRunAwareHandoffHref(link.path, runAwareHandoff, activeRunId)}
                 className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
               >
                 {link.label}
@@ -146,7 +152,7 @@ export default async function LogsPage({
           <Badge variant="subtle">tailing</Badge>
         </CardHeader>
         <CardContent>
-          <LogStream runId={requestedRunId} />
+          <LogStream runId={activeRunId} />
         </CardContent>
       </Card>
     </div>

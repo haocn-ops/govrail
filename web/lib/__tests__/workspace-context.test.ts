@@ -62,11 +62,15 @@ test("describeWorkspaceContextSource exposes expected fallback metadata", () => 
   assert.equal(metadata.is_fallback, false);
   assert.equal(metadata.local_only, false);
   assert.equal(metadata.warning, null);
+  assert.equal(metadata.session_checkpoint_required, false);
+  assert.equal(metadata.checkpoint_label, "Trusted metadata session");
 
   const envFallback = describeWorkspaceContextSource("env-fallback");
   assert.equal(envFallback.is_fallback, true);
   assert.equal(envFallback.local_only, true);
   assert.match(envFallback.label, /Environment fallback/);
+  assert.equal(envFallback.session_checkpoint_required, true);
+  assert.equal(envFallback.checkpoint_label, "Session checkpoint required");
 });
 
 test("isWorkspaceContextFallbackSource matches source semantics", () => {

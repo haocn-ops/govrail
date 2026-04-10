@@ -1,27 +1,17 @@
-import { AdminFollowUpNotice } from "@/components/admin/admin-follow-up-notice";
+import { ConsoleAdminFollowUp } from "@/components/admin/console-admin-follow-up";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { headers } from "next/headers";
-import { buildHandoffHref, type HandoffQueryArgs } from "@/lib/handoff-query";
+import {
+  buildConsoleAdminLinkState,
+  buildConsoleRunAwareHandoffHref,
+  parseConsoleHandoffState,
+} from "@/lib/console-handoff";
+import { requestControlPlanePageData } from "@/lib/server-control-plane-page-fetch";
 import { resolveWorkspaceContextForServer } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
-
-function buildArtifactsHandoffHref(args: HandoffQueryArgs & { pathname: string; runId?: string | null }): string {
-  const { pathname, runId, ...query } = args;
-  const href = buildHandoffHref(pathname, query, { preserveExistingQuery: true });
-  if (!runId) {
-    return href;
-  }
-
-  const [basePath, rawQuery] = href.split("?");
-  const searchParams = new URLSearchParams(rawQuery ?? "");
-  searchParams.set("run_id", runId);
-  const finalQuery = searchParams.toString();
-  return finalQuery ? `${basePath}?${finalQuery}` : basePath;
-}
 
 const evidenceGuidance = {
   body:
@@ -63,96 +53,52 @@ type RunGraphResponse = {
   artifacts: RunArtifact[];
 };
 
-function getBaseUrl(): string {
-  const requestHeaders = headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-  const proto = requestHeaders.get("x-forwarded-proto") ?? "http";
-  if (!host) {
-    return "";
-  }
-  return `${proto}://${host}`;
-}
-
-async function requestControlPlane<T>(path: string): Promise<T | null> {
-  const baseUrl = getBaseUrl();
-  if (!baseUrl) {
-    return null;
-  }
-
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store",
-    headers: {
-      accept: "application/json",
-      cookie: headers().get("cookie") ?? "",
-    },
-  });
-  if (!response.ok) {
-    return null;
-  }
-
-  const payload = (await response.json()) as { data?: T };
-  return payload.data ?? null;
-}
-
 export default async function ArtifactsPage({
   searchParams,
 }: {
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const workspaceContext = await resolveWorkspaceContextForServer();
-  const source = getParam(searchParams?.source);
-  const handoffWorkspace = getParam(searchParams?.attention_workspace);
-  const handoffOrganization = getParam(searchParams?.attention_organization);
-  const week8Focus = getParam(searchParams?.week8_focus);
-  const deliveryContext = getParam(searchParams?.delivery_context);
-  const recentTrackKey = getParam(searchParams?.recent_track_key);
-  const recentUpdateKind = getParam(searchParams?.recent_update_kind);
-  const evidenceCountParam = getParam(searchParams?.evidence_count);
-  const evidenceCount =
-    evidenceCountParam !== null && !Number.isNaN(Number(evidenceCountParam)) ? Number(evidenceCountParam) : null;
-  const ownerLabel =
-    getParam(searchParams?.recent_owner_label) ?? getParam(searchParams?.recent_owner_display_name);
-  const requestedRunId = getParam(searchParams?.run_id) ?? getParam(searchParams?.runId);
-  const showAdminAttention = source === "admin-attention";
-  const showAdminReadiness = source === "admin-readiness";
-  const showAdminReturn = showAdminAttention || showAdminReadiness;
-  const adminReturnLabel = showAdminAttention ? "Return to admin queue" : "Return to admin readiness";
-  const handoffArgs = {
+  const handoff = parseConsoleHandoffState(searchParams);
+  const {
     source,
+    attentionWorkspace,
+    attentionOrganization,
     week8Focus,
-    attentionWorkspace: handoffWorkspace,
-    attentionOrganization: handoffOrganization,
     deliveryContext,
     recentTrackKey,
     recentUpdateKind,
     evidenceCount,
-    recentOwnerLabel: ownerLabel,
-    runId: requestedRunId,
-  };
-  const workspace = await requestControlPlane<WorkspaceDetailResponse>("/api/control-plane/workspace");
-  const runId = requestedRunId ?? workspace?.onboarding?.latest_demo_run?.run_id ?? null;
-  const graph = runId ? await requestControlPlane<RunGraphResponse>(`/api/control-plane/runs/${runId}/graph`) : null;
+    recentOwnerLabel,
+    recentOwnerDisplayName,
+    recentOwnerEmail,
+  } = handoff;
+  const requestedRunId = getParam(searchParams?.run_id) ?? getParam(searchParams?.runId);
+  const workspace = await requestControlPlanePageData<WorkspaceDetailResponse>("/api/control-plane/workspace");
+  const activeRunId = requestedRunId ?? workspace?.onboarding?.latest_demo_run?.run_id ?? handoff.runId ?? null;
+  const runAwareHandoff = { ...handoff, runId: activeRunId };
+  const graph = activeRunId
+    ? await requestControlPlanePageData<RunGraphResponse>(`/api/control-plane/runs/${activeRunId}/graph`)
+    : null;
   const artifacts = (graph?.artifacts ?? [])
     .slice()
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const adminLinkState = buildConsoleAdminLinkState({
+    handoff: runAwareHandoff,
+    workspaceSlug: workspaceContext.workspace.slug,
+    runId: activeRunId,
+  });
+  const adminHref = adminLinkState.adminHref;
+  const adminHandoffActionsHref = "#artifacts-admin-handoff";
 
   return (
     <div className="space-y-8">
-      {showAdminAttention || showAdminReadiness ? (
-        <AdminFollowUpNotice
-          source={showAdminAttention ? "admin-attention" : "admin-readiness"}
-          surface="artifacts"
-          workspaceSlug={workspaceContext.workspace.slug}
-          sourceWorkspaceSlug={handoffWorkspace}
-          week8Focus={week8Focus}
-          attentionOrganization={handoffOrganization}
-          deliveryContext={deliveryContext}
-          recentTrackKey={recentTrackKey}
-          recentUpdateKind={recentUpdateKind}
-          evidenceCount={evidenceCount}
-          ownerDisplayName={ownerLabel}
-        />
-      ) : null}
+      <ConsoleAdminFollowUp
+        handoff={runAwareHandoff}
+        surface="artifacts"
+        workspaceSlug={workspaceContext.workspace.slug}
+        ownerDisplayName={recentOwnerDisplayName ?? recentOwnerLabel}
+      />
       <PageHeader
         eyebrow="Artifacts"
         title="Generated output and evidence"
@@ -166,18 +112,69 @@ export default async function ArtifactsPage({
           <p>{evidenceGuidance.body}</p>
           <p>
             Showing artifacts for{" "}
-            <span className="font-medium text-foreground">{runId ?? "the latest onboarding demo run when available"}</span>.
+            <span className="font-medium text-foreground">
+              {activeRunId ?? "the latest onboarding demo run when available"}
+            </span>.
           </p>
           <div className="flex flex-wrap gap-2">
             {evidenceGuidance.links.map((link) => (
               <Link
                 key={link.label}
-                href={buildArtifactsHandoffHref({ pathname: link.path, ...handoffArgs })}
+                href={buildConsoleRunAwareHandoffHref(link.path, runAwareHandoff, activeRunId)}
                 className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
               >
                 {link.label}
               </Link>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Audit export continuity</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted">
+          <p>
+            Artifacts finalize the evidence relay. Reopen the Latest export receipt from{" "}
+            <code className="font-mono">/settings?intent=upgrade</code> so the filename, filters, and SHA-256 stay
+            referenced across verification, go-live, and the{" "}
+            <Link href={adminHandoffActionsHref}>returned admin handoff</Link> while you inspect bundles here.
+          </p>
+          <p className="text-xs text-muted">
+            Navigation-only manual relay: these links preserve the workspace context but do not automatically attach the
+            receipt or close rollout steps for you.
+          </p>
+          <div id="artifacts-admin-handoff" className="flex flex-wrap gap-2">
+            <Link
+              href={buildConsoleRunAwareHandoffHref("/settings?intent=upgrade", runAwareHandoff, activeRunId)}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background/60"
+            >
+              Reopen audit export receipt
+            </Link>
+            <Link
+              href={buildConsoleRunAwareHandoffHref(
+                "/verification?surface=verification",
+                runAwareHandoff,
+                activeRunId,
+              )}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background/60"
+            >
+              Confirm verification evidence
+            </Link>
+            <Link
+              href={buildConsoleRunAwareHandoffHref("/go-live?surface=go_live", runAwareHandoff, activeRunId)}
+              className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background/60"
+            >
+              Reopen go-live drill
+            </Link>
+            {adminLinkState.showAdminReturn ? (
+              <Link
+                href={adminHref}
+                className="inline-flex items-center rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background/60"
+              >
+                {adminLinkState.adminLinkLabel}
+              </Link>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -197,29 +194,33 @@ export default async function ArtifactsPage({
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={buildArtifactsHandoffHref({ pathname: "/usage", ...handoffArgs })}
+              href={buildConsoleRunAwareHandoffHref("/usage", runAwareHandoff, activeRunId)}
               className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
             >
               Confirm usage signal
             </Link>
             <Link
-              href={buildArtifactsHandoffHref({ pathname: "/settings", ...handoffArgs })}
+              href={buildConsoleRunAwareHandoffHref("/settings?intent=manage-plan", runAwareHandoff, activeRunId)}
               className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
             >
               Review settings evidence lane
             </Link>
             <Link
-              href={buildArtifactsHandoffHref({ pathname: "/verification?surface=verification", ...handoffArgs })}
+              href={buildConsoleRunAwareHandoffHref(
+                "/verification?surface=verification",
+                runAwareHandoff,
+                activeRunId,
+              )}
               className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
             >
               Attach verification evidence
             </Link>
-            {showAdminReturn ? (
+            {adminLinkState.showAdminReturn ? (
               <Link
-                href={buildArtifactsHandoffHref({ pathname: "/admin", ...handoffArgs })}
+                href={adminHref}
                 className="inline-flex items-center rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition hover:bg-background"
               >
-                {adminReturnLabel}
+                {adminLinkState.adminLinkLabel}
               </Link>
             ) : null}
           </div>
@@ -229,7 +230,7 @@ export default async function ArtifactsPage({
           </p>
         </CardContent>
       </Card>
-      {!runId ? (
+      {!activeRunId ? (
         <Card>
           <CardHeader>
             <CardTitle>No demo run yet</CardTitle>
@@ -238,7 +239,7 @@ export default async function ArtifactsPage({
             <p>This workspace does not have a recorded onboarding demo run, so there are no live artifacts to show.</p>
             <Link
               className="text-foreground underline underline-offset-4"
-              href={buildArtifactsHandoffHref({ pathname: "/playground", ...handoffArgs })}
+              href={buildConsoleRunAwareHandoffHref("/playground", runAwareHandoff, activeRunId)}
             >
               Start a run in Playground
             </Link>
@@ -247,7 +248,7 @@ export default async function ArtifactsPage({
       ) : artifacts.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>No artifacts for run {runId}</CardTitle>
+            <CardTitle>No artifacts for run {activeRunId}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted">
             <p>The run exists, but no artifacts have been persisted yet.</p>

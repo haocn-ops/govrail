@@ -1,0 +1,79 @@
+# Verification Console Surface
+
+對應入口：`web/app/(console)/verification/page.tsx`
+
+## 1. 這個 surface 目前負責什麼
+
+`/verification` 是 Week 8 launch checklist 的人工證據收斂頁，用來把以下線索綁成同一條審核鏈：
+
+- onboarding / playground 的 first-run context
+- usage 與 billing posture
+- settings 上的 enterprise / billing evidence
+- delivery notes 與 go-live 前的最後確認
+
+## 2. 真實頁面結構
+
+目前頁面由以下區塊構成：
+
+1. `WorkspaceContextSurfaceNotice`
+2. `ConsoleAdminFollowUp`
+   - 視 source 顯示 `admin-attention` / `admin-readiness`
+3. `PageHeader`
+4. `Verification evidence lane`
+   - 提供到 `playground / usage / settings / artifacts / go-live` 的顯式 handoff
+5. `Week8VerificationChecklist`
+   - 主 checklist surface
+6. `WorkspaceDeliveryTrackPanel`
+   - `sectionKey="verification"` 的 delivery notes 與 evidence 描述
+
+## 3. handoff / query / session 結構
+
+這頁現在依賴 `web/lib/console-handoff.ts` 做 query / return 收斂：
+
+- `parseConsoleHandoffState(searchParams)`
+- `buildRecentDeliveryMetadata(handoff)`
+- `buildRecentDeliveryDescription(...)`
+- `buildConsoleVerificationChecklistHandoffArgs(handoff)`
+- `buildConsoleAdminReturnState(...)`
+- `buildConsoleAdminReturnHref(...)`
+- `buildConsoleHandoffHref("/session", handoff)`
+- `buildVerificationChecklistHandoffHref(...)`
+
+關鍵契約：
+
+- 顯式延續 `verification?surface=verification`
+- 繼續導向 `go-live?surface=go_live`
+- 只有在 source 與 expected surface 匹配時，才顯示正確的 admin return lane
+
+## 4. 目前已落地的測試契約
+
+- `web/tests/page-level/verification-go-live-handoff.page.test.ts`
+  - 固定 verification page 的 helper import、admin return continuity、go-live continuation contract
+- `web/tests/page-level/handoff-query-continuity-contract.page.test.ts`
+  - 固定 shared checklist handoff builder 的 continuity keys
+- `web/tests/page-level/delivery-track-context-handoff.page.test.ts`
+  - 固定 verification delivery track 與 admin return / go-live continuation mapping
+- `web/tests/e2e/saas-mainline-smoke.e2e.test.ts`
+  - 固定 verification/go-live/admin return 的 source-assisted smoke
+- `web/tests/browser/verification-delivery-admin-return.smoke.spec.ts`
+  - 固定 verification -> go-live -> admin focused browser smoke
+- `web/tests/e2e/browser-e2e-mainline-console-readiness.test.ts`
+  - 固定 mainline console focused batch 與 runner mapping
+- 若只需快速重跑這條主線 smoke，請從倉庫根目錄執行 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`；`npm run web:test:e2e` 仍保留給整包 non-browser smoke。
+- 若只需 focused browser 重跑，請從倉庫根目錄執行 `npm run web:test:browser:mainline-console-go-live`；這組 batch 會覆蓋 `verification-delivery-admin-return` 這條 verification -> go-live/admin 回流主線。
+
+## 5. 已完成範圍與保守邊界
+
+已完成：
+
+- recent delivery metadata 描述集中到共用 helper
+- verification -> go-live -> admin return 的顯式鏈路
+- session-aware workspace notice 與 fallback guardrails
+
+保守邊界：
+
+- 這頁仍是人工 evidence / checklist surface
+- 不自動放量 rollout
+- 不替操作者改變 session identity
+
+若後續繼續做，應優先延續 `Week8VerificationChecklist` 與 `WorkspaceDeliveryTrackPanel` 的共享 handoff contract。

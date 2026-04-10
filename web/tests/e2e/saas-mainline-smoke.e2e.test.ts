@@ -3,12 +3,23 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import React from "react";
 
-import AdminPage from "../../app/(console)/admin/page";
 import { GET as getWorkspaceContext, POST as postWorkspaceContext } from "../../app/api/workspace-context/route";
-import { buildVerificationChecklistHandoffHref } from "../../components/verification/week8-verification-checklist";
-import { buildAdminReturnHref, buildHandoffHref } from "../../lib/handoff-query";
+import {
+  buildConsoleAdminReturnHref,
+  buildConsoleHandoffHref,
+  buildConsoleRunAwareHandoffHref,
+  type ConsoleHandoffState,
+} from "../../lib/console-handoff";
+import {
+  buildAcceptedWorkspaceOnboardingPath,
+  getAcceptInvitationRoleLandingActions,
+} from "../../lib/accept-invitation-success-flow";
+import {
+  buildAdminReturnHref,
+  buildHandoffHref,
+  buildVerificationChecklistHandoffHref,
+} from "../../lib/handoff-query";
 import { downloadWorkspaceAuditExportViewModel } from "../../services/control-plane";
 import {
   ControlPlaneRequestError,
@@ -50,6 +61,7 @@ const onboardingWizardPath = path.resolve(testDir, "../../components/onboarding/
 const playgroundPanelPath = path.resolve(testDir, "../../components/playground/playground-panel.tsx");
 const usageDashboardPath = path.resolve(testDir, "../../components/usage/workspace-usage-dashboard.tsx");
 const acceptInvitationPagePath = path.resolve(testDir, "../../app/accept-invitation/page.tsx");
+const acceptInvitationSuccessFlowPath = path.resolve(testDir, "../../lib/accept-invitation-success-flow.ts");
 const goLivePagePath = path.resolve(testDir, "../../app/(console)/go-live/page.tsx");
 const verificationPagePath = path.resolve(testDir, "../../app/(console)/verification/page.tsx");
 const adminPagePath = path.resolve(testDir, "../../app/(console)/admin/page.tsx");
@@ -152,12 +164,18 @@ test(
       const payload = (await response.json()) as {
         data: {
           source: string;
-          source_detail: { is_fallback: boolean };
+          source_detail: {
+            is_fallback: boolean;
+            session_checkpoint_required: boolean;
+            checkpoint_label: string;
+          };
           workspace: { workspace_id: string; slug: string };
         };
       };
       assert.equal(payload.data.source, "metadata");
       assert.equal(payload.data.source_detail.is_fallback, false);
+      assert.equal(payload.data.source_detail.session_checkpoint_required, false);
+      assert.equal(payload.data.source_detail.checkpoint_label, "Trusted metadata session");
       assert.equal(payload.data.workspace.workspace_id, "ws_mainline_2");
       assert.equal(payload.data.workspace.slug, "mainline-two");
       assert.equal(response.headers.get("x-govrail-workspace-context-source"), "metadata");
@@ -243,7 +261,11 @@ test(
       const payload = (await response.json()) as {
         data: {
           source: string;
-          source_detail: { is_fallback: boolean };
+          source_detail: {
+            is_fallback: boolean;
+            session_checkpoint_required: boolean;
+            checkpoint_label: string;
+          };
           workspace: { workspace_id: string; slug: string };
           selection: {
             requested_workspace_id: string | null;
@@ -255,6 +277,8 @@ test(
 
       assert.equal(payload.data.source, "metadata");
       assert.equal(payload.data.source_detail.is_fallback, false);
+      assert.equal(payload.data.source_detail.session_checkpoint_required, false);
+      assert.equal(payload.data.source_detail.checkpoint_label, "Trusted metadata session");
       assert.equal(payload.data.workspace.workspace_id, "ws_beta");
       assert.equal(payload.data.workspace.slug, "beta");
       assert.equal(payload.data.selection.requested_workspace_id, "ws_beta");
@@ -586,6 +610,8 @@ test(
 
     assert.match(onboardingWizardSource, /firstDemoStatusText/);
     assert.match(onboardingWizardSource, /firstDemoStatusVariant/);
+    assert.match(onboardingWizardSource, /const latestDemoRun = onboardingState\?\.latest_demo_run \?\? null;/);
+    assert.match(onboardingWizardSource, /const activeRunId = latestDemoRun\?\.run_id \?\? runId \?\? null;/);
     assert.match(onboardingWizardSource, /latestDemoRunHint/);
     assert.match(onboardingWizardSource, /blockers\.find/);
     assert.match(
@@ -719,13 +745,37 @@ test(
       const goLiveSource = await readFile(goLivePagePath, "utf8");
       const verificationSource = await readFile(verificationPagePath, "utf8");
       const deliveryPanelSource = await readFile(deliveryTrackPanelPath, "utf8");
+      const consoleHandoffSource = await readFile(path.resolve(testDir, "../../lib/console-handoff.ts"), "utf8");
       const handoffQuerySource = await readFile(handoffQueryPath, "utf8");
 
       assert.match(settingsSource, /import \{ buildAdminReturnHref, buildHandoffHref \} from "@\/lib\/handoff-query";/);
-      assert.match(goLiveSource, /import \{ buildAdminReturnHref, buildHandoffHref \} from "@\/lib\/handoff-query";/);
-      assert.match(deliveryPanelSource, /import \{ buildAdminReturnHref, buildHandoffHref \} from "@\/lib\/handoff-query";/);
-      assert.match(goLiveSource, /return buildHandoffHref\(args\.pathname,/);
-      assert.match(deliveryPanelSource, /return buildHandoffHref\(pathname,/);
+      assert.match(
+        goLiveSource,
+        /import \{\s*buildConsoleAdminReturnHref,\s*buildConsoleAdminReturnState,\s*buildConsoleRunAwareHandoffHref,\s*buildRecentDeliveryDescription,\s*buildRecentDeliveryMetadata,\s*parseConsoleHandoffState,\s*\} from "@\/lib\/console-handoff";/s,
+      );
+      assert.match(goLiveSource, /import \{ requestControlPlanePageData \} from "@\/lib\/server-control-plane-page-fetch";/);
+      assert.match(
+        goLiveSource,
+        /const billingSettingsHref = buildConsoleRunAwareHandoffHref\("\/settings\?intent=manage-plan", handoff, activeRunId\);/,
+      );
+      assert.match(
+        goLiveSource,
+        /const upgradeSettingsHref = buildConsoleRunAwareHandoffHref\("\/settings\?intent=upgrade", handoff, activeRunId\);/,
+      );
+      assert.match(goLiveSource, /href=\{billingSettingsHref\}[\s\S]*Review billing \+ settings/s);
+      assert.match(goLiveSource, /href=\{upgradeSettingsHref\}[\s\S]*Settings upgrade intent/s);
+      assert.match(
+        verificationSource,
+        /buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/settings\?intent=manage-plan",\s*\.\.\.handoffHrefArgs\s*\}\)/s,
+      );
+      assert.match(
+        deliveryPanelSource,
+        /import \{\s*buildConsoleHandoffHref,\s*buildConsoleAdminReturnHref,\s*type ConsoleHandoffState,\s*\} from "@\/lib\/console-handoff";/s,
+      );
+      assert.match(consoleHandoffSource, /export function buildConsoleHandoffHref\(pathname: string, handoff: ConsoleHandoffState\): string \{/);
+      assert.match(consoleHandoffSource, /export function buildConsoleAdminReturnHref\(/);
+      assert.match(consoleHandoffSource, /return buildHandoffHref\(/);
+      assert.match(deliveryPanelSource, /return buildConsoleHandoffHref\(pathname, handoff\);/);
 
       for (const source of [settingsSource, goLiveSource, deliveryPanelSource]) {
         assert.match(source, /week8Focus/);
@@ -752,24 +802,20 @@ test(
       assert.match(handoffQuerySource, /"recent_owner_label"/);
       assert.match(handoffQuerySource, /"recent_owner_display_name"/);
       assert.match(handoffQuerySource, /"recent_owner_email"/);
-      assert.match(goLiveSource, /recent_owner_display_name/);
-      assert.match(goLiveSource, /recent_owner_email/);
+      assert.match(consoleHandoffSource, /recentOwnerDisplayName: handoff\.recentOwnerDisplayName,/);
+      assert.match(consoleHandoffSource, /recentOwnerEmail: handoff\.recentOwnerEmail,/);
 
       assert.match(verificationSource, /const verificationDeliveryDescription = buildRecentDeliveryDescription\(/);
       assert.match(goLiveSource, /const goLiveDeliveryDescription = buildRecentDeliveryDescription\(/);
-      assert.match(verificationSource, /Latest admin handoff: \$\{parts\.join\(" · "\)\}\./);
-      assert.match(goLiveSource, /Latest admin handoff: \$\{parts\.join\(" · "\)\}\./);
+      assert.match(goLiveSource, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+      assert.match(
+        goLiveSource,
+        /const verificationHref = buildConsoleRunAwareHandoffHref\("\/verification\?surface=verification", handoff, activeRunId\);/,
+      );
+      assert.match(goLiveSource, /const usageHref = buildConsoleRunAwareHandoffHref\("\/usage", handoff, activeRunId\);/);
+      assert.match(consoleHandoffSource, /Latest admin handoff: \$\{parts\.join\(" · "\)\}\./);
       assert.match(deliveryPanelSource, /describeRecentUpdateKind/);
       assert.match(deliveryPanelSource, /Evidence links were added on the \$\{trackLabel\(trackKey\)\} track\./);
-
-      assert.match(
-        goLiveSource,
-        /const verificationHref = buildGoLiveHref\(\{[\s\S]*pathname: "\/verification\?surface=verification",[\s\S]*recentTrackKey,[\s\S]*recentUpdateKind,[\s\S]*evidenceCount: recentEvidenceCountParam,[\s\S]*\}\);/s,
-      );
-      assert.match(
-        goLiveSource,
-        /const usageHref = buildGoLiveHref\(\{[\s\S]*pathname: "\/usage",[\s\S]*recentTrackKey,[\s\S]*recentUpdateKind,[\s\S]*evidenceCount: recentEvidenceCountParam,[\s\S]*\}\);/s,
-      );
     }),
 );
 
@@ -782,32 +828,61 @@ test(
     const adminPageSource = await readFile(adminPagePath, "utf8");
     const adminFollowUpNoticeSource = await readFile(adminFollowUpNoticePath, "utf8");
 
-    assert.match(verificationSource, /source="admin-attention"[\s\S]*surface="verification"/);
-    assert.match(verificationSource, /source="admin-readiness"[\s\S]*surface="verification"/);
-    assert.match(goLiveSource, /source="admin-attention"[\s\S]*surface="go_live"/);
-    assert.match(goLiveSource, /source="admin-readiness"[\s\S]*surface="go_live"/);
+    assert.match(verificationSource, /const adminReturnState = buildConsoleAdminReturnState\(\{/);
+    assert.match(verificationSource, /expectedSurface: "verification",/);
+    assert.match(verificationSource, /const followUpSource =/);
+    assert.match(verificationSource, /source: followUpSource,/);
+    assert.match(verificationSource, /ownerDisplayName: handoff\.recentOwnerDisplayName,/);
+    assert.match(verificationSource, /ownerEmail: handoff\.recentOwnerEmail,/);
+    assert.match(verificationSource, /surface="verification"/);
+    assert.match(goLiveSource, /const adminReturnState = buildConsoleAdminReturnState\(\{/);
+    assert.match(goLiveSource, /expectedSurface: "go_live",/);
+    assert.match(goLiveSource, /const followUpSource =/);
+    assert.match(goLiveSource, /source: followUpSource,/);
+    assert.match(goLiveSource, /ownerDisplayName: recentOwnerDisplayName,/);
+    assert.match(goLiveSource, /ownerEmail: recentOwnerEmail,/);
+    assert.match(goLiveSource, /surface="go_live"/);
+    assert.match(goLiveSource, /import \{ requestControlPlanePageData \} from "@\/lib\/server-control-plane-page-fetch";/);
+    assert.match(goLiveSource, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+    assert.match(
+      goLiveSource,
+      /sessionHref=\{buildConsoleRunAwareHandoffHref\("\/session", handoff, activeRunId\)\}/,
+    );
+    assert.match(
+      goLiveSource,
+      /const adminReturnHref = buildConsoleAdminReturnHref\(\{[\s\S]*handoff: runAwareHandoff,[\s\S]*queueSurface: adminReturnState\.adminQueueSurface,[\s\S]*\}\);/s,
+    );
 
-    assert.match(deliveryPanelSource, /import \{ buildAdminReturnHref, buildHandoffHref \} from "@\/lib\/handoff-query";/);
+    assert.match(
+      deliveryPanelSource,
+      /import \{\s*buildConsoleHandoffHref,\s*buildConsoleAdminReturnHref,\s*type ConsoleHandoffState,\s*\} from "@\/lib\/console-handoff";/s,
+    );
     assert.match(deliveryPanelSource, /function buildAdminReturnUrl\(/);
-    assert.match(deliveryPanelSource, /return buildAdminReturnHref\("\/admin", \{/);
+    assert.match(
+      deliveryPanelSource,
+      /return buildConsoleAdminReturnHref\(\{[\s\S]*pathname: "\/admin",[\s\S]*workspaceSlug,[\s\S]*queueSurface: surface,[\s\S]*\}\);/s,
+    );
     assert.match(deliveryPanelSource, /queueSurface: surface,/);
     assert.match(deliveryPanelSource, /week8Focus,/);
-    assert.match(deliveryPanelSource, /attentionWorkspace: workspaceSlug,/);
+    assert.match(deliveryPanelSource, /attentionWorkspace: attentionWorkspace \?\? workspaceSlug,/);
     assert.match(deliveryPanelSource, /Return to admin queue/);
     assert.match(deliveryPanelSource, /Return to admin readiness view/);
 
     assert.match(adminFollowUpNoticeSource, /import \{ buildAdminReturnHref \} from "@\/lib\/handoff-query";/);
     assert.match(adminFollowUpNoticeSource, /const queueSurface =/);
     assert.match(adminFollowUpNoticeSource, /const returnHref = buildAdminReturnHref\("\/admin", \{/);
+    assert.match(adminFollowUpNoticeSource, /runId: runId \?\? null,/);
+    assert.match(adminFollowUpNoticeSource, /runId,/);
     assert.match(adminFollowUpNoticeSource, /attentionWorkspace: returnWorkspaceSlug,/);
-    assert.match(adminPageSource, /const queueReturned = getParam\(searchParams\?\.queue_returned\) === "1";/);
-    assert.match(adminPageSource, /const readinessReturned = getParam\(searchParams\?\.readiness_returned\) === "1";/);
+    assert.match(adminPageSource, /const queueReturned = getConsoleParam\(searchParams\?\.queue_returned\) === "1";/);
+    assert.match(adminPageSource, /const readinessReturned = getConsoleParam\(searchParams\?\.readiness_returned\) === "1";/);
     assert.match(adminPageSource, /initialSurfaceFilter=\{normalizedSurface\}/);
     assert.match(adminPageSource, /initialReadinessFocus=\{normalizedReadinessFocus\}/);
 
-    const verificationHandoffHref = buildHandoffHref("/verification?surface=verification", {
+    const verificationHandoffState: ConsoleHandoffState = {
       source: "admin-attention",
-      surface: "verification",
+      surface: null,
+      runId: "run_admin_attention_123",
       week8Focus: "go_live_ready",
       attentionWorkspace: "handoff-beta",
       attentionOrganization: "org_handoff",
@@ -815,77 +890,73 @@ test(
       recentTrackKey: "verification",
       recentUpdateKind: "verification_completed",
       evidenceCount: 2,
+      recentOwnerLabel: null,
       recentOwnerDisplayName: "Queue Owner",
       recentOwnerEmail: "queue-owner@example.com",
-    });
+    };
+    const verificationHandoffHref = buildConsoleHandoffHref(
+      "/verification?surface=verification",
+      verificationHandoffState,
+    );
     const verificationHandoffUrl = new URL(`https://example.test${verificationHandoffHref}`);
     assert.equal(verificationHandoffUrl.searchParams.get("source"), "admin-attention");
     assert.equal(verificationHandoffUrl.searchParams.get("surface"), "verification");
+    assert.equal(verificationHandoffUrl.searchParams.get("run_id"), "run_admin_attention_123");
     assert.equal(verificationHandoffUrl.searchParams.get("attention_workspace"), "handoff-beta");
     assert.equal(verificationHandoffUrl.searchParams.get("delivery_context"), "recent_activity");
     assert.equal(verificationHandoffUrl.searchParams.get("recent_update_kind"), "verification_completed");
 
-    const goLiveHandoffHref = buildHandoffHref("/go-live?surface=go_live", {
+    const goLiveHandoffHref = buildConsoleHandoffHref("/go-live?surface=go_live", {
+      ...verificationHandoffState,
+      recentTrackKey: "go_live",
+      recentUpdateKind: "go_live_completed",
+      evidenceCount: 3,
+    });
+    const goLiveHandoffUrl = new URL(`https://example.test${goLiveHandoffHref}`);
+    assert.equal(goLiveHandoffUrl.searchParams.get("source"), "admin-attention");
+    assert.equal(goLiveHandoffUrl.searchParams.get("surface"), "go_live");
+    assert.equal(goLiveHandoffUrl.searchParams.get("run_id"), "run_admin_attention_123");
+    assert.equal(goLiveHandoffUrl.searchParams.get("recent_track_key"), "go_live");
+
+    const queueReturnHref = buildConsoleAdminReturnHref("/admin", {
       source: "admin-attention",
-      surface: "go_live",
+      queueSurface: "go_live",
       week8Focus: "go_live_ready",
       attentionWorkspace: "handoff-beta",
       attentionOrganization: "org_handoff",
       deliveryContext: "recent_activity",
-      recentTrackKey: "go_live",
       recentUpdateKind: "go_live_completed",
       evidenceCount: 3,
       recentOwnerDisplayName: "Queue Owner",
       recentOwnerEmail: "queue-owner@example.com",
     });
-    const goLiveHandoffUrl = new URL(`https://example.test${goLiveHandoffHref}`);
-    assert.equal(goLiveHandoffUrl.searchParams.get("source"), "admin-attention");
-    assert.equal(goLiveHandoffUrl.searchParams.get("surface"), "go_live");
-    assert.equal(goLiveHandoffUrl.searchParams.get("recent_track_key"), "go_live");
-
-    const queueReturnHref = buildAdminReturnHref("/admin", {
-      source: "admin-attention",
-      queueSurface: "go_live",
-      attentionWorkspace: "handoff-beta",
-      attentionOrganization: "org_handoff",
-    });
     const queueReturnSearchParams = Object.fromEntries(new URL(`https://example.test${queueReturnHref}`).searchParams.entries());
 
-    const previousReact = (globalThis as { React?: typeof React }).React;
-    (globalThis as { React?: typeof React }).React = React;
-    try {
-      const queueReturnElement = AdminPage({ searchParams: queueReturnSearchParams });
-      const queueReturnPanel = (queueReturnElement as { props?: { children?: unknown[] } }).props?.children?.[1] as {
-        type?: { name?: string };
-        props?: Record<string, unknown>;
-      };
-      assert.equal(queueReturnPanel?.type?.name, "AdminOverviewPanel");
-      assert.equal(queueReturnPanel?.props?.initialSurfaceFilter, "go_live");
-      assert.equal(queueReturnPanel?.props?.queueReturned, true);
-      assert.equal(queueReturnPanel?.props?.attentionWorkspaceSlug, "handoff-beta");
-      assert.equal(queueReturnPanel?.props?.attentionOrganizationId, "org_handoff");
+    assert.equal(queueReturnSearchParams.queue_surface, "go_live");
+    assert.equal(queueReturnSearchParams.queue_returned, "1");
+    assert.equal(queueReturnSearchParams.attention_workspace, "handoff-beta");
+    assert.equal(queueReturnSearchParams.attention_organization, "org_handoff");
+    assert.match(adminPageSource, /const requestedSurface = resolveAdminQueueSurface\(getConsoleParam\(searchParams\?\.queue_surface\)\);/);
+    assert.match(adminPageSource, /const queueReturned = getConsoleParam\(searchParams\?\.queue_returned\) === "1";/);
+    assert.match(adminPageSource, /attentionWorkspaceSlug=\{handoff\.attentionWorkspace\}/);
+    assert.match(adminPageSource, /attentionOrganizationId=\{handoff\.attentionOrganization\}/);
 
-      const readinessReturnHref = buildAdminReturnHref("/admin", {
-        source: "admin-readiness",
-        week8Focus: "go_live_ready",
-        attentionWorkspace: "handoff-beta",
-        attentionOrganization: "org_handoff",
-      });
-      const readinessReturnElement = AdminPage({
-        searchParams: Object.fromEntries(new URL(`https://example.test${readinessReturnHref}`).searchParams.entries()),
-      });
-      const readinessReturnPanel = (readinessReturnElement as { props?: { children?: unknown[] } }).props?.children?.[1] as {
-        type?: { name?: string };
-        props?: Record<string, unknown>;
-      };
-      assert.equal(readinessReturnPanel?.type?.name, "AdminOverviewPanel");
-      assert.equal(readinessReturnPanel?.props?.initialReadinessFocus, "go_live_ready");
-      assert.equal(readinessReturnPanel?.props?.readinessReturned, true);
-      assert.equal(readinessReturnPanel?.props?.attentionWorkspaceSlug, "handoff-beta");
-      assert.equal(readinessReturnPanel?.props?.attentionOrganizationId, "org_handoff");
-    } finally {
-      (globalThis as { React?: typeof React }).React = previousReact;
-    }
+    const readinessReturnHref = buildConsoleAdminReturnHref("/admin", {
+      source: "admin-readiness",
+      week8Focus: "go_live_ready",
+      attentionWorkspace: "handoff-beta",
+      attentionOrganization: "org_handoff",
+      deliveryContext: "recent_activity",
+      recentUpdateKind: "verification_completed",
+      evidenceCount: 2,
+      recentOwnerDisplayName: "Queue Owner",
+      recentOwnerEmail: "queue-owner@example.com",
+    });
+    const readinessReturnSearchParams = Object.fromEntries(
+      new URL(`https://example.test${readinessReturnHref}`).searchParams.entries(),
+    );
+    assert.equal(readinessReturnSearchParams.week8_focus, "go_live_ready");
+    assert.equal(readinessReturnSearchParams.readiness_returned, "1");
   },
 );
 
@@ -895,19 +966,27 @@ test(
     const dashboardSource = await readFile(path.resolve(testDir, "../../app/(console)/page.tsx"), "utf8");
     const launchpadSource = await readFile(workspaceLaunchpadPath, "utf8");
 
-    assert.match(dashboardSource, /const source = getParam\(searchParams\?\.source\);/);
-    assert.match(dashboardSource, /attentionWorkspace=\{handoffWorkspace\}/);
-    assert.match(dashboardSource, /attentionOrganization=\{handoffOrganization\}/);
+    assert.match(dashboardSource, /const handoff = parseConsoleHandoffState\(searchParams\);/);
+    assert.match(dashboardSource, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+    assert.match(dashboardSource, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
+    assert.match(
+      dashboardSource,
+      /const \{\s*source,\s*week8Focus,\s*attentionWorkspace,\s*attentionOrganization,\s*deliveryContext,\s*recentTrackKey,\s*recentUpdateKind,\s*evidenceCount,\s*recentOwnerLabel,\s*recentOwnerDisplayName,\s*recentOwnerEmail,\s*\} = runAwareHandoff;/s,
+    );
+    assert.match(dashboardSource, /attentionWorkspace=\{attentionWorkspace\}/);
+    assert.match(dashboardSource, /attentionOrganization=\{attentionOrganization\}/);
     assert.match(dashboardSource, /recentTrackKey=\{recentTrackKey\}/);
     assert.match(dashboardSource, /recentUpdateKind=\{recentUpdateKind\}/);
     assert.match(dashboardSource, /evidenceCount=\{evidenceCount\}/);
-    assert.match(dashboardSource, /recentOwnerLabel=\{ownerLabel\}/);
+    assert.match(dashboardSource, /recentOwnerLabel=\{recentOwnerLabel\}/);
+    assert.match(dashboardSource, /recentOwnerDisplayName=\{recentOwnerDisplayName\}/);
+    assert.match(dashboardSource, /recentOwnerEmail=\{recentOwnerEmail\}/);
 
+    assert.match(launchpadSource, /buildVerificationChecklistHandoffHref/);
     assert.match(
       launchpadSource,
-      /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/,
+      /import \{[\s\S]*buildAdminReturnHref[\s\S]*resolveAdminQueueSurface[\s\S]*\} from "@\/lib\/handoff-query";/s,
     );
-    assert.match(launchpadSource, /import \{ buildAdminReturnHref, resolveAdminQueueSurface \} from "@\/lib\/handoff-query";/);
     assert.match(
       launchpadSource,
       /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0], "pathname"> = \{/,
@@ -916,9 +995,14 @@ test(
     assert.match(launchpadSource, /const showAdminReadiness = normalizedSource === "admin-readiness";/);
     assert.match(launchpadSource, /const adminReturnHref =/);
     assert.match(launchpadSource, /buildAdminReturnHref\("\/admin", \{/);
+    assert.match(launchpadSource, /runId: activeRunId,/);
     assert.match(launchpadSource, /queueSurface: showAdminAttention \? resolveAdminQueueSurface\(recentTrackKey\) : null,/);
+    assert.match(launchpadSource, /recentOwnerDisplayName,/);
+    assert.match(launchpadSource, /recentOwnerEmail,/);
     assert.match(launchpadSource, /function buildLaunchpadHref\(pathname: string\): string \{/);
-    assert.match(launchpadSource, /return buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs \}\);/);
+    assert.match(launchpadSource, /const latestDemoRun = onboarding\?\.latest_demo_run \?\? null;/);
+    assert.match(launchpadSource, /const activeRunId = latestDemoRun\?\.run_id \?\? null;/);
+    assert.match(launchpadSource, /return buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/);
     assert.match(launchpadSource, /const nextStepLinks(?:: Array<\{ label: string; surface: OnboardingSurface \}>)? = \[/);
     assert.match(
       launchpadSource,
@@ -944,6 +1028,7 @@ test(
 
     const onboardingArgs = {
       source: "onboarding",
+      runId: "run_launchpad_123",
       week8Focus: "demo_run",
       attentionWorkspace: "launchpad-smoke",
       attentionOrganization: "org-launchpad",
@@ -952,6 +1037,8 @@ test(
       recentUpdateKind: "evidence_only",
       evidenceCount: 6,
       recentOwnerLabel: "Launchpad Owner",
+      recentOwnerDisplayName: "Launchpad Owner Display",
+      recentOwnerEmail: "launchpad-owner@example.test",
     } as const;
 
     const verificationEntryPath = hasExplicitVerification ? "/verification?surface=verification" : "/verification";
@@ -992,6 +1079,8 @@ test(
       recentUpdateKind: onboardingArgs.recentUpdateKind,
       evidenceCount: onboardingArgs.evidenceCount,
       recentOwnerLabel: onboardingArgs.recentOwnerLabel,
+      recentOwnerDisplayName: onboardingArgs.recentOwnerDisplayName,
+      recentOwnerEmail: onboardingArgs.recentOwnerEmail,
     });
     const readinessReturnHref = buildAdminReturnHref("/admin", {
       source: "admin-readiness",
@@ -1002,10 +1091,13 @@ test(
       recentUpdateKind: onboardingArgs.recentUpdateKind,
       evidenceCount: onboardingArgs.evidenceCount,
       recentOwnerLabel: onboardingArgs.recentOwnerLabel,
+      recentOwnerDisplayName: onboardingArgs.recentOwnerDisplayName,
+      recentOwnerEmail: onboardingArgs.recentOwnerEmail,
     });
 
     const expectedKeys = [
       ["source", onboardingArgs.source],
+      ["run_id", onboardingArgs.runId],
       ["week8_focus", onboardingArgs.week8Focus],
       ["attention_workspace", onboardingArgs.attentionWorkspace],
       ["attention_organization", onboardingArgs.attentionOrganization],
@@ -1014,6 +1106,8 @@ test(
       ["recent_update_kind", onboardingArgs.recentUpdateKind],
       ["evidence_count", String(onboardingArgs.evidenceCount)],
       ["recent_owner_label", onboardingArgs.recentOwnerLabel],
+      ["recent_owner_display_name", onboardingArgs.recentOwnerDisplayName],
+      ["recent_owner_email", onboardingArgs.recentOwnerEmail],
     ] as const;
 
     for (const href of [
@@ -1046,6 +1140,10 @@ test(
     assert.equal(readinessReturnUrl.searchParams.get("week8_focus"), onboardingArgs.week8Focus);
     assert.equal(readinessReturnUrl.searchParams.get("readiness_returned"), "1");
     assert.equal(readinessReturnUrl.searchParams.get("attention_workspace"), onboardingArgs.attentionWorkspace);
+    assert.equal(attentionReturnUrl.searchParams.get("recent_owner_display_name"), onboardingArgs.recentOwnerDisplayName);
+    assert.equal(attentionReturnUrl.searchParams.get("recent_owner_email"), onboardingArgs.recentOwnerEmail);
+    assert.equal(readinessReturnUrl.searchParams.get("recent_owner_display_name"), onboardingArgs.recentOwnerDisplayName);
+    assert.equal(readinessReturnUrl.searchParams.get("recent_owner_email"), onboardingArgs.recentOwnerEmail);
   },
 );
 
@@ -1061,6 +1159,8 @@ test(
     const usageSource = await readFile(usageDashboardPath, "utf8");
 
     assert.match(launchpadSource, /const latestDemoRunHint = onboarding\?\.latest_demo_run_hint \?\? null;/);
+    assert.match(launchpadSource, /const latestDemoRun = onboarding\?\.latest_demo_run \?\? null;/);
+    assert.match(launchpadSource, /const activeRunId = latestDemoRun\?\.run_id \?\? null;/);
     assert.match(launchpadSource, /const deliveryGuidance = onboarding\?\.delivery_guidance \?\? null;/);
     assert.match(launchpadSource, /<CardTitle>Onboarding recovery lane<\/CardTitle>/);
     assert.match(launchpadSource, /surface: "playground"/);
@@ -1103,6 +1203,7 @@ test(
 
     const continuityArgs = {
       source: "onboarding",
+      runId: "run_launchpad_prework_123",
       week8Focus: "demo_run",
       attentionWorkspace: "launchpad-prework",
       attentionOrganization: "org-launchpad-prework",
@@ -1141,6 +1242,7 @@ test(
 
     const expectedKeys = [
       ["source", continuityArgs.source],
+      ["run_id", continuityArgs.runId],
       ["week8_focus", continuityArgs.week8Focus],
       ["attention_workspace", continuityArgs.attentionWorkspace],
       ["attention_organization", continuityArgs.attentionOrganization],
@@ -1163,39 +1265,104 @@ test(
   "smoke(non-browser, source-assisted+execution): accept-invitation onboarding path builder preserves continuity keys and verification explicit-surface semantics",
   async () => {
     const acceptInvitationSource = await readFile(acceptInvitationPagePath, "utf8");
+    const acceptInvitationSuccessFlowSource = await readFile(acceptInvitationSuccessFlowPath, "utf8");
 
-    assert.match(acceptInvitationSource, /function buildOnboardingPath\(pathname: string\): string \{/);
-    assert.match(acceptInvitationSource, /params\.set\("source", "onboarding"\);/);
-    assert.match(acceptInvitationSource, /params\.set\("attention_workspace", acceptedWorkspace\.workspace_slug\);/);
-    assert.match(acceptInvitationSource, /params\.set\("delivery_context", "recent_activity"\);/);
-    assert.match(acceptInvitationSource, /params\.set\("recent_owner_label", acceptedWorkspace\.display_name\);/);
-    assert.match(acceptInvitationSource, /function getRoleLandingActions\(role: string\): WorkspaceLandingAction\[] \{/);
-    assert.match(acceptInvitationSource, /\{ label: "Confirm members", path: "\/members" \}/);
-    assert.match(acceptInvitationSource, /\{ label: "Run a demo", path: "\/playground" \}/);
-    assert.match(acceptInvitationSource, /\{ label: "Open verification", path: "\/verification\?surface=verification" \}/);
-    assert.match(acceptInvitationSource, /onClick=\{\(\) => void openWorkspaceSurface\(buildOnboardingPath\(action\.path\)\)\}/);
+    assert.match(
+      acceptInvitationSource,
+      /buildAcceptedWorkspaceOnboardingPath,\s*formatAcceptedInvitationRoleLabel,\s*getAcceptInvitationRoleLandingActions,/s,
+    );
+    assert.match(acceptInvitationSource, /void openWorkspaceSurface\(\s*buildAcceptedWorkspaceOnboardingPath\(\{/s);
+    assert.match(acceptInvitationSource, /pathname: action\.path,/);
+    assert.match(acceptInvitationSource, /acceptedWorkspace,/);
+    assert.match(acceptInvitationSource, /searchParams,/);
+
+    assert.match(acceptInvitationSuccessFlowSource, /export function buildAcceptedWorkspaceOnboardingPath\(args: \{/);
+    assert.match(acceptInvitationSuccessFlowSource, /const continuityKeys = \[/);
+    assert.match(acceptInvitationSuccessFlowSource, /"run_id"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"week8_focus"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"attention_organization"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"delivery_context"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"recent_track_key"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"recent_update_kind"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"evidence_count"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"recent_owner_label"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"recent_owner_display_name"/);
+    assert.match(acceptInvitationSuccessFlowSource, /"recent_owner_email"/);
+    assert.match(acceptInvitationSuccessFlowSource, /return buildWorkspaceNavigationHref\(/);
+    assert.match(acceptInvitationSuccessFlowSource, /source: "onboarding"/);
+    assert.match(acceptInvitationSuccessFlowSource, /attention_workspace: args\.acceptedWorkspace\.workspace_slug/);
+    assert.match(acceptInvitationSuccessFlowSource, /delivery_context: "recent_activity"/);
+    assert.match(acceptInvitationSuccessFlowSource, /recent_owner_label: args\.acceptedWorkspace\.display_name/);
+    assert.match(acceptInvitationSuccessFlowSource, /recent_owner_display_name: args\.acceptedWorkspace\.display_name/);
+    assert.match(acceptInvitationSuccessFlowSource, /recent_owner_email: args\.acceptedWorkspace\.owner_email/);
+    assert.match(acceptInvitationSuccessFlowSource, /preferExistingQuery: true/);
+
+    assert.ok(
+      getAcceptInvitationRoleLandingActions("workspace_owner").some(
+        (action) => action.label === "Confirm members" && action.path === "/members",
+      ),
+    );
+    assert.ok(
+      getAcceptInvitationRoleLandingActions("operator").some(
+        (action) => action.label === "Run a demo" && action.path === "/playground",
+      ),
+    );
+    assert.ok(
+      getAcceptInvitationRoleLandingActions("approver").some(
+        (action) => action.label === "Open Week 8 checklist" && action.path === "/verification?surface=verification",
+      ),
+    );
 
     const verificationOnboardingPath = "/verification?surface=verification";
-
-    const onboardingQueryArgs = {
-      source: "onboarding",
-      attentionWorkspace: "invite-smoke-workspace",
-      deliveryContext: "recent_activity",
-      recentOwnerLabel: "Invite Smoke Owner",
+    const acceptedWorkspace = {
+      workspace_slug: "invite-smoke-workspace",
+      display_name: "Invite Smoke Owner",
+      organization_display_name: "Govrail Demo Org",
+      role: "workspace_owner",
+      owner_email: "invite-smoke-owner@govrail.test",
     } as const;
+    const searchParams = new URLSearchParams({
+      source: "admin-attention",
+      run_id: "run_invite_smoke_123",
+      week8_focus: "demo_run",
+      attention_workspace: "stale-workspace",
+      attention_organization: "invite-smoke-org",
+      delivery_context: "queue_review",
+      recent_track_key: "verification",
+      recent_update_kind: "evidence_only",
+      evidence_count: "3",
+      recent_owner_label: "Original Owner",
+      recent_owner_display_name: "Original Owner Display",
+      recent_owner_email: "original-owner@govrail.test",
+    });
 
-    const membersFromInvite = buildHandoffHref("/members", onboardingQueryArgs);
-    const playgroundFromInvite = buildHandoffHref("/playground", onboardingQueryArgs);
-    const verificationFromInvite = buildHandoffHref(verificationOnboardingPath, onboardingQueryArgs, {
-      preserveExistingQuery: true,
+    const membersFromInvite = buildAcceptedWorkspaceOnboardingPath({
+      pathname: "/members",
+      acceptedWorkspace,
+      searchParams,
+    });
+    const playgroundFromInvite = buildAcceptedWorkspaceOnboardingPath({
+      pathname: "/playground",
+      acceptedWorkspace,
+      searchParams,
+    });
+    const verificationFromInvite = buildAcceptedWorkspaceOnboardingPath({
+      pathname: verificationOnboardingPath,
+      acceptedWorkspace,
+      searchParams,
     });
 
     for (const href of [membersFromInvite, playgroundFromInvite, verificationFromInvite]) {
       const parsed = new URL(`https://example.test${href}`);
       assert.equal(parsed.searchParams.get("source"), "onboarding");
+      assert.equal(parsed.searchParams.get("run_id"), "run_invite_smoke_123");
       assert.equal(parsed.searchParams.get("attention_workspace"), "invite-smoke-workspace");
+      assert.equal(parsed.searchParams.get("week8_focus"), "demo_run");
+      assert.equal(parsed.searchParams.get("attention_organization"), "invite-smoke-org");
       assert.equal(parsed.searchParams.get("delivery_context"), "recent_activity");
       assert.equal(parsed.searchParams.get("recent_owner_label"), "Invite Smoke Owner");
+      assert.equal(parsed.searchParams.get("recent_owner_display_name"), "Invite Smoke Owner");
+      assert.equal(parsed.searchParams.get("recent_owner_email"), "invite-smoke-owner@govrail.test");
     }
 
     if (verificationOnboardingPath.includes("surface=verification")) {
@@ -1211,22 +1378,23 @@ test(
     const createInvitationFormSource = await readFile(createInvitationFormPath, "utf8");
     const invitationsPanelSource = await readFile(invitationsPanelPath, "utf8");
     const acceptInvitationSource = await readFile(acceptInvitationPagePath, "utf8");
+    const acceptInvitationSuccessFlowSource = await readFile(acceptInvitationSuccessFlowPath, "utf8");
     const onboardingSource = await readFile(onboardingWizardPath, "utf8");
 
-    assert.match(membersSource, /href=\{buildHandoffHref\("\/accept-invitation", handoffArgs\)\}/);
-    assert.match(membersSource, /href=\{buildHandoffHref\("\/onboarding", handoffArgs\)\}/);
-    assert.match(membersSource, /href=\{buildHandoffHref\("\/usage", handoffArgs\)\}/);
+    assert.match(membersSource, /const handoff = parseConsoleHandoffState\(searchParams\);/);
+    assert.match(membersSource, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+    assert.match(membersSource, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
+    assert.match(membersSource, /href=\{buildConsoleHandoffHref\("\/accept-invitation", runAwareHandoff\)\}/);
+    assert.match(membersSource, /href=\{buildConsoleHandoffHref\("\/onboarding", runAwareHandoff\)\}/);
+    assert.match(membersSource, /href=\{buildConsoleHandoffHref\("\/usage", runAwareHandoff\)\}/);
     assert.match(
       membersSource,
-      /href=\{buildHandoffHref\("\/verification\?surface=verification", handoffArgs, \{ preserveExistingQuery: true \}\)\}/,
+      /href=\{buildConsoleHandoffHref\("\/verification\?surface=verification", runAwareHandoff\)\}/,
     );
-    assert.match(membersSource, /const handoffArgs = \{/);
-    assert.match(membersSource, /week8Focus,/);
-    assert.match(membersSource, /attentionOrganization: handoffOrganization,/);
-    assert.match(membersSource, /recentTrackKey,/);
-    assert.match(membersSource, /recentUpdateKind,/);
-    assert.match(membersSource, /evidenceCount,/);
-    assert.match(membersSource, /recentOwnerLabel: ownerLabel,/);
+    assert.match(membersSource, /href=\{buildConsoleHandoffHref\("\/go-live\?surface=go_live", runAwareHandoff\)\}/);
+    assert.match(membersSource, /href=\{buildConsoleHandoffHref\("\/service-accounts", runAwareHandoff\)\}/);
+    assert.match(membersSource, /CreateInvitationForm workspaceSlug=\{workspaceContext\.workspace\.slug\} handoffArgs=\{runAwareHandoff\}/);
+    assert.match(membersSource, /InvitationsPanel workspaceSlug=\{workspaceContext\.workspace\.slug\} handoffArgs=\{runAwareHandoff\}/);
     assert.match(membersSource, /Pending invitations reserve member seats before acceptance/);
     assert.match(
       membersSource,
@@ -1244,32 +1412,33 @@ test(
     assert.match(invitationsPanelSource, /href=\{buildInvitationHref\("\/session"\)\}/);
     assert.match(invitationsPanelSource, /Treat acceptance as a trusted-session checkpoint too:/);
 
-    assert.match(acceptInvitationSource, /function buildOnboardingPath\(pathname: string\): string \{/);
-    assert.match(acceptInvitationSource, /const \[basePath, rawQuery\] = pathname\.split\("\?", 2\);/);
-    assert.match(acceptInvitationSource, /const params = new URLSearchParams\(rawQuery \?\? ""\);/);
-    assert.match(acceptInvitationSource, /const continuityKeys = \[/);
-    assert.match(acceptInvitationSource, /"week8_focus"/);
-    assert.match(acceptInvitationSource, /"attention_organization"/);
-    assert.match(acceptInvitationSource, /"delivery_context"/);
-    assert.match(acceptInvitationSource, /"recent_track_key"/);
-    assert.match(acceptInvitationSource, /"recent_update_kind"/);
-    assert.match(acceptInvitationSource, /"evidence_count"/);
-    assert.match(acceptInvitationSource, /"recent_owner_label"/);
-    assert.match(acceptInvitationSource, /"recent_owner_display_name"/);
-    assert.match(acceptInvitationSource, /"recent_owner_email"/);
-    assert.match(acceptInvitationSource, /for \(const key of continuityKeys\) \{/);
-    assert.match(acceptInvitationSource, /const value = searchParams\.get\(key\);/);
-    assert.match(acceptInvitationSource, /if \(value && !params\.has\(key\)\) \{\s*params\.set\(key, value\);\s*\}/s);
-    assert.match(acceptInvitationSource, /params\.set\("source", "onboarding"\);/);
-    assert.match(acceptInvitationSource, /params\.set\("attention_workspace",/);
-    assert.match(acceptInvitationSource, /params\.set\("delivery_context",/);
-    assert.match(acceptInvitationSource, /params\.set\("recent_owner_label",/);
-    assert.match(acceptInvitationSource, /function getRoleLandingActions\(role: string\): WorkspaceLandingAction\[] \{/);
-    assert.match(acceptInvitationSource, /\{ label: "Confirm members", path: "\/members" \}/);
-    assert.match(acceptInvitationSource, /\{ label: "Run a demo", path: "\/playground" \}/);
-    assert.match(acceptInvitationSource, /\{ label: "Open Week 8 checklist", path: "\/verification\?surface=verification" \}/);
-    assert.match(acceptInvitationSource, /\{ label: "Review go-live drill", path: "\/go-live\?surface=go_live" \}/);
-    assert.match(acceptInvitationSource, /onClick=\{\(\) => void openWorkspaceSurface\(buildOnboardingPath\(action\.path\)\)\}/);
+    assert.match(
+      acceptInvitationSource,
+      /buildAcceptedWorkspaceOnboardingPath,\s*formatAcceptedInvitationRoleLabel,\s*getAcceptInvitationRoleLandingActions,/s,
+    );
+    assert.match(acceptInvitationSource, /getAcceptInvitationRoleLaneSummary\(acceptedWorkspace\.role\)/);
+    assert.match(acceptInvitationSource, /getAcceptInvitationRoleLandingActions\(acceptedWorkspace\.role\)\.map/);
+    assert.match(acceptInvitationSource, /buildAcceptedWorkspaceOnboardingPath\(\{\s*pathname: action\.path,\s*acceptedWorkspace,\s*searchParams,\s*\}\)/s);
+    assert.match(acceptInvitationSuccessFlowSource, /export function getAcceptInvitationRoleLandingActions\(role: string\)/);
+    assert.match(acceptInvitationSuccessFlowSource, /\{ label: "Confirm members", path: "\/members" \}/);
+    assert.match(acceptInvitationSuccessFlowSource, /\{ label: "Run a demo", path: "\/playground" \}/);
+    assert.match(
+      acceptInvitationSuccessFlowSource,
+      /\{ label: "Open Week 8 checklist", path: "\/verification\?surface=verification" \}/,
+    );
+    assert.match(
+      acceptInvitationSuccessFlowSource,
+      /\{ label: "Review go-live drill", path: "\/go-live\?surface=go_live" \}/,
+    );
+    assert.match(
+      acceptInvitationSource,
+      /buildAcceptedWorkspaceOnboardingPath\(\{\s*pathname: action\.path,\s*acceptedWorkspace,\s*searchParams,\s*\}\)/s,
+    );
+    assert.match(
+      onboardingSource,
+      /const latestDemoRun = onboardingState\?\.latest_demo_run \?\? null;/,
+    );
+    assert.match(onboardingSource, /const activeRunId = latestDemoRun\?\.run_id \?\? runId \?\? null;/);
     assert.match(
       onboardingSource,
       /const usageCheckpointHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/usage",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
@@ -1289,6 +1458,7 @@ test(
 
     const continuityArgs = {
       source: "admin-attention",
+      runId: "run_members_invite_123",
       week8Focus: "demo_run",
       attentionWorkspace: "members-invite-chain",
       attentionOrganization: "org-members-invite-chain",
@@ -1317,6 +1487,7 @@ test(
 
     const forwardedArgs = {
       source: requiredParam(parsedAcceptInvitationUrl.searchParams.get("source"), "source"),
+      runId: requiredParam(parsedAcceptInvitationUrl.searchParams.get("run_id"), "run_id"),
       week8Focus: requiredParam(parsedAcceptInvitationUrl.searchParams.get("week8_focus"), "week8_focus"),
       attentionWorkspace: requiredParam(
         parsedAcceptInvitationUrl.searchParams.get("attention_workspace"),
@@ -1350,6 +1521,7 @@ test(
     for (const href of [membersToOnboardingHref, membersToUsageHref, membersToVerificationHref]) {
       const parsed = new URL(`https://example.test${href}`);
       assert.equal(parsed.searchParams.get("source"), continuityArgs.source);
+      assert.equal(parsed.searchParams.get("run_id"), continuityArgs.runId);
       assert.equal(parsed.searchParams.get("week8_focus"), continuityArgs.week8Focus);
       assert.equal(parsed.searchParams.get("attention_workspace"), continuityArgs.attentionWorkspace);
       assert.equal(parsed.searchParams.get("attention_organization"), continuityArgs.attentionOrganization);
@@ -1362,99 +1534,103 @@ test(
     assert.equal(new URL(`https://example.test${membersToVerificationHref}`).searchParams.get("surface"), "verification");
 
     const acceptedWorkspace = {
-      workspaceSlug: "accepted-invite-workspace",
-      displayName: "Accepted Invite Workspace",
+      workspace_slug: "accepted-invite-workspace",
+      display_name: "Accepted Invite Workspace",
+      organization_display_name: "Accepted Invite Org",
+      role: "workspace_owner",
+      owner_email: "accepted-owner@govrail.test",
     } as const;
-    const continuityKeys = [
-      "week8_focus",
-      "attention_organization",
-      "delivery_context",
-      "recent_track_key",
-      "recent_update_kind",
-      "evidence_count",
-      "recent_owner_label",
-      "recent_owner_display_name",
-      "recent_owner_email",
-    ] as const;
-    const buildAcceptedOnboardingPath = (pathname: string): string => {
-      const [basePath, rawQuery] = pathname.split("?", 2);
-      const params = new URLSearchParams(rawQuery ?? "");
-      for (const key of continuityKeys) {
-        const value = parsedAcceptInvitationUrl.searchParams.get(key);
-        if (value && !params.has(key)) {
-          params.set(key, value);
-        }
-      }
-      params.set("source", "onboarding");
-      params.set("attention_workspace", acceptedWorkspace.workspaceSlug);
-      params.set("delivery_context", "recent_activity");
-      params.set("recent_owner_label", acceptedWorkspace.displayName);
-      const query = params.toString();
-      return query ? `${basePath}?${query}` : basePath;
-    };
 
-    const membersFromInvite = buildAcceptedOnboardingPath("/members");
+    const membersFromInvite = buildAcceptedWorkspaceOnboardingPath({
+      pathname: "/members",
+      acceptedWorkspace,
+      searchParams: parsedAcceptInvitationUrl.searchParams,
+    });
     const serviceAccountsFromInvite = buildVerificationChecklistHandoffHref({
       pathname: "/service-accounts",
       source: "onboarding",
       week8Focus: forwardedArgs.week8Focus,
-      attentionWorkspace: acceptedWorkspace.workspaceSlug,
+      runId: forwardedArgs.runId,
+      attentionWorkspace: acceptedWorkspace.workspace_slug,
       attentionOrganization: forwardedArgs.attentionOrganization,
       deliveryContext: "recent_activity",
       recentTrackKey: forwardedArgs.recentTrackKey,
       recentUpdateKind: forwardedArgs.recentUpdateKind,
       evidenceCount: forwardedArgs.evidenceCount,
-      recentOwnerLabel: acceptedWorkspace.displayName,
+      recentOwnerLabel: acceptedWorkspace.display_name,
+      recentOwnerDisplayName: acceptedWorkspace.display_name,
+      recentOwnerEmail: acceptedWorkspace.owner_email,
     });
     const apiKeysFromInvite = buildVerificationChecklistHandoffHref({
       pathname: "/api-keys",
       source: "onboarding",
       week8Focus: forwardedArgs.week8Focus,
-      attentionWorkspace: acceptedWorkspace.workspaceSlug,
+      runId: forwardedArgs.runId,
+      attentionWorkspace: acceptedWorkspace.workspace_slug,
       attentionOrganization: forwardedArgs.attentionOrganization,
       deliveryContext: "recent_activity",
       recentTrackKey: forwardedArgs.recentTrackKey,
       recentUpdateKind: forwardedArgs.recentUpdateKind,
       evidenceCount: forwardedArgs.evidenceCount,
-      recentOwnerLabel: acceptedWorkspace.displayName,
+      recentOwnerLabel: acceptedWorkspace.display_name,
+      recentOwnerDisplayName: acceptedWorkspace.display_name,
+      recentOwnerEmail: acceptedWorkspace.owner_email,
     });
-    const playgroundFromInvite = buildAcceptedOnboardingPath("/playground");
-    const verificationFromInvite = buildAcceptedOnboardingPath("/verification?surface=verification");
-    const goLiveFromInvite = buildAcceptedOnboardingPath("/go-live?surface=go_live");
+    const playgroundFromInvite = buildAcceptedWorkspaceOnboardingPath({
+      pathname: "/playground",
+      acceptedWorkspace,
+      searchParams: parsedAcceptInvitationUrl.searchParams,
+    });
+    const verificationFromInvite = buildAcceptedWorkspaceOnboardingPath({
+      pathname: "/verification?surface=verification",
+      acceptedWorkspace,
+      searchParams: parsedAcceptInvitationUrl.searchParams,
+    });
+    const goLiveFromInvite = buildAcceptedWorkspaceOnboardingPath({
+      pathname: "/go-live?surface=go_live",
+      acceptedWorkspace,
+      searchParams: parsedAcceptInvitationUrl.searchParams,
+    });
 
     const expectedKeys = [
       ["source", "onboarding"],
+      ["run_id", continuityArgs.runId],
       ["week8_focus", continuityArgs.week8Focus],
-      ["attention_workspace", acceptedWorkspace.workspaceSlug],
+      ["attention_workspace", acceptedWorkspace.workspace_slug],
       ["attention_organization", continuityArgs.attentionOrganization],
       ["delivery_context", "recent_activity"],
       ["recent_track_key", continuityArgs.recentTrackKey],
       ["recent_update_kind", continuityArgs.recentUpdateKind],
       ["evidence_count", String(continuityArgs.evidenceCount)],
-      ["recent_owner_label", acceptedWorkspace.displayName],
+      ["recent_owner_label", acceptedWorkspace.display_name],
+      ["recent_owner_display_name", acceptedWorkspace.display_name],
+      ["recent_owner_email", acceptedWorkspace.owner_email],
     ] as const;
 
-    for (const href of [
+    const allInviteHrefs = [
       membersFromInvite,
       serviceAccountsFromInvite,
       apiKeysFromInvite,
       playgroundFromInvite,
       verificationFromInvite,
       goLiveFromInvite,
-    ]) {
+    ];
+
+    for (const href of allInviteHrefs) {
       const parsed = new URL(`https://example.test${href}`);
       for (const [key, value] of expectedKeys) {
         assert.equal(parsed.searchParams.get(key), value);
       }
     }
 
-    for (const href of [membersFromInvite, playgroundFromInvite, verificationFromInvite, goLiveFromInvite]) {
+    for (const href of allInviteHrefs) {
       const parsed = new URL(`https://example.test${href}`);
-      assert.equal(parsed.searchParams.get("recent_owner_display_name"), continuityArgs.recentOwnerDisplayName);
-      assert.equal(parsed.searchParams.get("recent_owner_email"), continuityArgs.recentOwnerEmail);
+      assert.equal(parsed.searchParams.get("recent_owner_display_name"), acceptedWorkspace.display_name);
+      assert.equal(parsed.searchParams.get("recent_owner_email"), acceptedWorkspace.owner_email);
     }
 
     assert.equal(parsedAcceptInvitationUrl.searchParams.get("source"), continuityArgs.source);
+    assert.equal(parsedAcceptInvitationUrl.searchParams.get("run_id"), continuityArgs.runId);
     assert.equal(parsedAcceptInvitationUrl.searchParams.get("attention_workspace"), continuityArgs.attentionWorkspace);
     assert.equal(parsedAcceptInvitationUrl.searchParams.get("delivery_context"), continuityArgs.deliveryContext);
     assert.equal(parsedAcceptInvitationUrl.searchParams.get("recent_owner_label"), continuityArgs.recentOwnerLabel);
@@ -1474,25 +1650,17 @@ test(
   async () => {
     const onboardingSource = await readFile(onboardingWizardPath, "utf8");
     const playgroundSource = await readFile(playgroundPanelPath, "utf8");
+    const usagePageSource = await readFile(usagePagePath, "utf8");
     const usageSource = await readFile(usageDashboardPath, "utf8");
     const handoffQuerySource = await readFile(handoffQueryPath, "utf8");
 
-    assert.match(
-      onboardingSource,
-      /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/,
-    );
-    assert.match(
-      playgroundSource,
-      /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/,
-    );
-    assert.match(
-      usageSource,
-      /import \{ buildVerificationChecklistHandoffHref \} from "@\/components\/verification\/week8-verification-checklist";/,
-    );
+    assert.match(onboardingSource, /buildVerificationChecklistHandoffHref/);
+    assert.match(playgroundSource, /buildVerificationChecklistHandoffHref/);
+    assert.match(usageSource, /buildVerificationChecklistHandoffHref/);
 
     assert.match(
       onboardingSource,
-      /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{/,
+      /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{[\s\S]*runId: activeRunId,/,
     );
     assert.match(onboardingSource, /deliveryContext,/);
     assert.match(onboardingSource, /recentTrackKey,/);
@@ -1509,19 +1677,31 @@ test(
     );
     assert.match(
       playgroundSource,
-      /buildVerificationChecklistHandoffHref\(\{ pathname: "\/usage", \.\.\.handoffHrefArgs \}\)/,
+      /const buildRunAwarePlaygroundHref = \(pathname: string\): string =>\s*buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/s,
+    );
+    assert.match(usagePageSource, /import \{ requestControlPlanePageData \} from "@\/lib\/server-control-plane-page-fetch";/);
+    assert.match(usagePageSource, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+    assert.match(usagePageSource, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
+    assert.match(
+      usagePageSource,
+      /const handoffHrefArgs = buildConsoleVerificationChecklistHandoffArgs\(runAwareHandoff\);/,
     );
     assert.match(
-      usageSource,
-      /const handoffHrefArgs: Omit<Parameters<typeof buildVerificationChecklistHandoffHref>\[0\], "pathname"> = \{/,
+      usagePageSource,
+      /const buildRunAwareUsagePageHref = \(pathname: string\): string =>\s*buildVerificationChecklistHandoffHref\(\{ pathname, \.\.\.handoffHrefArgs, runId: activeRunId \}\);/s,
     );
+    assert.match(usageSource, /recentOwnerDisplayName,/);
+    assert.match(usageSource, /recentOwnerEmail,/);
     assert.match(
-      usageSource,
-      /const verificationHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/verification\?surface=verification",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+      usagePageSource,
+      /const verificationEvidenceHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/verification\?surface=verification",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
     );
+    assert.match(usagePageSource, /href=\{buildRunAwareUsagePageHref\("\/playground"\)\}/);
+    assert.match(usagePageSource, /runId=\{activeRunId\}/);
 
     const continuityArgs = {
       source: "onboarding",
+      runId: "run_onboarding_123",
       week8Focus: "demo_run",
       attentionWorkspace: "workspace-smoke",
       attentionOrganization: "org-smoke",
@@ -1541,12 +1721,13 @@ test(
       ...continuityArgs,
     });
     const usageHref = buildVerificationChecklistHandoffHref({
-      pathname: "/settings",
+      pathname: "/settings?intent=manage-plan",
       ...continuityArgs,
     });
 
     const expectedKeys = [
       ["source", continuityArgs.source],
+      ["run_id", continuityArgs.runId],
       ["week8_focus", continuityArgs.week8Focus],
       ["attention_workspace", continuityArgs.attentionWorkspace],
       ["attention_organization", continuityArgs.attentionOrganization],
@@ -1580,10 +1761,14 @@ test(
     const apiKeysPanelSource = await readFile(apiKeysPanelPath, "utf8");
     const playgroundPanelSource = await readFile(playgroundPanelPath, "utf8");
 
-    assert.match(membersSource, /href=\{buildHandoffHref\("\/service-accounts", handoffArgs\)\}/);
-    assert.match(serviceAccountsPageSource, /const apiKeysHref = buildHandoffHref\("\/api-keys", handoffArgs\);/);
-    assert.match(serviceAccountsPageSource, /href=\{buildHandoffHref\("\/api-keys", handoffArgs\)\}/);
-    assert.match(serviceAccountsPageSource, /recentOwnerLabel: ownerLabel,/);
+    assert.match(membersSource, /href=\{buildConsoleHandoffHref\("\/service-accounts", runAwareHandoff\)\}/);
+    assert.match(serviceAccountsPageSource, /function buildServiceAccountsHandoffHref\(pathname: string, handoff: ConsoleHandoffState\): string \{/);
+    assert.match(serviceAccountsPageSource, /return buildConsoleHandoffHref\(pathname, handoff\);/);
+    assert.match(serviceAccountsPageSource, /const activeRunId = workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/);
+    assert.match(serviceAccountsPageSource, /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/);
+    assert.match(serviceAccountsPageSource, /const apiKeysHref = buildServiceAccountsHandoffHref\("\/api-keys", runAwareHandoff\);/);
+    assert.match(serviceAccountsPageSource, /href=\{buildServiceAccountsHandoffHref\("\/api-keys", runAwareHandoff\)\}/);
+    assert.match(serviceAccountsPageSource, /handoff=\{runAwareHandoff\}/);
     assert.match(
       serviceAccountsPanelSource,
       /buildVerificationChecklistHandoffHref\(\{ pathname: action\.path, \.\.\.handoffHrefArgs \}\)/,
@@ -1602,11 +1787,12 @@ test(
     );
     assert.match(
       playgroundPanelSource,
-      /const verificationHref = buildVerificationChecklistHandoffHref\(\{\s*pathname: "\/verification\?surface=verification",\s*\.\.\.handoffHrefArgs,\s*\}\);/s,
+      /const verificationHref = buildRunAwarePlaygroundHref\("\/verification\?surface=verification"\);/,
     );
 
     const chainArgs = {
       source: "onboarding",
+      runId: "run_members_chain_123",
       week8Focus: "demo_run",
       attentionWorkspace: "members-chain",
       attentionOrganization: "org-members-chain",
@@ -1617,8 +1803,15 @@ test(
       recentOwnerLabel: "Chain Owner",
     } as const;
 
-    const membersToServiceAccountsHref = buildHandoffHref("/service-accounts", chainArgs);
-    const serviceAccountsToApiKeysHref = buildHandoffHref("/api-keys", chainArgs);
+    const chainHandoff: ConsoleHandoffState = {
+      ...chainArgs,
+      surface: null,
+      runId: chainArgs.runId,
+      recentOwnerDisplayName: null,
+      recentOwnerEmail: null,
+    };
+    const membersToServiceAccountsHref = buildConsoleHandoffHref("/service-accounts", chainHandoff);
+    const serviceAccountsToApiKeysHref = buildConsoleHandoffHref("/api-keys", chainHandoff);
     const apiKeysToPlaygroundHref = buildVerificationChecklistHandoffHref({
       pathname: "/playground",
       ...chainArgs,
@@ -1630,6 +1823,7 @@ test(
 
     const expectedKeys = [
       ["source", chainArgs.source],
+      ["run_id", chainArgs.runId],
       ["week8_focus", chainArgs.week8Focus],
       ["attention_workspace", chainArgs.attentionWorkspace],
       ["attention_organization", chainArgs.attentionOrganization],
@@ -1661,23 +1855,42 @@ test(
     const artifactsSource = await readFile(artifactsPagePath, "utf8");
     const logsSource = await readFile(logsPagePath, "utf8");
     const membersSource = await readFile(membersPagePath, "utf8");
+    const adminPageSource = await readFile(adminPagePath, "utf8");
 
-    assert.match(artifactsSource, /import \{ buildHandoffHref, type HandoffQueryArgs \} from "@\/lib\/handoff-query";/);
-    assert.match(logsSource, /import \{ buildHandoffHref, type HandoffQueryArgs \} from "@\/lib\/handoff-query";/);
-    assert.match(artifactsSource, /function buildArtifactsHandoffHref\(args: HandoffQueryArgs & \{ pathname: string; runId\?: string \| null \}\): string \{/);
-    assert.match(logsSource, /function buildLogsHandoffHref\(args: HandoffQueryArgs & \{ pathname: string; runId\?: string \| null \}\): string \{/);
-    assert.match(artifactsSource, /buildHandoffHref\(pathname, query, \{ preserveExistingQuery: true \}\)/);
-    assert.match(logsSource, /buildHandoffHref\(pathname, query, \{ preserveExistingQuery: true \}\)/);
-    assert.match(artifactsSource, /searchParams\.set\("run_id", runId\);/);
-    assert.match(logsSource, /searchParams\.set\("run_id", runId\);/);
+    assert.match(
+      artifactsSource,
+      /import \{\s*buildConsoleAdminLinkState,\s*buildConsoleRunAwareHandoffHref,\s*parseConsoleHandoffState,\s*\} from "@\/lib\/console-handoff";/s,
+    );
+    assert.match(
+      logsSource,
+      /import \{\s*buildConsoleAdminLinkState,\s*buildConsoleRunAwareHandoffHref,\s*parseConsoleHandoffState,\s*\} from "@\/lib\/console-handoff";/s,
+    );
+    assert.match(artifactsSource, /const adminLinkState = buildConsoleAdminLinkState\(\{/);
+    assert.match(logsSource, /const adminLinkState = buildConsoleAdminLinkState\(\{/);
+    assert.match(
+      artifactsSource,
+      /const activeRunId = requestedRunId \?\? workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/,
+    );
+    assert.match(
+      logsSource,
+      /const activeRunId = requestedRunId \?\? workspace\?\.onboarding\?\.latest_demo_run\?\.run_id \?\? handoff\.runId \?\? null;/,
+    );
+    assert.match(
+      artifactsSource,
+      /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/,
+    );
+    assert.match(
+      logsSource,
+      /const runAwareHandoff = \{ \.\.\.handoff, runId: activeRunId \};/,
+    );
     assert.match(artifactsSource, /const requestedRunId = getParam\(searchParams\?\.run_id\) \?\? getParam\(searchParams\?\.runId\);/);
     assert.match(logsSource, /const requestedRunId = getParam\(searchParams\?\.run_id\) \?\? getParam\(searchParams\?\.runId\);/);
-    assert.match(logsSource, /<LogStream runId=\{requestedRunId\} \/>/);
+    assert.match(logsSource, /<LogStream runId=\{activeRunId\} \/>/);
     assert.match(artifactsSource, /path: "\/verification\?surface=verification"/);
     assert.match(artifactsSource, /path: "\/go-live\?surface=go_live"/);
     assert.match(logsSource, /path: "\/verification\?surface=verification"/);
     assert.match(logsSource, /path: "\/go-live\?surface=go_live"/);
-    assert.match(membersSource, /href=\{buildHandoffHref\("\/service-accounts", handoffArgs\)\}/);
+    assert.match(membersSource, /href=\{buildConsoleHandoffHref\("\/service-accounts", runAwareHandoff\)\}/);
 
     const consoleArgs = {
       source: "admin-attention",
@@ -1690,40 +1903,37 @@ test(
       evidenceCount: 5,
       recentOwnerLabel: "Console Owner",
     } as const;
+    const consoleHandoff: ConsoleHandoffState = {
+      ...consoleArgs,
+      surface: null,
+      runId: "run_console_123",
+      recentOwnerDisplayName: null,
+      recentOwnerEmail: null,
+    };
 
-    function withRunId(href: string, runId: string): string {
-      const [basePath, rawQuery] = href.split("?");
-      const searchParams = new URLSearchParams(rawQuery ?? "");
-      searchParams.set("run_id", runId);
-      const query = searchParams.toString();
-      return query ? `${basePath}?${query}` : basePath;
-    }
-
-    const artifactsVerificationHref = withRunId(
-      buildHandoffHref("/verification?surface=verification", consoleArgs, { preserveExistingQuery: true }),
+    const artifactsVerificationHref = buildConsoleRunAwareHandoffHref(
+      "/verification?surface=verification",
+      consoleHandoff,
       "run_console_123",
     );
-    const artifactsGoLiveHref = withRunId(
-      buildHandoffHref("/go-live?surface=go_live", consoleArgs, { preserveExistingQuery: true }),
+    const artifactsGoLiveHref = buildConsoleRunAwareHandoffHref(
+      "/go-live?surface=go_live",
+      consoleHandoff,
       "run_console_123",
     );
-    const logsVerificationHref = withRunId(
-      buildHandoffHref("/verification?surface=verification", consoleArgs, { preserveExistingQuery: true }),
+    const logsVerificationHref = buildConsoleRunAwareHandoffHref(
+      "/verification?surface=verification",
+      consoleHandoff,
       "run_console_123",
     );
-    const logsGoLiveHref = withRunId(
-      buildHandoffHref("/go-live?surface=go_live", consoleArgs, { preserveExistingQuery: true }),
+    const logsGoLiveHref = buildConsoleRunAwareHandoffHref("/go-live?surface=go_live", consoleHandoff, "run_console_123");
+    const membersNextHref = buildConsoleHandoffHref("/service-accounts", consoleHandoff);
+    const verificationExplicitHref = buildConsoleRunAwareHandoffHref(
+      "/verification?surface=verification",
+      consoleHandoff,
       "run_console_123",
     );
-    const membersNextHref = buildHandoffHref("/service-accounts", consoleArgs);
-    const verificationExplicitHref = withRunId(
-      buildHandoffHref("/verification?surface=verification", consoleArgs, { preserveExistingQuery: true }),
-      "run_console_123",
-    );
-    const goLiveExplicitHref = withRunId(
-      buildHandoffHref("/go-live?surface=go_live", consoleArgs, { preserveExistingQuery: true }),
-      "run_console_123",
-    );
+    const goLiveExplicitHref = buildConsoleRunAwareHandoffHref("/go-live?surface=go_live", consoleHandoff, "run_console_123");
 
     const artifactsVerificationUrl = new URL(`https://example.test${artifactsVerificationHref}`);
     const artifactsGoLiveUrl = new URL(`https://example.test${artifactsGoLiveHref}`);
@@ -1755,12 +1965,13 @@ test(
     assert.equal(artifactsGoLiveUrl.searchParams.get("run_id"), "run_console_123");
     assert.equal(logsVerificationUrl.searchParams.get("run_id"), "run_console_123");
     assert.equal(logsGoLiveUrl.searchParams.get("run_id"), "run_console_123");
+    assert.equal(membersNextUrl.searchParams.get("run_id"), "run_console_123");
     assert.equal(verificationExplicitUrl.searchParams.get("surface"), "verification");
     assert.equal(goLiveExplicitUrl.searchParams.get("surface"), "go_live");
     assert.equal(verificationExplicitUrl.searchParams.get("run_id"), "run_console_123");
     assert.equal(goLiveExplicitUrl.searchParams.get("run_id"), "run_console_123");
 
-    const queueReturnHref = buildAdminReturnHref("/admin", {
+    const queueReturnHref = buildConsoleAdminReturnHref("/admin", {
       source: "admin-attention",
       queueSurface: "go_live",
       attentionWorkspace: consoleArgs.attentionWorkspace,
@@ -1770,7 +1981,7 @@ test(
       evidenceCount: consoleArgs.evidenceCount,
       recentOwnerLabel: consoleArgs.recentOwnerLabel,
     });
-    const readinessReturnHref = buildAdminReturnHref("/admin", {
+    const readinessReturnHref = buildConsoleAdminReturnHref("/admin", {
       source: "admin-readiness",
       week8Focus: "demo_run",
       attentionWorkspace: consoleArgs.attentionWorkspace,
@@ -1787,33 +1998,12 @@ test(
     assert.equal(readinessReturnUrl.searchParams.get("week8_focus"), "demo_run");
     assert.equal(readinessReturnUrl.searchParams.get("readiness_returned"), "1");
 
-    const previousReact = (globalThis as { React?: typeof React }).React;
-    (globalThis as { React?: typeof React }).React = React;
-    try {
-      const queueReturnElement = AdminPage({
-        searchParams: Object.fromEntries(queueReturnUrl.searchParams.entries()),
-      });
-      const queueReturnPanel = (queueReturnElement as { props?: { children?: unknown[] } }).props?.children?.[1] as {
-        type?: { name?: string };
-        props?: Record<string, unknown>;
-      };
-      assert.equal(queueReturnPanel?.type?.name, "AdminOverviewPanel");
-      assert.equal(queueReturnPanel?.props?.initialSurfaceFilter, "go_live");
-      assert.equal(queueReturnPanel?.props?.queueReturned, true);
-
-      const readinessReturnElement = AdminPage({
-        searchParams: Object.fromEntries(readinessReturnUrl.searchParams.entries()),
-      });
-      const readinessReturnPanel = (readinessReturnElement as { props?: { children?: unknown[] } }).props?.children?.[1] as {
-        type?: { name?: string };
-        props?: Record<string, unknown>;
-      };
-      assert.equal(readinessReturnPanel?.type?.name, "AdminOverviewPanel");
-      assert.equal(readinessReturnPanel?.props?.initialReadinessFocus, "demo_run");
-      assert.equal(readinessReturnPanel?.props?.readinessReturned, true);
-    } finally {
-      (globalThis as { React?: typeof React }).React = previousReact;
-    }
+    const adminPageContractSource = await readFile(adminPagePath, "utf8");
+    assert.match(adminPageContractSource, /const requestedSurface = resolveAdminQueueSurface\(getConsoleParam\(searchParams\?\.queue_surface\)\);/);
+    assert.match(adminPageContractSource, /initialSurfaceFilter=\{normalizedSurface\}/);
+    assert.match(adminPageContractSource, /queueReturned=\{queueReturned\}/);
+    assert.match(adminPageContractSource, /initialReadinessFocus=\{normalizedReadinessFocus\}/);
+    assert.match(adminPageContractSource, /readinessReturned=\{readinessReturned\}/);
 
     assert.equal(membersNextUrl.pathname, "/service-accounts");
     assert.equal(membersNextUrl.searchParams.get("attention_workspace"), "console-smoke");

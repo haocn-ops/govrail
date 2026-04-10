@@ -1,0 +1,89 @@
+# Usage Console Surface
+
+對應入口：`web/app/(console)/usage/page.tsx`
+
+## 1. 這個 surface 目前負責什麼
+
+`/usage` 現在是「plan limit governance + evidence loop」頁，不只是配額展示。
+
+它的責任包含：
+
+- 展示 current billing window 與 usage pressure
+- 把 plan-limit follow-up 導回 `settings`
+- 把 first demo / verification / go-live 的 evidence loop 串起來
+- 在需要時提供回到 admin queue / readiness 的 return lane
+
+## 2. 真實頁面結構
+
+目前頁面主要區塊如下：
+
+1. `WorkspaceContextSurfaceNotice`
+2. `Plan limit governance lane`
+   - 先確認 usage window、quota 壓力與 plan posture
+3. `ConsoleAdminFollowUp`
+   - 視 source 顯示 admin-attention 或 admin-readiness
+4. `PageHeader`
+5. `First demo evidence lane`
+   - 把 onboarding / playground / verification 串起來
+6. `Evidence loop follow-through`
+   - 把 artifacts / verification / go-live / admin return 串起來
+7. `WorkspaceUsageDashboard`
+   - 真正展示 usage 與 billing window
+
+## 3. handoff / query / session 結構
+
+這頁已對齊共用 helper：
+
+- `parseConsoleHandoffState(searchParams)`
+- `buildConsoleVerificationChecklistHandoffArgs(handoff)`
+- `buildVerificationChecklistHandoffHref(...)`
+- `buildConsoleAdminReturnState(...)`
+- `buildConsoleAdminReturnHref(...)`
+- `buildConsoleHandoffHref("/session", handoff)`
+
+關鍵語義：
+
+- `expectedSurface` 目前固定按 `verification` 來判定 admin return lane
+- `settings?intent=manage-plan` / `settings?intent=resolve-billing` 會保留原 handoff query
+- `verification?surface=verification` 與 `go-live?surface=go_live` 都是顯式 surface contract
+
+也就是說，Usage 現在是 evidence loop 中的一站，而不是孤立頁面。
+
+## 4. 目前已落地的測試契約
+
+- `web/tests/page-level/usage-period-evidence-contract.page.test.ts`
+  - 固定 current usage window / billing window evidence contract
+- `web/tests/page-level/handoff-query-continuity-contract.page.test.ts`
+  - 固定 usage 對 shared checklist handoff helper 的復用
+- `web/tests/page-level/workspace-context-hardening.page.test.ts`
+  - 固定 usage / go-live 的 workspace context callout 語義
+- `web/tests/page-level/usage-console-handoff.page.test.ts`
+  - 固定 usage surface 的 console handoff 與 admin return lane
+- `web/tests/page-level/usage-audit-export-relay.page.test.ts`
+  - 固定 usage -> verification/go-live 的 evidence relay 語義
+- `web/tests/e2e/saas-mainline-smoke.e2e.test.ts`
+  - 固定 onboarding / playground / usage / verification 的 source-assisted continuity smoke
+- `web/tests/browser/usage-verification-admin-return.smoke.spec.ts`
+  - 固定 usage -> verification -> admin focused browser smoke
+- `web/tests/browser/usage-verification-go-live-admin-return.smoke.spec.ts`
+  - 固定 usage -> verification/go-live -> admin focused browser smoke
+- `web/tests/e2e/browser-e2e-mainline-console-readiness.test.ts`
+  - 固定 mainline console focused batch 與 runner mapping
+- 若只需快速重跑這條主線 smoke，請從倉庫根目錄執行 `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`；`npm run web:test:e2e` 仍保留給整包 non-browser smoke。
+- 若只需 focused browser 重跑，請從倉庫根目錄執行 `npm run web:test:browser:mainline-console-verification` 或 `npm run web:test:browser:mainline-console-go-live`；兩組 batch 會分別覆蓋 usage -> verification/admin 與 usage -> verification/go-live/admin。
+
+## 5. 已完成範圍與保守邊界
+
+已完成：
+
+- billing window 與 evidence wording 對齊
+- settings / verification / go-live / admin 的顯式導流
+- admin queue / readiness return 契約接入
+
+保守邊界：
+
+- 不自動升級方案
+- 不自動解除限額
+- 不替操作者做 remediation 判斷
+
+後續擴展應以 `WorkspaceUsageDashboard` 的 usage contract 與 shared handoff helper 為中心，避免再次分裂成多套 query builder。

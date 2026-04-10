@@ -52,6 +52,10 @@ test("Settings panel keeps idempotency conflict and access guidance copy", async
   );
   assert.match(
     source,
+    /if \(normalizedCode === "workspace_admin_required"\) \{\s*return `\$\{featureLabel\} configuration requires workspace owner or admin access\. Confirm your role and retry once the proper permissions are granted\.`;\s*\}/s,
+  );
+  assert.match(
+    source,
     /if \(error\.status === 401 \|\| error\.status === 403\) \{\s*return `\$\{featureLabel\} configuration requires workspace owner or admin access\. Confirm your role and retry once the proper permissions are granted\.`;/,
   );
 });
@@ -106,6 +110,41 @@ test("Settings panel keeps contract source issue mapping distinct for 409 featur
   assert.match(source, /contractSourceDescription\(auditContractSource, auditContractIssue\)/);
 });
 
+test("Settings panel keeps enterprise recovery lanes aligned with session checkpoint, upgrade, and verification routes", async () => {
+  const source = await readSource(settingsPanelPath);
+
+  assert.match(source, /type EnterpriseRecoveryCard = \{/);
+  assert.match(source, /function buildEnterpriseRecoveryCard\(args: \{/);
+  assert.match(source, /const featureLabel = args\.feature === "sso" \? "SSO" : "Dedicated environment";/);
+  assert.match(source, /const sessionHref = buildSettingsHref\(\{ pathname: "\/session", \.\.\.handoffHrefArgs \}\);/);
+  assert.match(
+    source,
+    /args\.writeResponseCode === "workspace_context_not_metadata"[\s\S]*?title: `\$\{featureLabel\} context checkpoint`[\s\S]*?Review workspace context on \/session[\s\S]*?Capture verification evidence/s,
+  );
+  assert.match(
+    source,
+    /args\.writeResponseCode === "workspace_feature_unavailable" \|\| args\.contractSource === "fallback_feature_gate"[\s\S]*?title: `\$\{featureLabel\} upgrade lane`[\s\S]*?Upgrade plan[\s\S]*?Capture verification evidence/s,
+  );
+  assert.match(
+    source,
+    /args\.writeResponseCode === "control_plane_base_missing"[\s\S]*?\|\|[\s\S]*?args\.contractSource === "fallback_control_plane_unavailable"[\s\S]*?title: `\$\{featureLabel\} recovery lane`[\s\S]*?Review workspace context on \/session/s,
+  );
+  assert.match(
+    source,
+    /args\.contractSource === "fallback_error"[\s\S]*?title: `\$\{featureLabel\} fallback continuity lane`[\s\S]*?Fallback continuity keeps the workspace lane auditable, but it does not replace the live readiness check\./s,
+  );
+  assert.match(source, /const ssoRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /writeResponseCode: ssoWriteState\.responseCode,/);
+  assert.match(source, /upgradeHref: ssoUpgradeHref,/);
+  assert.match(source, /const dedicatedRecoveryCard = buildEnterpriseRecoveryCard\(\{/);
+  assert.match(source, /writeResponseCode: dedicatedWriteState\.responseCode,/);
+  assert.match(source, /upgradeHref: dedicatedEnvironmentUpgradeHref,/);
+  assert.match(source, /\{ssoRecoveryCard \? \(/);
+  assert.match(source, /\{dedicatedRecoveryCard \? \(/);
+  assert.match(source, /ssoRecoveryCard\.footnote/);
+  assert.match(source, /dedicatedRecoveryCard\.footnote/);
+});
+
 test("Settings panel keeps SSO controlled live-write submit path, payload, and refresh contract", async () => {
   const source = await readSource(settingsPanelPath);
 
@@ -145,8 +184,54 @@ test("Settings panel keeps dedicated-environment submit path, payload, and refre
 test("Settings panel keeps enterprise preflight and submit-status guidance semantics", async () => {
   const source = await readSource(settingsPanelPath);
 
+  assert.match(source, /function hasWorkspaceManagementRole\(role\?: string \| null\): boolean \{/);
+  assert.match(source, /return role === "workspace_owner" \|\| role === "workspace_admin";/);
   assert.match(source, /SSO write flow is locked until plan upgrade\./);
   assert.match(source, /Dedicated environment write flow is locked until plan upgrade\./);
+  assert.match(
+    source,
+    /SSO configuration requires workspace owner or admin access before controlled live write is enabled\./,
+  );
+  assert.match(
+    source,
+    /Dedicated environment configuration requires workspace owner or admin access before controlled live write is enabled\./,
+  );
+  assert.match(
+    source,
+    /<Button[\s\S]*variant="secondary"[\s\S]*disabled=\{!hasEnterpriseWriteAccess \|\| !ssoPreflightReady\}[\s\S]*>\s*Validate preflight/s,
+  );
+  assert.match(source, /value=\{ssoDraft\.protocol\}[\s\S]*disabled=\{!ssoFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s);
+  assert.match(source, /value=\{ssoDraft\.metadataUrl\}[\s\S]*disabled=\{!ssoFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s);
+  assert.match(source, /value=\{ssoDraft\.entityId\}[\s\S]*disabled=\{!ssoFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s);
+  assert.match(source, /value=\{ssoDraft\.domains\}[\s\S]*disabled=\{!ssoFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s);
+  assert.match(
+    source,
+    /<Button[\s\S]*variant="secondary"[\s\S]*disabled=\{!hasEnterpriseWriteAccess \|\| !dedicatedPreflightReady\}[\s\S]*>\s*Validate preflight/s,
+  );
+  assert.match(
+    source,
+    /value=\{dedicatedDraft\.targetRegion\}[\s\S]*disabled=\{!dedicatedEnvironmentFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s,
+  );
+  assert.match(
+    source,
+    /value=\{dedicatedDraft\.dataClassification\}[\s\S]*disabled=\{!dedicatedEnvironmentFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s,
+  );
+  assert.match(
+    source,
+    /value=\{dedicatedDraft\.requesterEmail\}[\s\S]*disabled=\{!dedicatedEnvironmentFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s,
+  );
+  assert.match(
+    source,
+    /value=\{dedicatedDraft\.requestedCapacity\}[\s\S]*disabled=\{!dedicatedEnvironmentFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s,
+  );
+  assert.match(
+    source,
+    /value=\{dedicatedDraft\.requestedSla\}[\s\S]*disabled=\{!dedicatedEnvironmentFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s,
+  );
+  assert.match(
+    source,
+    /value=\{dedicatedDraft\.networkNotes\}[\s\S]*disabled=\{!dedicatedEnvironmentFeatureEnabled \|\| !hasEnterpriseWriteAccess\}/s,
+  );
   assert.match(source, /Submit status: \{ssoSubmitDisabledReason \?\? "Ready for controlled live write\."\}/);
   assert.match(
     source,
@@ -154,6 +239,12 @@ test("Settings panel keeps enterprise preflight and submit-status guidance seman
   );
   assert.match(source, /SSO preflight is ready\./);
   assert.match(source, /Dedicated environment preflight is ready\./);
+  assert.match(source, /Current workspace role:/);
+  assert.match(source, /Coordinate the final SSO controlled live write with a workspace owner or admin\./);
+  assert.match(
+    source,
+    /Coordinate the final dedicated-environment controlled live write with a workspace owner or admin\./,
+  );
 });
 
 test("Settings panel resets submit-state feedback when SSO and dedicated drafts change", async () => {
@@ -228,12 +319,17 @@ test("Settings panel keeps submit-payload and saved-sections coupling contract f
   assert.match(source, /client_id: ssoDraft\.protocol === "oidc" && entityId \? entityId : null/);
   assert.match(source, /audience: ssoDraft\.protocol === "saml" && entityId \? entityId : null/);
   assert.match(source, /metadata_url: ssoDraft\.metadataUrl\.trim\(\)/);
+  assert.match(source, /const ssoConfiguredSigningCertificate = readString\(ssoReadiness\?\.signing_certificate\);/);
   assert.match(source, /const ssoConfiguredDomains = normalizeDomainList\(\[/);
   assert.match(source, /ssoReadiness\?\.email_domains/);
   assert.match(source, /ssoReadiness\?\.email_domain/);
-  assert.match(source, /const ssoConfiguredIdentity =\s*ssoReadiness\?\.provider_type === "saml" \? \(ssoReadiness\?\.audience \?\? null\) : \(ssoReadiness\?\.client_id \?\? null\);/s);
+  assert.match(
+    source,
+    /const ssoConfiguredIdentity = readString\(\s*ssoReadiness\?\.provider_type === "saml" \? ssoReadiness\?\.audience : ssoReadiness\?\.client_id,\s*\);/s,
+  );
   assert.match(source, /ssoReadiness\?\.metadata_url \?\? "Not saved"/);
   assert.match(source, /ssoReadiness\?\.entrypoint_url \?\? "Not saved"/);
+  assert.match(source, /ssoConfiguredSigningCertificate \?\? "Not saved"/);
 
   // Dedicated submit payload fields must stay coupled with saved provisioning request fields.
   assert.match(source, /requester_email: requesterEmail \|\| null/);
@@ -257,6 +353,7 @@ test("Settings panel keeps handoff query passthrough contract for settings/verif
   assert.match(source, /function buildSettingsHref\(args: SettingsHrefArgs\): string/);
   assert.match(source, /const href = buildHandoffHref\(/);
   assert.match(source, /source: args\.source,/);
+  assert.match(source, /runId: args\.runId,/);
   assert.match(source, /week8Focus: args\.week8Focus,/);
   assert.match(source, /attentionWorkspace: args\.attentionWorkspace,/);
   assert.match(source, /attentionOrganization: args\.attentionOrganization,/);
@@ -265,11 +362,21 @@ test("Settings panel keeps handoff query passthrough contract for settings/verif
   assert.match(source, /recentUpdateKind: args\.recentUpdateKind,/);
   assert.match(source, /evidenceCount: args\.evidenceCount,/);
   assert.match(source, /recentOwnerLabel: args\.recentOwnerLabel,/);
+  assert.match(source, /recentOwnerDisplayName: args\.recentOwnerDisplayName,/);
+  assert.match(source, /recentOwnerEmail: args\.recentOwnerEmail,/);
   assert.match(source, /\{ preserveExistingQuery: true \}/);
   assert.match(source, /searchParams\.set\("intent", args\.intent\);/);
-  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{/);
+  assert.match(source, /const adminReturnHref = buildAdminReturnHref\("\/admin", \{[\s\S]*runId,/);
   assert.match(source, /queueSurface: normalizedRecentTrackKey,/);
   assert.match(source, /attentionWorkspace: attentionWorkspace \?\? workspaceSlug,/);
+  assert.match(source, /deliveryContext: normalizedDeliveryContext,/);
+  assert.match(source, /recentTrackKey: normalizedRecentTrackKey,/);
+  assert.match(source, /recentUpdateKind: normalizedRecentUpdateKind,/);
+  assert.match(source, /evidenceCount: normalizedEvidenceCount,/);
+  assert.match(source, /recentOwnerLabel,/);
+  assert.match(source, /recentOwnerDisplayName,/);
+  assert.match(source, /recentOwnerEmail,/);
+  assert.match(source, /runId,/);
 
   assert.match(source, /const usageHref = buildSettingsHref\(\{ pathname: "\/usage", \.\.\.handoffHrefArgs \}\);/);
   assert.match(
@@ -313,6 +420,12 @@ test("Settings panel keeps attention/readiness/onboarding cards linked through s
   assert.match(source, /const intentContextMap:[\s\S]*\{ label: "Continue to go-live drill", href: goLiveHref \}/);
   assert.match(source, /const billingFollowUpCard =[\s\S]*\{ label: "Return to Week 8 checklist", href: verificationHref \}/);
   assert.match(source, /const billingFollowUpCard =[\s\S]*\{ label: "Continue to go-live drill", href: goLiveHref \}/);
+  assert.match(source, /const ssoAdminReturnActionsHref = "#settings-sso-admin-return";/);
+  assert.match(source, /const dedicatedAdminReturnActionsHref = "#settings-dedicated-admin-return";/);
+  assert.match(source, /<Link href=\{ssoAdminReturnActionsHref\}>admin readiness return action below<\/Link>/);
+  assert.match(source, /<div id="settings-sso-admin-return" className="flex flex-wrap gap-2">/);
+  assert.match(source, /<Link href=\{dedicatedAdminReturnActionsHref\}>admin readiness return action below<\/Link>/);
+  assert.match(source, /<div id="settings-dedicated-admin-return" className="flex flex-wrap gap-2">/);
 });
 
 test("Settings panel keeps Stripe-focused billing action messaging and resolve-billing intent semantics", async () => {

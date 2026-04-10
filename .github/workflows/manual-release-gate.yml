@@ -244,6 +244,7 @@ jobs:
           node -e '
             const fs = require("node:fs");
             const manifest = {
+              type: "manual_release_gate",
               mode: process.env.MODE,
               inputs: {
                 base_url: process.env.BASE_URL || "",
@@ -281,6 +282,14 @@ jobs:
           EOF
 
           cat release-gate/release-gate-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate gate artifact contract
+        if: always()
+        run: |
+          set -euo pipefail
+          node scripts/validate_release_artifact_manifest.mjs \
+            --manifest release-gate/release-gate-manifest.json \
+            --artifact-dir release-gate
 
       - name: Upload gate artifact
         if: always()

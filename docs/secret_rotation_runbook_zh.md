@@ -52,6 +52,12 @@ npm run secret:rotation:bundle -- --plan docs/secret_rotation_plan.example.json 
 npm run secret:rotation:bundle -- --plan docs/secret_rotation_plan.example.json --output-dir .secret-rotation --strict
 ```
 
+若你想固定成更容易記的入口，repo 也提供：
+
+```bash
+npm run secret:rotation:bundle:strict -- --plan docs/secret_rotation_plan.example.json --output-dir .secret-rotation
+```
+
 這個 bundle 會輸出：
 
 - `rotation-plan.json`
@@ -62,6 +68,20 @@ npm run secret:rotation:bundle -- --plan docs/secret_rotation_plan.example.json 
 - `evidence/rollback.json`
 - `evidence/command-log.txt`
 - `rotate.sh`
+
+生成 bundle 後，建議立刻再跑一次 artifact contract 驗證：
+
+```bash
+npm run secret:rotation:validate -- \
+  --manifest .secret-rotation/<tenant_id>/rotation-manifest.json \
+  --artifact-dir .secret-rotation/<tenant_id>
+```
+
+這一步會檢查：
+
+- `rotation-manifest.json` 的固定欄位與 phase 結構
+- `rotation-plan.json`、`rotation-checklist.md`、`rotate.sh`、`evidence/*.json`、`evidence/command-log.txt` 是否都已生成
+- preview / cutover / rollback evidence template 是否和 manifest、plan 的固定契約一致
 
 建議在 maintenance window 前先跑一次：
 
@@ -164,6 +184,7 @@ npm run post-deploy:verify:readonly
 - `evidence/cutover.json`
   - 記錄切換時間、操作者、verify output 路徑與結果摘要
   - 建議把 verify output 的 `sha256`、`trace_id`、`run_id` 回填到 `verification_evidence.outputs[*]`
+- 若有對 bundle 做任何手工調整，最後再跑一次 `npm run secret:rotation:validate`，避免 manifest 與 evidence template 已經失配
 
 ### 4.5 刪除舊 secret
 

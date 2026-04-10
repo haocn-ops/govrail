@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 const membersEntry =
-  "/members?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_demo&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Ops";
+  "/members?source=admin-readiness&week8_focus=credentials&attention_workspace=preview&attention_organization=org_demo&delivery_context=week8&recent_track_key=verification&recent_update_kind=verification&evidence_count=2&recent_owner_label=Ops&recent_owner_display_name=Avery%20Ops&recent_owner_email=avery.ops%40govrail.test";
 
 test(
-  "members -> accept-invitation -> onboarding -> usage -> settings -> go-live -> admin keeps readiness return continuity",
+  "members -> accept-invitation -> onboarding -> usage -> /settings?intent=manage-plan -> go-live -> admin keeps readiness return continuity",
   async ({ page }) => {
     test.slow();
 
@@ -27,13 +27,15 @@ test(
     await expect(page).toHaveURL(/recent_track_key=verification/);
     await expect(page).toHaveURL(/recent_update_kind=verification/);
     await expect(page).toHaveURL(/evidence_count=2/);
-    await expect(page).toHaveURL(/recent_owner_label=Ops/);
+    await expect(page).toHaveURL(/recent_owner_display_name=Avery(?:\+|%20)Ops/);
+    await expect(page).toHaveURL(/recent_owner_email=avery\.ops(?:%40|@)govrail\.test/);
     await expect(page.getByRole("heading", { name: "Accept workspace invitation" })).toBeVisible();
     await expect(page.getByText("Token guidance")).toBeVisible();
     await expect(page.getByRole("button", { name: "Accept invitation" })).toBeVisible();
     await expect(page.getByText("/session")).toBeVisible();
 
     await page.goBack();
+    await page.waitForLoadState("networkidle");
 
     await expect(page).toHaveURL(/\/members\?/);
     await expect(page).toHaveURL(/source=admin-readiness/);
@@ -44,7 +46,8 @@ test(
     await expect(page).toHaveURL(/recent_track_key=verification/);
     await expect(page).toHaveURL(/recent_update_kind=verification/);
     await expect(page).toHaveURL(/evidence_count=2/);
-    await expect(page).toHaveURL(/recent_owner_label=Ops/);
+    await expect(page).toHaveURL(/recent_owner_display_name=Avery(?:\+|%20)Ops/);
+    await expect(page).toHaveURL(/recent_owner_email=avery\.ops(?:%40|@)govrail\.test/);
     const onboardingLink = page.getByRole("link", { name: "Continue onboarding lane" }).first();
     await expect(onboardingLink).toBeVisible();
 
@@ -59,7 +62,8 @@ test(
     await expect(page).toHaveURL(/recent_track_key=verification/);
     await expect(page).toHaveURL(/recent_update_kind=verification/);
     await expect(page).toHaveURL(/evidence_count=2/);
-    await expect(page).toHaveURL(/recent_owner_label=Ops/);
+    await expect(page).toHaveURL(/recent_owner_display_name=Avery(?:\+|%20)Ops/);
+    await expect(page).toHaveURL(/recent_owner_email=avery\.ops(?:%40|@)govrail\.test/);
     await expect(page.getByText("Launch lane context")).toBeVisible();
     const usageLink = page.getByRole("link", { name: "Step 5: Confirm usage window" }).first();
     await expect(usageLink).toBeVisible();
@@ -74,14 +78,14 @@ test(
     await expect(page).toHaveURL(/recent_track_key=verification/);
     await expect(page).toHaveURL(/recent_update_kind=verification/);
     await expect(page).toHaveURL(/evidence_count=2/);
-    await expect(page).toHaveURL(/recent_owner_label=Ops/);
+    await expect(page).toHaveURL(/recent_owner_display_name=Avery(?:\+|%20)Ops/);
+    await expect(page).toHaveURL(/recent_owner_email=avery\.ops(?:%40|@)govrail\.test/);
     await expect(page.getByRole("heading", { name: "Workspace usage and plan posture" })).toBeVisible();
     const settingsLink = page.getByRole("link", { name: "Review plan limits in Settings" }).first();
     await expect(settingsLink).toBeVisible();
 
-    await settingsLink.click();
+    await Promise.all([page.waitForURL(/\/settings\?/), settingsLink.click()]);
 
-    await expect(page).toHaveURL(/\/settings\?/);
     await expect(page).toHaveURL(/intent=manage-plan/);
     await expect(page).toHaveURL(/source=admin-readiness/);
     await expect(page).toHaveURL(/week8_focus=credentials/);
@@ -90,7 +94,8 @@ test(
     await expect(page).toHaveURL(/recent_track_key=verification/);
     await expect(page).toHaveURL(/recent_update_kind=verification/);
     await expect(page).toHaveURL(/evidence_count=2/);
-    await expect(page).toHaveURL(/recent_owner_label=Ops/);
+    await expect(page).toHaveURL(/recent_owner_display_name=Avery(?:\+|%20)Ops/);
+    await expect(page).toHaveURL(/recent_owner_email=avery\.ops(?:%40|@)govrail\.test/);
     await expect(page.getByRole("heading", { name: "Workspace configuration" })).toBeVisible();
     const goLiveLink = page.getByRole("link", { name: "Rehearse go-live readiness" }).first();
     await expect(goLiveLink).toBeVisible();
@@ -106,7 +111,8 @@ test(
     await expect(page).toHaveURL(/recent_track_key=verification/);
     await expect(page).toHaveURL(/recent_update_kind=verification/);
     await expect(page).toHaveURL(/evidence_count=2/);
-    await expect(page).toHaveURL(/recent_owner_(label|display_name)=Ops/);
+    await expect(page).toHaveURL(/recent_owner_display_name=Avery(?:\+|%20)Ops/);
+    await expect(page).toHaveURL(/recent_owner_email=avery\.ops(?:%40|@)govrail\.test/);
     await expect(page.getByRole("heading", { name: "Mock go-live drill" })).toBeVisible();
     await expect(page.getByText("Session-aware drill lane")).toBeVisible();
     const adminReturnLink = page.getByRole("link", { name: "Return to admin readiness view" }).first();
@@ -119,6 +125,8 @@ test(
     await expect(page).toHaveURL(/week8_focus=credentials/);
     await expect(page).toHaveURL(/attention_workspace=preview/);
     await expect(page).toHaveURL(/attention_organization=org_demo/);
+    await expect(page).toHaveURL(/recent_owner_display_name=Avery(?:\+|%20)Ops/);
+    await expect(page).toHaveURL(/recent_owner_email=avery\.ops(?:%40|@)govrail\.test/);
     await expect(page.getByRole("heading", { name: "SaaS admin overview" })).toBeVisible();
     await expect(page.getByText("Returned from Week 8 readiness")).toBeVisible();
     await expect(page.getByText("Focus restored")).toBeVisible();

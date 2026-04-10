@@ -910,7 +910,7 @@ function requireWorkspaceManagementRole(membership: WorkspaceMembershipRow, acti
     return;
   }
 
-  throw new ApiError(403, "tenant_access_denied", actionLabel, {
+  throw new ApiError(403, "workspace_admin_required", actionLabel, {
     required_roles: [...WORKSPACE_MEMBER_MANAGER_ROLES],
   });
 }
@@ -1342,9 +1342,22 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
          )
       ),
       delivery_status AS (
-        SELECT w.workspace_id, w.slug, w.display_name, w.organization_id,
+        SELECT w.workspace_id, w.slug, w.display_name, w.organization_id, w.tenant_id,
                o.display_name AS organization_display_name,
                p.code AS plan_code,
+               (
+                 SELECT r.run_id
+                   FROM runs r
+                  WHERE r.tenant_id = w.tenant_id
+                    AND json_extract(r.context_json, '$.source_app') = 'web_console'
+                    AND json_extract(r.context_json, '$.workspace_slug') = w.slug
+                    AND (
+                      json_extract(r.context_json, '$.onboarding_flow') = 'workspace_first_demo'
+                      OR json_extract(r.context_json, '$.conversation_id') = 'onboarding-' || w.slug
+                    )
+                  ORDER BY r.created_at DESC, r.run_id DESC
+                  LIMIT 1
+               ) AS latest_demo_run_id,
                COALESCE(MAX(CASE WHEN t.track_key = 'verification' THEN t.status END), 'pending') AS verification_status,
                COALESCE(MAX(CASE WHEN t.track_key = 'go_live' THEN t.status END), 'pending') AS go_live_status
           FROM workspace_delivery_tracks t
@@ -1354,9 +1367,10 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
              ON o.organization_id = w.organization_id
           INNER JOIN pricing_plans p
              ON p.plan_id = w.plan_id
-         GROUP BY w.workspace_id, w.slug, w.display_name, w.organization_id, o.display_name, p.code
+         GROUP BY w.workspace_id, w.slug, w.display_name, w.organization_id, w.tenant_id, o.display_name, p.code
       )
       SELECT ds.workspace_id, ds.slug, ds.display_name, ds.organization_id, ds.organization_display_name, ds.plan_code,
+             ds.latest_demo_run_id,
              ds.verification_status, ds.go_live_status,
              CASE
                WHEN ds.verification_status != 'complete' THEN 'verification'
@@ -1382,6 +1396,19 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
         SELECT w.workspace_id, w.slug, w.display_name, w.updated_at AS workspace_updated_at,
                o.organization_id,
                o.display_name AS organization_display_name,
+               (
+                 SELECT r.run_id
+                   FROM runs r
+                  WHERE r.tenant_id = w.tenant_id
+                    AND json_extract(r.context_json, '$.source_app') = 'web_console'
+                    AND json_extract(r.context_json, '$.workspace_slug') = w.slug
+                    AND (
+                      json_extract(r.context_json, '$.onboarding_flow') = 'workspace_first_demo'
+                      OR json_extract(r.context_json, '$.conversation_id') = 'onboarding-' || w.slug
+                    )
+                  ORDER BY r.created_at DESC, r.run_id DESC
+                  LIMIT 1
+               ) AS latest_demo_run_id,
                COALESCE(MAX(CASE WHEN t.track_key = 'verification' THEN t.status END), 'pending') AS verification_status,
                COALESCE(MAX(CASE WHEN t.track_key = 'go_live' THEN t.status END), 'pending') AS go_live_status,
                MAX(t.updated_at) AS delivery_updated_at
@@ -1392,7 +1419,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
              ON t.workspace_id = w.workspace_id
          GROUP BY w.workspace_id, w.slug, w.display_name, w.updated_at, o.organization_id, o.display_name
       )
-      SELECT workspace_id, slug, display_name, organization_id, organization_display_name, verification_status, go_live_status,
+      SELECT workspace_id, slug, display_name, organization_id, organization_display_name, latest_demo_run_id, verification_status, go_live_status,
              CASE
                WHEN verification_status != 'complete' THEN 'verification'
                WHEN go_live_status != 'complete' THEN 'go_live'
@@ -1594,6 +1621,19 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
       ),
       workspace_readiness AS (
         SELECT ws.workspace_id, ws.slug, ws.display_name, ws.organization_id, ws.organization_display_name, ws.updated_at,
+               (
+                 SELECT r.run_id
+                   FROM runs r
+                  WHERE r.tenant_id = ws.tenant_id
+                    AND json_extract(r.context_json, '$.source_app') = 'web_console'
+                    AND json_extract(r.context_json, '$.workspace_slug') = ws.slug
+                    AND (
+                      json_extract(r.context_json, '$.onboarding_flow') = 'workspace_first_demo'
+                      OR json_extract(r.context_json, '$.conversation_id') = 'onboarding-' || ws.slug
+                    )
+                  ORDER BY r.created_at DESC, r.run_id DESC
+                  LIMIT 1
+               ) AS latest_demo_run_id,
                CASE
                  WHEN EXISTS(
                    SELECT 1
@@ -1665,6 +1705,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
           FROM workspace_seed ws
       )
       SELECT workspace_id, slug, display_name, organization_id, organization_display_name, updated_at,
+             latest_demo_run_id,
              baseline_ready, credentials_ready, demo_run_succeeded, billing_warning,
              CASE
                WHEN baseline_ready = 1
@@ -1778,6 +1819,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
           display_name?: string;
           organization_id?: string;
           organization_display_name?: string;
+          latest_demo_run_id?: string | null;
           verification_status?: string;
           go_live_status?: string;
           next_action_surface?: string;
@@ -1796,6 +1838,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
           display_name: record.display_name ?? record.slug ?? "workspace",
           organization_id: record.organization_id ?? "",
           organization_display_name: record.organization_display_name ?? "Unknown organization",
+          latest_demo_run_id: record.latest_demo_run_id ?? null,
           verification_status: record.verification_status ?? "pending",
           go_live_status: record.go_live_status ?? "pending",
           next_action_surface:
@@ -1825,6 +1868,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
           display_name?: string;
           organization_id?: string;
           organization_display_name?: string;
+          latest_demo_run_id?: string | null;
           verification_status?: string;
           go_live_status?: string;
           next_action_surface?: string;
@@ -1836,6 +1880,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
           display_name: record.display_name ?? record.slug ?? "workspace",
           organization_id: record.organization_id ?? "",
           organization_display_name: record.organization_display_name ?? "Unknown organization",
+          latest_demo_run_id: record.latest_demo_run_id ?? null,
           verification_status: record.verification_status ?? "pending",
           go_live_status: record.go_live_status ?? "pending",
           next_action_surface:
@@ -1865,6 +1910,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
           display_name?: string;
           organization_id?: string;
           organization_display_name?: string;
+          latest_demo_run_id?: string | null;
           baseline_ready?: number | boolean;
           credentials_ready?: number | boolean;
           demo_run_succeeded?: number | boolean;
@@ -1879,6 +1925,7 @@ async function getSaasAdminOverview(request: Request, env: Env): Promise<Respons
           display_name: record.display_name ?? record.slug ?? "workspace",
           organization_id: record.organization_id ?? "",
           organization_display_name: record.organization_display_name ?? "Unknown organization",
+          latest_demo_run_id: record.latest_demo_run_id ?? null,
           baseline_ready: Boolean(record.baseline_ready),
           credentials_ready: Boolean(record.credentials_ready),
           demo_run_succeeded: Boolean(record.demo_run_succeeded),
@@ -6425,7 +6472,9 @@ async function buildWorkspaceOnboardingState(
     policies_created: number;
     policies_existing: number;
     service_accounts_total: number;
+    active_service_accounts_total: number;
     api_keys_total: number;
+    active_api_keys_total: number;
     demo_runs_total: number;
   };
   latest_demo_run: {
@@ -6506,11 +6555,13 @@ async function buildWorkspaceOnboardingState(
   const seed = buildWorkspaceBootstrapSeed(workspace);
   const serviceAccounts = await listWorkspaceServiceAccounts(env, workspace.workspace_id);
   const apiKeys = await listWorkspaceApiKeys(env, workspace.workspace_id);
+  const activeServiceAccounts = serviceAccounts.filter((serviceAccount) => serviceAccount.status === "active");
+  const activeApiKeys = apiKeys.filter((apiKey) => apiKey.status === "active");
   const baselineReady =
     bootstrap.summary.providers_total === seed.providers.length &&
     bootstrap.summary.policies_total === seed.policies.length;
-  const serviceAccountCreated = serviceAccounts.length > 0;
-  const apiKeyCreated = apiKeys.length > 0;
+  const serviceAccountCreated = activeServiceAccounts.length > 0;
+  const apiKeyCreated = activeApiKeys.length > 0;
   const demoRunCreated = latestDemoRun !== null;
   const demoRunSucceeded = latestDemoRun?.status === "completed";
   const demoRunsTotal =
@@ -6604,7 +6655,10 @@ async function buildWorkspaceOnboardingState(
     blockers.push({
       code: "service_account_missing",
       severity: "blocking",
-      message: "Create at least one active service account for workspace runtime operations.",
+      message:
+        serviceAccounts.length > 0
+          ? "Only disabled or historical service accounts remain. Create a new active service account for workspace runtime operations."
+          : "Create at least one active service account for workspace runtime operations.",
       surface: "service-accounts",
     });
   }
@@ -6612,7 +6666,10 @@ async function buildWorkspaceOnboardingState(
     blockers.push({
       code: "api_key_missing",
       severity: "blocking",
-      message: "Issue an API key so the first workspace demo flow can be invoked.",
+      message:
+        apiKeys.length > 0
+          ? "Only revoked or historical API keys remain. Issue a new active API key so the first workspace demo flow can be invoked."
+          : "Issue an API key so the first workspace demo flow can be invoked.",
       surface: "api-keys",
     });
   }
@@ -6740,7 +6797,9 @@ async function buildWorkspaceOnboardingState(
           ? persistedSummary.policies_existing
           : bootstrap.summary.policies_existing,
       service_accounts_total: serviceAccounts.length,
+      active_service_accounts_total: activeServiceAccounts.length,
       api_keys_total: apiKeys.length,
+      active_api_keys_total: activeApiKeys.length,
       demo_runs_total: demoRunsTotal,
     },
     latest_demo_run: latestDemoRun
@@ -7220,6 +7279,7 @@ function buildWorkspaceBillingSummary(
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   self_serve_enabled: boolean;
+  self_serve_reason_code: "billing_self_serve_not_configured" | null;
   description: string;
   action: {
     kind: "upgrade" | "manage_plan" | "resolve_billing" | "contact_support";
@@ -7250,6 +7310,8 @@ function buildWorkspaceBillingSummary(
   const checkoutProviderIsStripe = checkoutProvider?.code === "stripe";
   const checkoutProviderIsMock = checkoutProvider?.code === "mock_checkout";
   const checkoutSelfServeEnabled = checkoutProvider?.supports_checkout === true;
+  const selfServeReasonCode =
+    !checkoutProvider && !allowMockCheckout ? "billing_self_serve_not_configured" : null;
   const manageSelfServeEnabled = Boolean(
     providerConfig &&
       (providerConfig.supports_customer_portal || providerConfig.supports_subscription_cancel),
@@ -7275,6 +7337,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: actionReady,
+      self_serve_reason_code: actionReady ? null : selfServeReasonCode,
       description: isPaidPlan
         ? "This workspace is on a paid plan with manual billing operations."
         : actionReady && checkoutProviderIsStripe
@@ -7310,6 +7373,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: resolveBillingSelfServeEnabled,
+      self_serve_reason_code: resolveBillingSelfServeEnabled ? null : selfServeReasonCode,
       description: "The subscription is past due and feature access may tighten if billing is not resolved.",
       action: {
         kind: "resolve_billing",
@@ -7335,6 +7399,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: trialUpgradeReady,
+      self_serve_reason_code: trialUpgradeReady ? null : selfServeReasonCode,
       description: "The workspace is in trial and can be converted into an ongoing paid subscription.",
       action: {
         kind: "upgrade",
@@ -7364,6 +7429,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: manageSelfServeEnabled,
+      self_serve_reason_code: manageSelfServeEnabled ? null : selfServeReasonCode,
       description: "The current subscription is paused and should be resumed or replaced before go-live.",
       action: {
         kind: "contact_support",
@@ -7387,6 +7453,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: manageSelfServeEnabled,
+      self_serve_reason_code: manageSelfServeEnabled ? null : selfServeReasonCode,
       description: "The workspace is scheduled to leave its current plan at the end of the billing window.",
       action: {
         kind: "manage_plan",
@@ -7411,6 +7478,7 @@ function buildWorkspaceBillingSummary(
       current_period_end: currentPeriodEnd,
       cancel_at_period_end: cancelAtPeriodEnd,
       self_serve_enabled: replacementUpgradeReady,
+      self_serve_reason_code: replacementUpgradeReady ? null : selfServeReasonCode,
       description: "The previous paid subscription is no longer active for this workspace.",
       action: {
         kind: "upgrade",
@@ -7440,6 +7508,7 @@ function buildWorkspaceBillingSummary(
     current_period_end: currentPeriodEnd,
     cancel_at_period_end: cancelAtPeriodEnd,
     self_serve_enabled: activeManageReady,
+    self_serve_reason_code: activeManageReady ? null : selfServeReasonCode,
     description: activeManageReady
       ? "The workspace has an active self-serve-capable subscription."
       : "The workspace is active on its current plan, with manual billing operations behind the scenes.",

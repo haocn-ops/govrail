@@ -18,9 +18,11 @@ As of 2026-04-01, the repo has passed:
 
 - `npm run verify:local`
 - `npm run verify:build`
+- `npm run web:test`
+- `npm run provisioning:validate -- --request docs/tenant_provisioning_request.example.json`
 - `npm run validate:observability`
 
-A minimal GitHub Actions baseline now mirrors those checks on `push` and `pull_request` via [.github/workflows/ci.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/ci.yml).
+A minimal GitHub Actions baseline now mirrors those checks on `push` and `pull_request` via [.github/workflows/ci.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/ci.yml), including the root `verify:local` / `verify:build` pair, `web:test`, observability example validation, and a frozen tenant provisioning contract check against `docs/tenant_provisioning_request.example.json`.
 A separate manual release gate workflow now exists at [.github/workflows/manual-release-gate.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/manual-release-gate.yml) for `workflow_dispatch`-driven verification and artifact capture without any deploy.
 
 The codebase is in "deployable MVP skeleton" shape:
@@ -100,17 +102,34 @@ npm run post-deploy:verify:readonly
 | `npm run verify:local` | `check` + `smoke` |
 | `npm run verify:build` | Wrangler dry-run package validation |
 | `npm run validate:observability` | Validate observability example contracts and refs |
+| `npm run observability:bundle -- --output-dir .observability-bundles/production --environment production --run-id <existing_run_id>` | Render an actionable observability handoff bundle with runtime inputs, alert refs, and evidence templates |
 | `npm run access:ingress:plan -- --plan-file <plan.json>` | Render an access ingress plan and checklist for a tenant/environment |
+| `npm run access:ingress:plan:strict -- --plan-file <plan.json>` | Fail early if the access ingress plan is missing handoff owner, change reference, readonly run-id source, token audience, or other required governance metadata |
 | `npm run github:actions:bootstrap -- --dry-run` | Validate or push the GitHub Actions runtime variables / secret bootstrap |
 | `npm run github:actions:inventory -- --format markdown` | Print the GitHub Actions runtime variable / secret / workflow input inventory |
+| `npm run provisioning:validate -- --request <file>` | Validate that a tenant provisioning request still matches the frozen external handoff contract |
 | `npm run provisioning:submit -- --request <file> --endpoint <url>` | Submit a provisioning request artifact to an external workflow or ticket endpoint |
+| `npm run release:artifact:validate -- --manifest <manifest.json> --artifact-dir <dir>` | Validate that a release/deploy artifact manifest still matches the frozen artifact layout, summary path, and verify-summary contract |
 | `npm run seed:sql -- --tenant-id <id>` | Render seed SQL for a tenant |
 | `npm run secret:rotation:bundle -- --plan <plan.json>` | Render a secret rotation bundle with checklist and helper script |
+| `npm run secret:rotation:bundle:strict -- --plan <plan.json>` | Fail early when the rotation plan is missing verify output paths, rollback coverage, or other required evidence hooks |
+| `npm run secret:rotation:validate -- --manifest <manifest.json> --artifact-dir <dir>` | Validate that a generated secret-rotation bundle still matches the frozen manifest, evidence-template, and file-layout contract |
+| `npm run synthetic:artifact:validate -- --manifest <manifest.json> --artifact-dir <dir>` | Validate that a synthetic runtime artifact manifest still matches the frozen summary/log layout and runtime-check schema |
 | `npm run tenant:onboarding:apply -- --request <file> --mode dry-run` | Dry-run or apply tenant provider/policy changes from a provisioning request |
 | `npm run tenant:onboarding:bundle -- --tenant-id <id>` | Render tenant onboarding bundle files for a tenant |
+| `npm run tenant:handoff:validate -- --bundle <bundle.json> --state <handoff-state.json>` | Validate that the onboarding bundle and folded request/submission/apply/verify evidence still form a consistent handoff-state contract |
 | `npm run tenant:handoff:update -- --bundle <file>` | Fold request/verify evidence back into a handoff-state JSON |
 | `npm run post-deploy:verify` | Write-mode remote verification for staging or dedicated verify tenants |
 | `npm run post-deploy:verify:readonly` | Readonly remote verification for production or shared tenants |
+| `npm run web:preview:staging` | Build the web console with the `web` staging env and open the Cloudflare/OpenNext local preview |
+| `npm run web:deploy:staging:dry-run` | Dry-run the isolated `workers.dev` web staging deploy without touching production routes |
+| `npm run web:deploy:staging` | Deploy the isolated `workers.dev` web staging console |
+| `npm run web:test:e2e` | Run the full root-level web non-browser e2e batch from `web/tests/e2e` |
+| `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts` | Run one targeted root-level web non-browser e2e file for focused debugging or contract checks |
+| `npm run web:test:browser:smoke` | Run the default browser smoke suite on the production-backed local server |
+| `npm run web:test:browser:smoke:stable` | Run the same browser smoke suite with explicit stable-server settings |
+| `npm run web:test:browser:smoke:dev` | Run the browser smoke suite against a local Next dev server for quicker iteration |
+| `npm run web:test:browser:spike` | Print the browser harness readiness report and boundary summary |
 | `npm run deploy` | Real Wrangler deploy |
 | `npm run dev` | Local Wrangler dev server |
 
@@ -204,10 +223,23 @@ Use the verification paths like this:
   - `npm run verify:build`
 - Observability example contract validation:
   - `npm run validate:observability`
+- Root-level web non-browser e2e, full batch:
+  - `npm run web:test:e2e`
+- Root-level web non-browser e2e, targeted single file:
+  - `npm run web:test:e2e:file -- tests/e2e/saas-mainline-smoke.e2e.test.ts`
 - Staging or isolated verification tenant:
   - `npm run post-deploy:verify`
+- Web staging preview or deploy from repo root:
+  - `npm run web:preview:staging`
+  - `npm run web:deploy:staging:dry-run`
+  - `npm run web:deploy:staging`
+- Browser smoke against an existing staging console URL:
+  - `PLAYWRIGHT_BASE_URL="https://<web-staging>.workers.dev" npm run web:test:browser:session-checkpoint:existing-server`
+  - `PLAYWRIGHT_BASE_URL="https://<web-staging>.workers.dev" npm run web:test:browser:mainline-console-verification:existing-server`
 - Production or shared tenant:
   - `npm run post-deploy:verify:readonly`
+
+`npm run web:test:e2e -- <file>` 仍會帶上整包 `web/tests/e2e/*.test.ts`；若只需 targeted 單檔重跑，請改用 `npm run web:test:e2e:file -- <file>`。
 
 ## CI Baseline
 
@@ -216,9 +248,11 @@ The GitHub Actions workflow at [.github/workflows/ci.yml](/Users/zh/Documents/co
 - it installs dependencies with `npm ci`
 - it runs `npm run verify:local`
 - it runs `npm run verify:build`
+- it runs `npm run web:test`
+- it runs `npm run provisioning:validate -- --request docs/tenant_provisioning_request.example.json`
 - it runs `npm run validate:observability`
 
-That workflow is meant to catch local type/smoke regressions, Wrangler packaging regressions, and observability contract drift early. It does not perform deploys, post-deploy checks, or tenant-specific release validation.
+That workflow is meant to catch local type/smoke regressions, web contract drift, Wrangler packaging regressions, frozen provisioning contract drift, and observability contract drift early. It does not perform deploys, post-deploy checks, or tenant-specific release validation.
 
 For human release gating, use [.github/workflows/manual-release-gate.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/manual-release-gate.yml):
 
@@ -227,6 +261,7 @@ For human release gating, use [.github/workflows/manual-release-gate.yml](/Users
 - it can optionally run write-mode remote verification against a staging or verify tenant
 - it can optionally run readonly remote verification against a deployed worker
 - it uploads logs, JSON summaries, and a short markdown summary as an artifact
+- it validates `release-gate-manifest.json` against the frozen artifact contract before upload
 - it does not deploy
 
 For controlled staging rollout, use [.github/workflows/deploy-staging.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/deploy-staging.yml):
@@ -237,6 +272,7 @@ For controlled staging rollout, use [.github/workflows/deploy-staging.yml](/User
 - it deploys the `staging` environment
 - it runs write-mode `post-deploy:verify`
 - it uploads `staging-deploy-manifest.json`, logs, and JSON summary as an artifact
+- it validates `staging-deploy-manifest.json` before upload so artifact naming/path drift fails inside the workflow
 - before first remote use, you can bootstrap the required repo-side values with `npm run github:actions:bootstrap -- --dry-run`
 - if you want the exact repo-side wiring matrix first, run `npm run github:actions:inventory -- --format markdown`
 
@@ -245,6 +281,7 @@ For production-safe remote checks without deploy, use [.github/workflows/product
 - it runs readonly `post-deploy:verify:readonly` against an existing `RUN_ID`
 - it runs `validate:observability`
 - it uploads `production-readonly-manifest.json`, logs, and JSON summary as an artifact
+- it validates `production-readonly-manifest.json` before upload
 - it does not deploy or mutate production data
 
 For controlled production rollout, use [.github/workflows/deploy-production.yml](/Users/zh/Documents/codeX/agent_control_plane/.github/workflows/deploy-production.yml):
@@ -256,6 +293,7 @@ For controlled production rollout, use [.github/workflows/deploy-production.yml]
 - it deploys the top-level production worker
 - it runs readonly `post-deploy:verify:readonly`
 - it uploads `production-deploy-manifest.json`, logs, and JSON summary as an artifact
+- it validates `production-deploy-manifest.json` before upload
 - it is designed to pair with a protected GitHub `production` environment for human approval
 - before first remote use, you can bootstrap the required repo-side values with `npm run github:actions:bootstrap -- --dry-run`
 - if you want the exact repo-side wiring matrix first, run `npm run github:actions:inventory -- --format markdown`
@@ -265,6 +303,7 @@ For scheduled runtime checks, use [.github/workflows/synthetic-runtime-checks.ym
 - it runs scheduled or manual health probes against configured staging / production URLs
 - it can run production readonly verification on a schedule using repository variables
 - it uploads synthetic health and readonly verify artifacts for incident review
+- it now writes `synthetic-runtime-health-manifest.json` and `synthetic-runtime-production-manifest.json`, plus markdown summaries, and validates both artifact contracts before upload
 - it currently uses repository variables for URLs / tenant / run ID, so it can start working before deploy credentials are wired
 - optional `ACP_SYNTH_*` repository variables unlock A2A and MCP SSE probes; `github:actions:inventory` shows the full matrix
 

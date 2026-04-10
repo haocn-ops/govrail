@@ -14,11 +14,13 @@ export function AdminFocusBar({
   organization,
   workspace,
   queueReturned,
+  readinessReturned,
   clearSurfaceHref,
   clearReadinessHref,
   clearOrganizationHref,
   clearWorkspaceHref,
   clearQueueReturnedHref,
+  clearReadinessReturnedHref,
   clearAllHref,
 }: {
   surface?: string | null;
@@ -26,11 +28,13 @@ export function AdminFocusBar({
   organization?: string | null;
   workspace?: string | null;
   queueReturned?: boolean;
+  readinessReturned?: boolean;
   clearSurfaceHref?: string | null;
   clearReadinessHref?: string | null;
   clearOrganizationHref?: string | null;
   clearWorkspaceHref?: string | null;
   clearQueueReturnedHref?: string | null;
+  clearReadinessReturnedHref?: string | null;
   clearAllHref?: string | null;
 }) {
   const chips: FocusChip[] = [];
@@ -70,13 +74,20 @@ export function AdminFocusBar({
       clearHref: clearQueueReturnedHref ?? null,
     });
   }
+  if (readinessReturned) {
+    chips.push({
+      label: "Readiness return",
+      value: "Returned from readiness",
+      clearHref: clearReadinessReturnedHref ?? null,
+    });
+  }
 
   if (!chips.length) {
     return null;
   }
 
   return (
-    <Card className="rounded-2xl border border-border bg-background shadow-sm">
+    <Card className="scroll-mt-36 rounded-2xl border border-border bg-background shadow-sm lg:scroll-mt-44">
       <CardHeader>
         <CardTitle className="text-sm font-semibold">Governance focus</CardTitle>
       </CardHeader>
@@ -98,7 +109,7 @@ export function AdminFocusBar({
               {chip.clearHref ? (
                 <Link
                   href={chip.clearHref}
-                  className="rounded-full border border-border p-0.5 text-[0.55rem] font-semibold uppercase tracking-wide text-muted hover:text-foreground"
+                  className="scroll-mt-36 rounded-full border border-border p-0.5 text-[0.55rem] font-semibold uppercase tracking-wide text-muted hover:text-foreground lg:scroll-mt-44"
                 >
                   Clear
                 </Link>
@@ -110,7 +121,7 @@ export function AdminFocusBar({
           <div>
             <Link
               href={clearAllHref}
-              className="text-[0.65rem] font-medium text-foreground underline underline-offset-4"
+              className="scroll-mt-36 text-[0.65rem] font-medium text-foreground underline underline-offset-4 lg:scroll-mt-44"
             >
               Clear all focus
             </Link>
